@@ -1,0 +1,6 @@
+@POS_MB.API_HostAddress = http://localhost:5098
+
+GET {{POS_MB.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
