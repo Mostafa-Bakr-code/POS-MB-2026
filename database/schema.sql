@@ -60,7 +60,7 @@ CREATE TABLE dbo.Orders
     SerialNumber    INT               NULL,
     OrderDate AS (CAST(Date AS DATE)) PERSISTED,
     UserId          INT               NOT NULL,
-    Status          TINYINT           NOT NULL CONSTRAINT DF_Orders_Status DEFAULT (3), -- 0=Placed,1=Preparing,2=Ready,3=Completed,4=Cancelled
+    Status          TINYINT           NOT NULL CONSTRAINT DF_Orders_Status DEFAULT (0), -- 0=Placed,1=Preparing,2=Ready,3=Completed,4=Cancelled
     IsComplimentary BIT               NOT NULL CONSTRAINT DF_Orders_IsComplimentary DEFAULT (0),
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_UpdatedAt DEFAULT (SYSUTCDATETIME()),
