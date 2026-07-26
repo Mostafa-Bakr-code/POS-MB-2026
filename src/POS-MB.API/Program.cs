@@ -15,6 +15,8 @@ builder.Services.AddScoped<clsItemDataAccess>();
 builder.Services.AddScoped<clsItemBusiness>();
 builder.Services.AddScoped<clsOrderDataAccess>();
 builder.Services.AddScoped<clsOrderBusiness>();
+builder.Services.AddScoped<clsUserDataAccess>();
+builder.Services.AddScoped<clsUserBusiness>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
