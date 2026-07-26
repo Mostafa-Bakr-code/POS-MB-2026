@@ -11,6 +11,8 @@ builder.Services.AddSingleton<ISqlConnectionFactory>(new SqlConnectionFactory(co
 
 builder.Services.AddScoped<clsCategoryDataAccess>();
 builder.Services.AddScoped<clsCategoryBusiness>();
+builder.Services.AddScoped<clsItemDataAccess>();
+builder.Services.AddScoped<clsItemBusiness>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
