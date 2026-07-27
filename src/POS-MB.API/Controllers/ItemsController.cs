@@ -24,7 +24,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateItemRequest request)
     {
-        var id = await itemBusiness.CreateAsync(request.Name, request.CategoryId, request.Price, request.TaxRate ?? clsItemBusiness.DefaultTaxRate);
+        var id = await itemBusiness.CreateAsync(request.Name, request.CategoryId, request.Price, request.TaxRate);
         var item = await itemBusiness.GetByIdAsync(id);
         return CreatedAtAction(nameof(GetById), new { id }, item);
     }
@@ -32,7 +32,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateItemRequest request)
     {
-        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate ?? clsItemBusiness.DefaultTaxRate);
+        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate);
         return updated ? NoContent() : NotFound();
     }
 
