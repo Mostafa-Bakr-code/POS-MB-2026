@@ -78,6 +78,7 @@ CREATE TABLE dbo.OrderItems
     Quantity        INT               NOT NULL,
     Price           DECIMAL(18,4)     NOT NULL,
     TotalItemsPrice DECIMAL(18,4)     NOT NULL,
+    TaxRate         DECIMAL(18,4)     NOT NULL CONSTRAINT DF_OrderItems_TaxRate DEFAULT (14.00), -- snapshot of Item.TaxRate at time of sale, for accurate historical tax reporting
     Comment         NVARCHAR(50)      NULL,
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_OrderItems_CreatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_OrderItems PRIMARY KEY CLUSTERED (OrderItemId),

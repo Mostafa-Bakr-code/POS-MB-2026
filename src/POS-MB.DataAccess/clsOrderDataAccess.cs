@@ -29,18 +29,18 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
                 serialQuery, new { Date = date }, transaction);
 
             var itemIds = items.Select(i => i.ItemId).Distinct().ToArray();
-            const string pricesQuery = "SELECT ItemId, Price FROM Items WHERE ItemId IN @ItemIds";
-            var prices = (await connection.QueryAsync<(int ItemId, decimal Price)>(
+            const string pricesQuery = "SELECT ItemId, Price, TaxRate FROM Items WHERE ItemId IN @ItemIds";
+            var itemInfo = (await connection.QueryAsync<(int ItemId, decimal Price, decimal TaxRate)>(
                 pricesQuery, new { ItemIds = itemIds }, transaction))
-                .ToDictionary(p => p.ItemId, p => p.Price);
+                .ToDictionary(p => p.ItemId, p => (p.Price, p.TaxRate));
 
             foreach (var item in items)
             {
-                if (!prices.ContainsKey(item.ItemId))
+                if (!itemInfo.ContainsKey(item.ItemId))
                     throw new InvalidOperationException($"Item {item.ItemId} does not exist.");
             }
 
-            var total = items.Sum(i => prices[i.ItemId] * i.Quantity);
+            var total = items.Sum(i => itemInfo[i.ItemId].Price * i.Quantity);
 
             const string insertOrderQuery = @"
                 INSERT INTO Orders (Date, Total, SerialNumber, UserId, OrderSource, Status, IsComplimentary)
@@ -58,11 +58,11 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             }, transaction);
 
             const string insertItemQuery = @"
-                INSERT INTO OrderItems (OrderId, ItemId, Quantity, Price, TotalItemsPrice, Comment)
-                VALUES (@OrderId, @ItemId, @Quantity, @Price, @TotalItemsPrice, @Comment);";
+                INSERT INTO OrderItems (OrderId, ItemId, Quantity, Price, TotalItemsPrice, TaxRate, Comment)
+                VALUES (@OrderId, @ItemId, @Quantity, @Price, @TotalItemsPrice, @TaxRate, @Comment);";
             foreach (var item in items)
             {
-                var price = prices[item.ItemId];
+                var (price, taxRate) = itemInfo[item.ItemId];
                 await connection.ExecuteAsync(insertItemQuery, new
                 {
                     OrderId = orderId,
@@ -70,6 +70,7 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
                     item.Quantity,
                     Price = price,
                     TotalItemsPrice = price * item.Quantity,
+                    TaxRate = taxRate,
                     item.Comment
                 }, transaction);
             }

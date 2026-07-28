@@ -21,6 +21,8 @@ builder.Services.AddScoped<clsSettingsDataAccess>();
 builder.Services.AddScoped<clsSettingsBusiness>();
 builder.Services.AddScoped<clsLogsDataAccess>();
 builder.Services.AddScoped<clsLogsBusiness>();
+builder.Services.AddScoped<clsReportingDataAccess>();
+builder.Services.AddScoped<clsReportingBusiness>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
