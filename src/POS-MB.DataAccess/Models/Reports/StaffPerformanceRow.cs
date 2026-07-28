@@ -6,4 +6,6 @@ public class StaffPerformanceRow
     public string UserName { get; set; } = string.Empty;
     public int OrderCount { get; set; }
     public decimal Revenue { get; set; }
+    public decimal Tax { get; set; }
+    public decimal RevenueExcludingTax => Revenue - Tax;
 }

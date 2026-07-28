@@ -5,6 +5,10 @@ namespace POS_MB.DataAccess;
 
 public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
 {
+    // TotalItemsPrice is tax-inclusive; this pulls out just the tax portion,
+    // using each line's own snapshotted TaxRate (not today's Items.TaxRate).
+    private const string TaxExpression = "(oi.TotalItemsPrice / (1 + (oi.TaxRate / 100)) * (oi.TaxRate / 100))";
+
     public async Task<SalesSummary> GetSalesSummaryAsync(DateTime? startDate = null, DateTime? endDate = null)
     {
         using var connection = connectionFactory.CreateConnection();
@@ -26,11 +30,14 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
 
         var summary = await connection.QuerySingleAsync<SalesSummary>(summaryQuery, parameters);
 
-        var taxQuery = @"
-            SELECT ISNULL(SUM(oi.TotalItemsPrice / (1 + (oi.TaxRate / 100)) * (oi.TaxRate / 100)), 0)
+        // Scoped to paid (non-complimentary) orders only, matching TotalRevenue,
+        // so RevenueExcludingTax = TotalRevenue - TotalTax is coherent.
+        var taxQuery = $@"
+            SELECT ISNULL(SUM({TaxExpression}), 0)
             FROM OrderItems oi
             INNER JOIN Orders o ON oi.OrderId = o.OrderId
-            WHERE o.Status <> 4";
+            WHERE o.Status <> 4
+              AND o.IsComplimentary = 0";
         if (startDate is not null) taxQuery += " AND o.OrderDate >= @StartDate";
         if (endDate is not null) taxQuery += " AND o.OrderDate <= @EndDate";
 
@@ -54,7 +61,8 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
                 i.ItemName,
                 SUM(oi.Quantity) AS Quantity,
                 ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS Revenue,
-                ISNULL(SUM(CASE WHEN o.IsComplimentary = 1 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS ComplimentaryValue
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 1 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS ComplimentaryValue,
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN {TaxExpression} ELSE 0 END), 0) AS Tax
             FROM OrderItems oi
             INNER JOIN Items i ON oi.ItemId = i.ItemId
             INNER JOIN Categories c ON i.CategoryId = c.CategoryId
@@ -84,7 +92,8 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
                 i.ItemName,
                 SUM(oi.Quantity) AS Quantity,
                 ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS Revenue,
-                ISNULL(SUM(CASE WHEN o.IsComplimentary = 1 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS ComplimentaryValue
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 1 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS ComplimentaryValue,
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN {TaxExpression} ELSE 0 END), 0) AS Tax
             FROM OrderItems oi
             INNER JOIN Items i ON oi.ItemId = i.ItemId
             INNER JOIN Categories c ON i.CategoryId = c.CategoryId
@@ -104,14 +113,18 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        var query = @"
+        // Joins through OrderItems (rather than summing Orders.Total directly) so Tax
+        // can be computed from each line's own snapshotted TaxRate.
+        var query = $@"
             SELECT
                 u.UserId,
                 u.UserName,
-                COUNT(*) AS OrderCount,
-                ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN o.Total ELSE 0 END), 0) AS Revenue
+                COUNT(DISTINCT o.OrderId) AS OrderCount,
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN oi.TotalItemsPrice ELSE 0 END), 0) AS Revenue,
+                ISNULL(SUM(CASE WHEN o.IsComplimentary = 0 THEN {TaxExpression} ELSE 0 END), 0) AS Tax
             FROM Orders o
             INNER JOIN Users u ON o.UserId = u.UserId
+            INNER JOIN OrderItems oi ON oi.OrderId = o.OrderId
             WHERE o.Status <> 4
               AND o.OrderSource = 0";
         if (startDate is not null) query += " AND o.OrderDate >= @StartDate";

@@ -23,9 +23,10 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
             new object[] { "Cashier Orders", summary.CashierOrders },
             new object[] { "Mobile Orders", summary.MobileOrders },
             new object[] { "Complimentary Orders", summary.ComplimentaryOrders },
-            new object[] { "Total Revenue", summary.TotalRevenue },
-            new object[] { "Complimentary Value", summary.ComplimentaryValue },
+            new object[] { "Total Revenue (incl. tax)", summary.TotalRevenue },
+            new object[] { "Total Revenue (excl. tax)", summary.RevenueExcludingTax },
             new object[] { "Total Tax", summary.TotalTax },
+            new object[] { "Complimentary Value", summary.ComplimentaryValue },
             new object[] { "Average Order Value", summary.AverageOrderValue },
         };
         return ExportToExcel("Sales Summary", ["Metric", "Value"], rows, "sales-summary.xlsx");
@@ -41,12 +42,12 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
         if (!IsExcel(format)) return Ok(items);
 
         var headers = groupByDay
-            ? new[] { "Date", "Category", "Item", "Quantity", "Revenue", "Complimentary Value", "Average Price" }
-            : new[] { "Category", "Item", "Quantity", "Revenue", "Complimentary Value", "Average Price" };
+            ? new[] { "Date", "Category", "Item", "Quantity", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax", "Complimentary Value", "Average Price" }
+            : new[] { "Category", "Item", "Quantity", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax", "Complimentary Value", "Average Price" };
 
         var rows = items.Select(i => groupByDay
-            ? new object[] { i.OrderDate?.ToString("yyyy-MM-dd") ?? "", i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.ComplimentaryValue, i.AveragePrice }
-            : new object[] { i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.ComplimentaryValue, i.AveragePrice });
+            ? new object[] { i.OrderDate?.ToString("yyyy-MM-dd") ?? "", i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.RevenueExcludingTax, i.Tax, i.ComplimentaryValue, i.AveragePrice }
+            : new object[] { i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.RevenueExcludingTax, i.Tax, i.ComplimentaryValue, i.AveragePrice });
 
         return ExportToExcel("Item Sales", headers, rows, "item-sales.xlsx");
     }
@@ -61,8 +62,8 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
 
         if (!IsExcel(format)) return Ok(items);
 
-        var headers = new[] { "Category", "Item", "Quantity", "Revenue", "Complimentary Value", "Average Price" };
-        var rows = items.Select(i => new object[] { i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.ComplimentaryValue, i.AveragePrice });
+        var headers = new[] { "Category", "Item", "Quantity", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax", "Complimentary Value", "Average Price" };
+        var rows = items.Select(i => new object[] { i.CategoryName, i.ItemName, i.Quantity, i.Revenue, i.RevenueExcludingTax, i.Tax, i.ComplimentaryValue, i.AveragePrice });
 
         return ExportToExcel("Top Sellers", headers, rows, "top-sellers.xlsx");
     }
@@ -75,8 +76,8 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
 
         if (!IsExcel(format)) return Ok(staff);
 
-        var headers = new[] { "User", "Order Count", "Revenue" };
-        var rows = staff.Select(s => new object[] { s.UserName, s.OrderCount, s.Revenue });
+        var headers = new[] { "User", "Order Count", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax" };
+        var rows = staff.Select(s => new object[] { s.UserName, s.OrderCount, s.Revenue, s.RevenueExcludingTax, s.Tax });
 
         return ExportToExcel("Staff Performance", headers, rows, "staff-performance.xlsx");
     }

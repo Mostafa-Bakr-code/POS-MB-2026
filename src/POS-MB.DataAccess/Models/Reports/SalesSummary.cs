@@ -9,6 +9,7 @@ public class SalesSummary
     public decimal TotalRevenue { get; set; }
     public decimal ComplimentaryValue { get; set; }
     public decimal TotalTax { get; set; }
+    public decimal RevenueExcludingTax => TotalRevenue - TotalTax;
     public decimal AverageOrderValue =>
         TotalOrders == 0 ? 0 : (TotalRevenue + ComplimentaryValue) / TotalOrders;
 }

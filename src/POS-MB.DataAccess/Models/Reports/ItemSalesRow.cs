@@ -8,5 +8,7 @@ public class ItemSalesRow
     public int Quantity { get; set; }
     public decimal Revenue { get; set; }
     public decimal ComplimentaryValue { get; set; }
+    public decimal Tax { get; set; }
+    public decimal RevenueExcludingTax => Revenue - Tax;
     public decimal AveragePrice => Quantity == 0 ? 0 : (Revenue + ComplimentaryValue) / Quantity;
 }
