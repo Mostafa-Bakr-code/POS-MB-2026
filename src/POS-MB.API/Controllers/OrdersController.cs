@@ -9,9 +9,9 @@ namespace POS_MB.API.Controllers;
 public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
+    public async Task<IActionResult> GetAll([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null, [FromQuery] OrderSource? orderSource = null)
     {
-        var orders = await orderBusiness.GetAllAsync(startDate, endDate);
+        var orders = await orderBusiness.GetAllAsync(startDate, endDate, orderSource);
         return Ok(orders);
     }
 
@@ -22,7 +22,7 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
         if (order is null) return NotFound();
 
         var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
+        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
     }
 
     [HttpPost]
@@ -32,7 +32,7 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
             .Select(i => new NewOrderItem(i.ItemId, i.Quantity, i.Comment))
             .ToList();
 
-        var id = await orderBusiness.CreateOrderAsync(request.UserId, request.IsComplimentary, items);
+        var id = await orderBusiness.CreateOrderAsync(request.OrderSource, request.UserId, request.IsComplimentary, items);
         return await GetById(id);
     }
 
@@ -51,6 +51,6 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
     }
 }
 
-public record CreateOrderRequest(int UserId, bool IsComplimentary, List<CreateOrderItemRequest> Items);
+public record CreateOrderRequest(OrderSource OrderSource, int? UserId, bool IsComplimentary, List<CreateOrderItemRequest> Items);
 public record CreateOrderItemRequest(int ItemId, int Quantity, string? Comment);
 public record UpdateOrderStatusRequest(OrderStatus Status);

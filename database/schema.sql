@@ -59,7 +59,8 @@ CREATE TABLE dbo.Orders
     Total           DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Orders_Total DEFAULT (0),
     SerialNumber    INT               NULL,
     OrderDate AS (CAST(Date AS DATE)) PERSISTED,
-    UserId          INT               NOT NULL,
+    UserId          INT               NULL, -- staff cashier; NULL for mobile orders (no student/customer entity yet)
+    OrderSource     TINYINT           NOT NULL CONSTRAINT DF_Orders_OrderSource DEFAULT (0), -- 0=Cashier,1=Mobile
     Status          TINYINT           NOT NULL CONSTRAINT DF_Orders_Status DEFAULT (0), -- 0=Placed,1=Preparing,2=Ready,3=Completed,4=Cancelled
     IsComplimentary BIT               NOT NULL CONSTRAINT DF_Orders_IsComplimentary DEFAULT (0),
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),

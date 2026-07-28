@@ -6,7 +6,7 @@ namespace POS_MB.DataAccess;
 
 public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
 {
-    public async Task<int> CreateOrderAsync(int userId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
+    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
     {
         if (items.Count == 0)
             throw new ArgumentException("An order must have at least one item.", nameof(items));
@@ -43,15 +43,16 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             var total = items.Sum(i => prices[i.ItemId] * i.Quantity);
 
             const string insertOrderQuery = @"
-                INSERT INTO Orders (Date, Total, SerialNumber, UserId, Status, IsComplimentary)
+                INSERT INTO Orders (Date, Total, SerialNumber, UserId, OrderSource, Status, IsComplimentary)
                 OUTPUT INSERTED.OrderId
-                VALUES (@Date, @Total, @SerialNumber, @UserId, @Status, @IsComplimentary);";
+                VALUES (@Date, @Total, @SerialNumber, @UserId, @OrderSource, @Status, @IsComplimentary);";
             var orderId = await connection.ExecuteScalarAsync<int>(insertOrderQuery, new
             {
                 Date = date,
                 Total = total,
                 SerialNumber = serialNumber,
                 UserId = userId,
+                OrderSource = orderSource,
                 Status = OrderStatus.Placed,
                 IsComplimentary = isComplimentary
             }, transaction);
@@ -101,17 +102,18 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QueryAsync<OrderItem>(query, new { OrderId = orderId });
     }
 
-    public async Task<IEnumerable<Order>> GetAllAsync(DateTime? startDate = null, DateTime? endDate = null)
+    public async Task<IEnumerable<Order>> GetAllAsync(DateTime? startDate = null, DateTime? endDate = null, OrderSource? orderSource = null)
     {
         using var connection = connectionFactory.CreateConnection();
 
         var query = "SELECT * FROM Orders WHERE 1 = 1";
         if (startDate is not null) query += " AND OrderDate >= @StartDate";
         if (endDate is not null) query += " AND OrderDate <= @EndDate";
+        if (orderSource is not null) query += " AND OrderSource = @OrderSource";
         query += " ORDER BY OrderId DESC";
 
         return await connection.QueryAsync<Order>(
-            query, new { StartDate = startDate?.Date, EndDate = endDate?.Date });
+            query, new { StartDate = startDate?.Date, EndDate = endDate?.Date, OrderSource = orderSource });
     }
 
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)
