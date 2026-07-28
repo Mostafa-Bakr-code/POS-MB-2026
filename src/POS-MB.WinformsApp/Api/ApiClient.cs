@@ -45,17 +45,57 @@ public class ApiClient
         await _httpClient.PostAsync($"api/logs/{logId}/end", null);
     }
 
-    public async Task<List<CategoryDto>> GetCategoriesAsync()
+    public async Task<List<CategoryDto>> GetCategoriesAsync(bool includeInactive = false)
     {
-        var result = await _httpClient.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+        var url = $"api/categories?includeInactive={includeInactive}";
+        var result = await _httpClient.GetFromJsonAsync<List<CategoryDto>>(url);
         return result ?? [];
     }
 
-    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null)
+    public async Task CreateCategoryAsync(string name)
     {
-        var url = categoryId is null ? "api/items" : $"api/items?categoryId={categoryId}";
+        var response = await _httpClient.PostAsJsonAsync("api/categories", new { Name = name });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateCategoryAsync(int categoryId, string name)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/categories/{categoryId}", new { Name = name });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeactivateCategoryAsync(int categoryId)
+    {
+        var response = await _httpClient.PostAsync($"api/categories/{categoryId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool includeInactive = false)
+    {
+        var url = $"api/items?includeInactive={includeInactive}";
+        if (categoryId is not null) url += $"&categoryId={categoryId}";
         var result = await _httpClient.GetFromJsonAsync<List<ItemDto>>(url);
         return result ?? [];
+    }
+
+    public async Task CreateItemAsync(string name, int categoryId, decimal price)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "api/items", new { Name = name, CategoryId = categoryId, Price = price });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeactivateItemAsync(int itemId)
+    {
+        var response = await _httpClient.PostAsync($"api/items/{itemId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task<OrderDto> CreateOrderAsync(CreateOrderRequest request)

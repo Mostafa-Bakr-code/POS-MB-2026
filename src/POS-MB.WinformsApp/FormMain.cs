@@ -10,6 +10,8 @@ public class FormMain : Form
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
     private readonly Button _btnNewOrder;
+    private readonly Button _btnCategories;
+    private readonly Button _btnItems;
     private readonly Button _btnLogout;
 
     public FormMain()
@@ -38,6 +40,12 @@ public class FormMain : Form
         _btnNewOrder = CreateNavButton("New Order");
         _btnNewOrder.Click += (_, _) => ShowOrderTaking();
 
+        _btnCategories = CreateNavButton("Categories");
+        _btnCategories.Click += (_, _) => ShowContent(new CategoriesControl());
+
+        _btnItems = CreateNavButton("Items");
+        _btnItems.Click += (_, _) => ShowContent(new ItemsControl());
+
         _btnLogout = CreateNavButton("Log Out");
         _btnLogout.Click += async (_, _) => await LogoutAsync();
 
@@ -49,6 +57,8 @@ public class FormMain : Form
             Padding = new Padding(10)
         };
         navButtonsPanel.Controls.Add(_btnNewOrder);
+        navButtonsPanel.Controls.Add(_btnCategories);
+        navButtonsPanel.Controls.Add(_btnItems);
         navButtonsPanel.Controls.Add(_btnLogout);
 
         _navBar.Controls.Add(navButtonsPanel);
@@ -79,15 +89,19 @@ public class FormMain : Form
     {
         _lblActiveUser.Text = AppSession.CurrentUser?.UserName ?? "";
 
-        _btnNewOrder.Enabled = AppSession.HasPermission(Permission.Orders) || AppSession.HasPermission(Permission.FullAccess);
+        _btnNewOrder.Enabled = AppSession.HasPermission(Permission.Orders);
+        _btnCategories.Enabled = AppSession.HasPermission(Permission.Categories);
+        _btnItems.Enabled = AppSession.HasPermission(Permission.Items);
 
         ShowOrderTaking();
     }
 
-    private void ShowOrderTaking()
+    private void ShowOrderTaking() => ShowContent(new OrderTakingControl());
+
+    private void ShowContent(Control control)
     {
+        control.Dock = DockStyle.Fill;
         _contentArea.Controls.Clear();
-        var control = new OrderTakingControl { Dock = DockStyle.Fill };
         _contentArea.Controls.Add(control);
     }
 
