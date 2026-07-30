@@ -1,0 +1,110 @@
+using POS_MB.WinformsApp.Api;
+using POS_MB.WinformsApp.Dialogs;
+using POS_MB.WinformsApp.Models;
+
+namespace POS_MB.WinformsApp.Controls;
+
+public class UsersControl : UserControl
+{
+    private readonly ApiClient _apiClient = new();
+    private readonly DataGridView _grid;
+    private readonly CheckBox _chkShowInactive;
+    private List<UserDto> _users = [];
+
+    public UsersControl()
+    {
+        Font = new Font("Segoe UI", 12F);
+
+        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 60, Padding = new Padding(10) };
+
+        var btnAdd = new Button { Text = "Add User", Width = 140, Height = 40, Font = new Font("Segoe UI", 11F, FontStyle.Bold) };
+        btnAdd.Click += async (_, _) => await AddUserAsync();
+
+        _chkShowInactive = new CheckBox { Text = "Show Inactive", AutoSize = true, Margin = new Padding(20, 12, 0, 0) };
+        _chkShowInactive.CheckedChanged += async (_, _) => await LoadAsync();
+
+        toolbar.Controls.Add(btnAdd);
+        toolbar.Controls.Add(_chkShowInactive);
+
+        _grid = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            AutoGenerateColumns = false,
+            ReadOnly = true,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            RowTemplate = { Height = 40 },
+            Font = new Font("Segoe UI", 11F)
+        };
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserId", HeaderText = "Id", DataPropertyName = "UserId", Width = 60 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserName", HeaderText = "Username", DataPropertyName = "UserName", Width = 200 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Permissions", HeaderText = "Permissions", DataPropertyName = "Permissions", Width = 100 });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 80 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
+        _grid.CellClick += Grid_CellClick;
+        _grid.CellFormatting += Grid_CellFormatting;
+
+        Controls.Add(_grid);
+        Controls.Add(toolbar);
+
+        Load += async (_, _) => await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _users = await _apiClient.GetUsersAsync(_chkShowInactive.Checked);
+        _grid.DataSource = null;
+        _grid.DataSource = _users;
+    }
+
+    private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (_grid.Columns[e.ColumnIndex].Name != "Permissions" || e.Value is null) return;
+
+        var permission = (Permission)Convert.ToInt32(e.Value);
+        e.Value = permission == Permission.FullAccess ? "Full Access" : permission.ToString();
+        e.FormattingApplied = true;
+    }
+
+    private async void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0) return;
+
+        var user = _users[e.RowIndex];
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
+
+        if (columnName == "Edit")
+        {
+            using var dialog = new FormUserEditDialog("Edit User", isEdit: true, user.UserName, user.Permissions);
+            if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
+            {
+                await _apiClient.UpdateUserAsync(user.UserId, dialog.UserNameValue, dialog.PasswordValue, dialog.Permissions);
+                await LoadAsync();
+            }
+        }
+        else if (columnName == "Deactivate")
+        {
+            var confirm = MessageBox.Show(
+                $"Deactivate '{user.UserName}'? They will no longer be able to log in.",
+                "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+            if (confirm == DialogResult.Yes)
+            {
+                await _apiClient.DeactivateUserAsync(user.UserId);
+                await LoadAsync();
+            }
+        }
+    }
+
+    private async Task AddUserAsync()
+    {
+        using var dialog = new FormUserEditDialog("Add User", isEdit: false);
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
+        {
+            await _apiClient.CreateUserAsync(dialog.UserNameValue, dialog.PasswordValue!, dialog.Permissions);
+            await LoadAsync();
+        }
+    }
+}

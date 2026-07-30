@@ -106,5 +106,33 @@ public class ApiClient
         return (await response.Content.ReadFromJsonAsync<OrderDto>())!;
     }
 
+    public async Task<List<UserDto>> GetUsersAsync(bool includeInactive = false)
+    {
+        var url = $"api/users?includeInactive={includeInactive}";
+        var result = await _httpClient.GetFromJsonAsync<List<UserDto>>(url);
+        return result ?? [];
+    }
+
+    public async Task CreateUserAsync(string userName, string password, int permissions)
+    {
+        var response = await _httpClient.PostAsJsonAsync(
+            "api/users", new { UserName = userName, Password = password, Permissions = permissions });
+        response.EnsureSuccessStatusCode();
+    }
+
+    // password: null/blank keeps the user's existing password unchanged.
+    public async Task UpdateUserAsync(int userId, string userName, string? password, int permissions)
+    {
+        var response = await _httpClient.PutAsJsonAsync(
+            $"api/users/{userId}", new { UserName = userName, Password = password, Permissions = permissions });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeactivateUserAsync(int userId)
+    {
+        var response = await _httpClient.PostAsync($"api/users/{userId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
     private record StartSessionResponse(int LogId);
 }

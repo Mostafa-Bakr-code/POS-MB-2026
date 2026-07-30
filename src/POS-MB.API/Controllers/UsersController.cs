@@ -56,6 +56,6 @@ public class UsersController(clsUserBusiness userBusiness) : ControllerBase
 }
 
 public record CreateUserRequest(string UserName, string Password, int Permissions);
-public record UpdateUserRequest(string UserName, string Password, int Permissions);
+public record UpdateUserRequest(string UserName, string? Password, int Permissions);
 public record VerifyCredentialsRequest(string UserName, string Password);
 public record UserResponse(int UserId, string UserName, int Permissions, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);

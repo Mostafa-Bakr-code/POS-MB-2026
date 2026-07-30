@@ -29,14 +29,26 @@ public class clsUserBusiness(clsUserDataAccess dataAccess)
         return await dataAccess.AddAsync(userName, passwordHash, permissions);
     }
 
-    public async Task<bool> UpdateAsync(int id, string userName, string password, int permissions)
+    /// <summary>
+    /// Updates a user. A null/blank password leaves the existing password unchanged -
+    /// editing someone's permissions shouldn't force resetting their password too.
+    /// </summary>
+    public async Task<bool> UpdateAsync(int id, string userName, string? password, int permissions)
     {
         if (string.IsNullOrWhiteSpace(userName))
             throw new ArgumentException("Username is required.", nameof(userName));
-        if (string.IsNullOrWhiteSpace(password))
-            throw new ArgumentException("Password is required.", nameof(password));
 
-        var passwordHash = Hasher.HashPassword(new User(), password);
+        string passwordHash;
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            var existing = await dataAccess.GetByIdAsync(id)
+                ?? throw new InvalidOperationException($"User {id} does not exist.");
+            passwordHash = existing.PasswordHash;
+        }
+        else
+        {
+            passwordHash = Hasher.HashPassword(new User(), password);
+        }
 
         return await dataAccess.UpdateAsync(id, userName, passwordHash, permissions);
     }
