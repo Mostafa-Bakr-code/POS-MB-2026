@@ -13,6 +13,7 @@ public class FormMain : Form
     private readonly Button _btnCategories;
     private readonly Button _btnItems;
     private readonly Button _btnUsers;
+    private readonly Button _btnReports;
     private readonly Button _btnLogout;
 
     public FormMain()
@@ -50,6 +51,9 @@ public class FormMain : Form
         _btnUsers = CreateNavButton("Users");
         _btnUsers.Click += (_, _) => ShowContent(new UsersControl());
 
+        _btnReports = CreateNavButton("Reports");
+        _btnReports.Click += (_, _) => ShowContent(new ReportsControl());
+
         _btnLogout = CreateNavButton("Log Out");
         _btnLogout.Click += async (_, _) => await LogoutAsync();
 
@@ -65,6 +69,7 @@ public class FormMain : Form
         navButtonsPanel.Controls.Add(_btnCategories);
         navButtonsPanel.Controls.Add(_btnItems);
         navButtonsPanel.Controls.Add(_btnUsers);
+        navButtonsPanel.Controls.Add(_btnReports);
         navButtonsPanel.Controls.Add(_btnLogout);
 
         _navBar.Controls.Add(navButtonsPanel);
@@ -99,6 +104,7 @@ public class FormMain : Form
         _btnCategories.Enabled = AppSession.HasPermission(Permission.Categories);
         _btnItems.Enabled = AppSession.HasPermission(Permission.Items);
         _btnUsers.Enabled = AppSession.HasPermission(Permission.Users);
+        _btnReports.Enabled = AppSession.HasPermission(Permission.Reports);
 
         ShowOrderTaking();
     }

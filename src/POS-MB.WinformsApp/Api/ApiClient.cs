@@ -134,5 +134,48 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<SalesSummaryDto> GetSalesSummaryAsync(DateTime? startDate, DateTime? endDate)
+    {
+        var url = "api/reports/sales-summary" + DateQuery(startDate, endDate);
+        return (await _httpClient.GetFromJsonAsync<SalesSummaryDto>(url))!;
+    }
+
+    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay)
+    {
+        var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}";
+        var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
+        return result ?? [];
+    }
+
+    public async Task<List<ItemSalesRowDto>> GetTopSellersAsync(DateTime? startDate, DateTime? endDate, TopSellersSortBy sortBy, int take)
+    {
+        var url = "api/reports/top-sellers" + DateQuery(startDate, endDate) + $"&sortBy={sortBy}&take={take}";
+        var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
+        return result ?? [];
+    }
+
+    public async Task<List<StaffPerformanceRowDto>> GetStaffPerformanceAsync(DateTime? startDate, DateTime? endDate)
+    {
+        var url = "api/reports/staff-performance" + DateQuery(startDate, endDate);
+        var result = await _httpClient.GetFromJsonAsync<List<StaffPerformanceRowDto>>(url);
+        return result ?? [];
+    }
+
+    public async Task<byte[]> DownloadReportExcelAsync(string reportPath, DateTime? startDate, DateTime? endDate, string extraParams = "")
+    {
+        var url = $"api/reports/{reportPath}" + DateQuery(startDate, endDate) + "&format=excel" + extraParams;
+        var response = await _httpClient.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    private static string DateQuery(DateTime? startDate, DateTime? endDate)
+    {
+        var query = "?x=1";
+        if (startDate is not null) query += $"&startDate={startDate:yyyy-MM-dd}";
+        if (endDate is not null) query += $"&endDate={endDate:yyyy-MM-dd}";
+        return query;
+    }
+
     private record StartSessionResponse(int LogId);
 }
