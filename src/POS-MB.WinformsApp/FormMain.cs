@@ -54,6 +54,7 @@ public class FormMain : Form
             Dock = DockStyle.Left,
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
             Padding = new Padding(10)
         };
         navButtonsPanel.Controls.Add(_btnNewOrder);
