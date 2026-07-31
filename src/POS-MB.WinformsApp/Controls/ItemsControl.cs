@@ -59,7 +59,7 @@ public class ItemsControl : UserControl
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 70 });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsAvailable", HeaderText = "In Stock", DataPropertyName = "IsAvailable", Width = 70 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
-        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Availability", HeaderText = "", Width = 150 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Availability", HeaderText = "", Width = 200 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
         _grid.CellClick += Grid_CellClick;
         _grid.CellFormatting += Grid_CellFormatting;
@@ -72,16 +72,26 @@ public class ItemsControl : UserControl
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
+        if (e.RowIndex >= _items.Count) return;
+        var item = _items[e.RowIndex];
         var columnName = _grid.Columns[e.ColumnIndex].Name;
+
+        // Make out-of-stock items impossible to miss - a checkbox alone is too easy to skim past.
+        if (!item.IsAvailable)
+        {
+            e.CellStyle.BackColor = Color.FromArgb(248, 215, 218);
+            e.CellStyle.SelectionBackColor = Color.FromArgb(220, 53, 69);
+            e.CellStyle.SelectionForeColor = Color.White;
+        }
 
         if (columnName == "CategoryId" && e.Value is not null)
         {
             e.Value = CategoryName(Convert.ToInt32(e.Value));
             e.FormattingApplied = true;
         }
-        else if (columnName == "Availability" && e.RowIndex < _items.Count)
+        else if (columnName == "Availability")
         {
-            e.Value = _items[e.RowIndex].IsAvailable ? "Mark Out of Stock" : "Mark In Stock";
+            e.Value = item.IsAvailable ? "Mark Out of Stock" : "Mark In Stock";
             e.FormattingApplied = true;
         }
     }
