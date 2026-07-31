@@ -9,6 +9,7 @@ public class ItemsControl : UserControl
     private readonly ApiClient _apiClient = new();
     private readonly DataGridView _grid;
     private readonly CheckBox _chkShowInactive;
+    private readonly ComboBox _cboCategoryFilter;
     private List<ItemDto> _items = [];
     private List<CategoryDto> _categories = [];
 
@@ -21,10 +22,22 @@ public class ItemsControl : UserControl
         var btnAdd = new Button { Text = "Add Item", Width = 140, Height = 40, Font = new Font("Segoe UI", 11F, FontStyle.Bold) };
         btnAdd.Click += async (_, _) => await AddItemAsync();
 
-        _chkShowInactive = new CheckBox { Text = "Show Inactive", AutoSize = true, Margin = new Padding(20, 12, 0, 0) };
+        _cboCategoryFilter = new ComboBox
+        {
+            Width = 200,
+            Height = 40,
+            Font = new Font("Segoe UI", 11F),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            DisplayMember = nameof(CategoryFilterOption.Name),
+            Margin = new Padding(10, 10, 20, 0)
+        };
+        _cboCategoryFilter.SelectedIndexChanged += CategoryFilter_SelectedIndexChanged;
+
+        _chkShowInactive = new CheckBox { Text = "Show Inactive", AutoSize = true, Margin = new Padding(0, 12, 0, 0) };
         _chkShowInactive.CheckedChanged += async (_, _) => await LoadAsync();
 
         toolbar.Controls.Add(btnAdd);
+        toolbar.Controls.Add(_cboCategoryFilter);
         toolbar.Controls.Add(_chkShowInactive);
 
         _grid = new DataGridView
@@ -40,12 +53,14 @@ public class ItemsControl : UserControl
             Font = new Font("Segoe UI", 11F)
         };
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ItemId", HeaderText = "Id", DataPropertyName = "ItemId", Width = 60 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ItemName", HeaderText = "Name", DataPropertyName = "ItemName", Width = 200 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ItemName", HeaderText = "Name", DataPropertyName = "ItemName", Width = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "CategoryId", HeaderText = "Category", DataPropertyName = "CategoryId", Width = 150 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Price", HeaderText = "Price", DataPropertyName = "Price", Width = 100 });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 80 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
         _grid.CellClick += Grid_CellClick;
+        _grid.CellFormatting += Grid_CellFormatting;
 
         Controls.Add(_grid);
         Controls.Add(toolbar);
@@ -53,10 +68,35 @@ public class ItemsControl : UserControl
         Load += async (_, _) => await LoadAsync();
     }
 
+    private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (_grid.Columns[e.ColumnIndex].Name != "CategoryId" || e.Value is null) return;
+
+        e.Value = CategoryName(Convert.ToInt32(e.Value));
+        e.FormattingApplied = true;
+    }
+
+    private async void CategoryFilter_SelectedIndexChanged(object? sender, EventArgs e) => await LoadAsync();
+
     private async Task LoadAsync()
     {
         _categories = await _apiClient.GetCategoriesAsync(includeInactive: true);
-        _items = await _apiClient.GetItemsAsync(includeInactive: _chkShowInactive.Checked);
+
+        var previousSelection = (_cboCategoryFilter.SelectedItem as CategoryFilterOption)?.CategoryId;
+
+        _cboCategoryFilter.SelectedIndexChanged -= CategoryFilter_SelectedIndexChanged;
+        _cboCategoryFilter.Items.Clear();
+        _cboCategoryFilter.Items.Add(new CategoryFilterOption("All Categories", null));
+        foreach (var category in _categories)
+            _cboCategoryFilter.Items.Add(new CategoryFilterOption(category.CategoryName, category.CategoryId));
+
+        var toReselect = _cboCategoryFilter.Items.Cast<CategoryFilterOption>()
+            .FirstOrDefault(o => o.CategoryId == previousSelection);
+        _cboCategoryFilter.SelectedItem = toReselect ?? _cboCategoryFilter.Items[0];
+        _cboCategoryFilter.SelectedIndexChanged += CategoryFilter_SelectedIndexChanged;
+
+        var selectedCategoryId = (_cboCategoryFilter.SelectedItem as CategoryFilterOption)?.CategoryId;
+        _items = await _apiClient.GetItemsAsync(selectedCategoryId, includeInactive: _chkShowInactive.Checked);
         _grid.DataSource = null;
         _grid.DataSource = _items;
     }
@@ -109,4 +149,6 @@ public class ItemsControl : UserControl
             await LoadAsync();
         }
     }
+
+    private record CategoryFilterOption(string Name, int? CategoryId);
 }
