@@ -101,7 +101,19 @@ public class FormMain : Form
         Controls.Add(_navBar);
 
         Load += FormMain_Load;
-        FormClosing += async (_, _) => await LogoutAsync(closingApp: true);
+        FormClosing += FormMain_FormClosing;
+    }
+
+    // FormClosing is fire-and-forget by default with an async handler - the window (and
+    // process) can close before the EndSessionAsync call actually completes, silently
+    // dropping the logout. Cancel the close, wait for it to finish, then close for real.
+    private async void FormMain_FormClosing(object? sender, FormClosingEventArgs e)
+    {
+        if (_loggedOut) return;
+
+        e.Cancel = true;
+        await LogoutAsync(closingApp: true);
+        Close();
     }
 
     private static Button CreateNavButton(string text) => new()
