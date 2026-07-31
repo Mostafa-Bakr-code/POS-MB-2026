@@ -14,6 +14,7 @@ public class FormMain : Form
     private readonly Button _btnItems;
     private readonly Button _btnUsers;
     private readonly Button _btnOrderHistory;
+    private readonly Button _btnDailySummary;
     private readonly Button _btnReports;
     private readonly Button _btnLogout;
 
@@ -55,6 +56,9 @@ public class FormMain : Form
         _btnOrderHistory = CreateNavButton("Order History");
         _btnOrderHistory.Click += (_, _) => ShowContent(new OrderHistoryControl());
 
+        _btnDailySummary = CreateNavButton("Daily Summary");
+        _btnDailySummary.Click += (_, _) => ShowContent(new DailySummaryControl());
+
         _btnReports = CreateNavButton("Reports");
         _btnReports.Click += (_, _) => ShowContent(new ReportsControl());
 
@@ -74,6 +78,7 @@ public class FormMain : Form
         navButtonsPanel.Controls.Add(_btnItems);
         navButtonsPanel.Controls.Add(_btnUsers);
         navButtonsPanel.Controls.Add(_btnOrderHistory);
+        navButtonsPanel.Controls.Add(_btnDailySummary);
         navButtonsPanel.Controls.Add(_btnReports);
         navButtonsPanel.Controls.Add(_btnLogout);
 
@@ -110,6 +115,7 @@ public class FormMain : Form
         _btnItems.Enabled = AppSession.HasPermission(Permission.Items);
         _btnUsers.Enabled = AppSession.HasPermission(Permission.Users);
         _btnOrderHistory.Enabled = AppSession.HasPermission(Permission.OrderHistory);
+        _btnDailySummary.Enabled = AppSession.HasPermission(Permission.DailySummary);
         _btnReports.Enabled = AppSession.HasPermission(Permission.Reports);
 
         ShowOrderTaking();
