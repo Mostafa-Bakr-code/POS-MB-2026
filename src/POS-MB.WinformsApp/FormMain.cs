@@ -29,7 +29,7 @@ public class FormMain : Form
         _navBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 90,
+            Height = 170,
             BackColor = Color.FromArgb(33, 37, 41)
         };
 
@@ -76,12 +76,12 @@ public class FormMain : Form
         var navButtonsPanel = new FlowLayoutPanel
         {
             // Fill (not Left+AutoSize) so this panel stops at the label's reserved
-            // width instead of growing over it as more nav buttons get added;
-            // AutoScroll lets it scroll horizontally if buttons still don't all fit.
+            // width instead of growing over it as more nav buttons get added.
+            // WrapContents lets extra buttons flow onto a second row (navBar is
+            // tall enough for two rows) instead of overlapping or scrolling.
             Dock = DockStyle.Fill,
-            AutoScroll = true,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             Padding = new Padding(10)
         };
         navButtonsPanel.Controls.Add(_btnNewOrder);
