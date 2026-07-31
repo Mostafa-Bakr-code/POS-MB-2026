@@ -66,6 +66,7 @@ public class ReportsControl : UserControl
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
+            RowHeadersVisible = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             RowTemplate = { Height = 36 },
             Font = new Font("Segoe UI", 11F)

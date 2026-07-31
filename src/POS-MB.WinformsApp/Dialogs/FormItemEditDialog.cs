@@ -15,7 +15,7 @@ public class FormItemEditDialog : Form
     public FormItemEditDialog(string title, List<CategoryDto> categories, string initialName = "", int? initialCategoryId = null, decimal initialPrice = 0)
     {
         Text = title;
-        Size = new Size(420, 320);
+        ClientSize = new Size(420, 330);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;

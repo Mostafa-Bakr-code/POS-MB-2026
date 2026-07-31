@@ -7,7 +7,7 @@ public class FormOrderDetailDialog : Form
     public FormOrderDetailDialog(OrderDto order, Dictionary<int, string> itemNamesById, string? cashierName)
     {
         Text = $"Order #{order.SerialNumber ?? order.OrderId}";
-        Size = new Size(560, 560);
+        ClientSize = new Size(600, 560);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -33,6 +33,7 @@ public class FormOrderDetailDialog : Form
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
             AutoGenerateColumns = false,
+            RowHeadersVisible = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             RowTemplate = { Height = 36 },
             Font = new Font("Segoe UI", 11F)

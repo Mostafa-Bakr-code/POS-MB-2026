@@ -10,7 +10,7 @@ public class FormTextInputDialog : Form
     public FormTextInputDialog(string title, string label, string initialValue = "")
     {
         Text = title;
-        Size = new Size(420, 220);
+        ClientSize = new Size(420, 190);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;

@@ -50,6 +50,7 @@ public class OrderHistoryControl : UserControl
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
+            RowHeadersVisible = false,
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             RowTemplate = { Height = 40 },
             Font = new Font("Segoe UI", 11F)

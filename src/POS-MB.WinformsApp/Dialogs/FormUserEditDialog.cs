@@ -39,7 +39,7 @@ public class FormUserEditDialog : Form
     {
         _isEdit = isEdit;
         Text = title;
-        Size = new Size(420, 480);
+        ClientSize = new Size(420, 470);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;

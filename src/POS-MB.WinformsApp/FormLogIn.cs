@@ -14,7 +14,7 @@ public class FormLogIn : Form
     public FormLogIn()
     {
         Text = "POS-MB - Login";
-        Size = new Size(480, 420);
+        ClientSize = new Size(480, 400);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
