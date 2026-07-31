@@ -12,6 +12,7 @@ public class OrderTakingControl : UserControl
     private readonly FlowLayoutPanel _itemsPanel;
     private readonly FlowLayoutPanel _cartPanel;
     private readonly Label _lblTotal;
+    private readonly CheckBox _chkComplimentary;
     private readonly Button _btnPlaceOrder;
 
     private List<CategoryDto> _categories = [];
@@ -64,6 +65,15 @@ public class OrderTakingControl : UserControl
             TextAlign = ContentAlignment.MiddleLeft
         };
 
+        _chkComplimentary = new CheckBox
+        {
+            Text = "Complimentary Order (no charge)",
+            Dock = DockStyle.Bottom,
+            Height = 40,
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(220, 53, 69)
+        };
+
         _btnPlaceOrder = new Button
         {
             Text = "Place Order",
@@ -78,6 +88,7 @@ public class OrderTakingControl : UserControl
 
         cartContainer.Controls.Add(_cartPanel);
         cartContainer.Controls.Add(_lblTotal);
+        cartContainer.Controls.Add(_chkComplimentary);
         cartContainer.Controls.Add(_btnPlaceOrder);
         cartContainer.Controls.Add(lblCartTitle);
 
@@ -231,7 +242,7 @@ public class OrderTakingControl : UserControl
             var request = new CreateOrderRequest(
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
-                IsComplimentary: false,
+                IsComplimentary: _chkComplimentary.Checked,
                 _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, null)).ToList());
 
             var order = await _apiClient.CreateOrderAsync(request);
@@ -241,6 +252,7 @@ public class OrderTakingControl : UserControl
                 "Order Placed", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
             _cart.Clear();
+            _chkComplimentary.Checked = false;
             RenderCart();
         }
         catch (Exception ex)
