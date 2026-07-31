@@ -1,4 +1,5 @@
 using POS_MB.WinformsApp.Models;
+using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Dialogs;
 
@@ -40,7 +41,7 @@ public class FormItemPriceHistoryDialog : Form
             foreach (var entry in history)
             {
                 grid.Rows.Add(
-                    entry.ChangedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                    AppSession.ToLocalDisplay(entry.ChangedAt).ToString("yyyy-MM-dd HH:mm"),
                     entry.ChangedByUserName ?? "(unknown)",
                     $"{entry.OldPrice:0.00} -> {entry.NewPrice:0.00}",
                     $"{entry.OldTaxRate:0.00}% -> {entry.NewTaxRate:0.00}%");

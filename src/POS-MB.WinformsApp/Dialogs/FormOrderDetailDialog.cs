@@ -1,4 +1,5 @@
 using POS_MB.WinformsApp.Models;
+using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Dialogs;
 
@@ -20,7 +21,7 @@ public class FormOrderDetailDialog : Form
             Height = 150,
             Padding = new Padding(20, 15, 20, 0),
             Text =
-                $"Date: {order.Date:yyyy-MM-dd HH:mm}\n" +
+                $"Date: {AppSession.ToLocalDisplay(order.Date):yyyy-MM-dd HH:mm}\n" +
                 $"Source: {order.OrderSource}{(cashierName is null ? "" : $"  (Cashier: {cashierName})")}\n" +
                 $"Status: {order.Status}{(order.IsComplimentary ? "  (Complimentary)" : "")}\n" +
                 $"Total: {order.Total:0.00}"

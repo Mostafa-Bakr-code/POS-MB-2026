@@ -1,6 +1,7 @@
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
+using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Controls;
 
@@ -75,7 +76,7 @@ public class OrderHistoryControl : UserControl
     {
         if (_grid.Columns[e.ColumnIndex].Name == "Date" && e.Value is DateTime date)
         {
-            e.Value = date.ToString("yyyy-MM-dd HH:mm");
+            e.Value = AppSession.ToLocalDisplay(date).ToString("yyyy-MM-dd HH:mm");
             e.FormattingApplied = true;
         }
         else if (_grid.Columns[e.ColumnIndex].Name == "Total" && e.Value is decimal total)

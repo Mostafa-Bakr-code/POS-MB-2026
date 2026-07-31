@@ -1,3 +1,4 @@
+using System.Globalization;
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Session;
 
@@ -91,6 +92,11 @@ public class FormLogIn : Form
 
             AppSession.CurrentUser = user;
             AppSession.LogId = logId;
+
+            var offsetValue = await _apiClient.GetSettingValueAsync("TimeZoneOffsetHours");
+            AppSession.TimeZoneOffsetHours = offsetValue is not null && decimal.TryParse(offsetValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var offset)
+                ? offset
+                : 0m;
 
             var main = new FormMain();
             main.FormClosed += (_, _) => Close();
