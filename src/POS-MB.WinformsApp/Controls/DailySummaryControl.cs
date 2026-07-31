@@ -67,11 +67,18 @@ public class DailySummaryControl : UserControl
         _grid.Rows.Add("Cashier Orders", summary.CashierOrders.ToString());
         _grid.Rows.Add("Mobile Orders", summary.MobileOrders.ToString());
         _grid.Rows.Add("Complimentary Orders", summary.ComplimentaryOrders.ToString());
-        _grid.Rows.Add("Total Revenue (incl. tax)", summary.TotalRevenue.ToString("0.00"));
+
+        var revenueRowIndex = _grid.Rows.Add("Total Revenue (incl. tax)", summary.TotalRevenue.ToString("0.00"));
+
         _grid.Rows.Add("Total Revenue (excl. tax)", summary.RevenueExcludingTax.ToString("0.00"));
         _grid.Rows.Add("Total Tax", summary.TotalTax.ToString("0.00"));
         _grid.Rows.Add("Complimentary Value", summary.ComplimentaryValue.ToString("0.00"));
         _grid.Rows.Add("Average Order Value", summary.AverageOrderValue.ToString("0.00"));
+
+        // This is the one figure the cashier reads out - make it impossible to miss.
+        var revenueRow = _grid.Rows[revenueRowIndex];
+        revenueRow.DefaultCellStyle.ForeColor = Color.Red;
+        revenueRow.DefaultCellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
     }
 
     private async Task ExportAsync()
