@@ -16,6 +16,7 @@ public class FormUserEditDialog : Form
     private readonly CheckBox _chkOrderHistory;
     private readonly CheckBox _chkDailySummary;
     private readonly CheckBox _chkSettings;
+    private readonly CheckBox _chkLogs;
 
     public string UserNameValue => _txtUserName.Text.Trim();
     public string? PasswordValue => string.IsNullOrWhiteSpace(_txtPassword.Text) ? null : _txtPassword.Text;
@@ -35,6 +36,7 @@ public class FormUserEditDialog : Form
             if (_chkOrderHistory.Checked) permission |= Permission.OrderHistory;
             if (_chkDailySummary.Checked) permission |= Permission.DailySummary;
             if (_chkSettings.Checked) permission |= Permission.Settings;
+            if (_chkLogs.Checked) permission |= Permission.Logs;
             return (int)permission;
         }
     }
@@ -45,7 +47,7 @@ public class FormUserEditDialog : Form
     {
         _isEdit = isEdit;
         Text = title;
-        ClientSize = new Size(420, 500);
+        ClientSize = new Size(420, 550);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -75,16 +77,17 @@ public class FormUserEditDialog : Form
         _chkOrderHistory = new CheckBox { Text = "Order History", Location = new Point(210, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.OrderHistory) };
         _chkDailySummary = new CheckBox { Text = "Daily Summary Only", Location = new Point(20, 332), Size = new Size(200, 28), Checked = existing.HasFlag(Permission.DailySummary) };
         _chkSettings = new CheckBox { Text = "Settings", Location = new Point(230, 332), Size = new Size(150, 28), Checked = existing.HasFlag(Permission.Settings) };
+        _chkLogs = new CheckBox { Text = "Logs", Location = new Point(20, 364), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Logs) };
 
-        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary, _chkSettings };
+        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary, _chkSettings, _chkLogs };
         _chkFullAccess.CheckedChanged += (_, _) =>
         {
             foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
         };
         foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
 
-        var btnSave = new Button { Text = "Save", Location = new Point(20, 432), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F, FontStyle.Bold), DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(210, 432), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F), DialogResult = DialogResult.Cancel };
+        var btnSave = new Button { Text = "Save", Location = new Point(20, 482), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F, FontStyle.Bold), DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", Location = new Point(210, 482), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F), DialogResult = DialogResult.Cancel };
 
         Controls.Add(lblUserName);
         Controls.Add(_txtUserName);
@@ -100,6 +103,7 @@ public class FormUserEditDialog : Form
         Controls.Add(_chkOrderHistory);
         Controls.Add(_chkDailySummary);
         Controls.Add(_chkSettings);
+        Controls.Add(_chkLogs);
         Controls.Add(btnSave);
         Controls.Add(btnCancel);
 

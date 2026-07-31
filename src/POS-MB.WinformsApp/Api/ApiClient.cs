@@ -126,6 +126,13 @@ public class ApiClient
         return result ?? [];
     }
 
+    public async Task<List<LogDto>> GetLogsAsync(DateTime? startDate, DateTime? endDate)
+    {
+        var url = "api/logs" + DateQuery(startDate, endDate);
+        var result = await _httpClient.GetFromJsonAsync<List<LogDto>>(url);
+        return result ?? [];
+    }
+
     public async Task<OrderDto?> GetOrderByIdAsync(int orderId)
     {
         var response = await _httpClient.GetAsync($"api/orders/{orderId}");

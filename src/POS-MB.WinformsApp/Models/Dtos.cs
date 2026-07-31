@@ -39,6 +39,14 @@ public class UserDto
     public bool IsActive { get; set; }
 }
 
+public class LogDto
+{
+    public int LogId { get; set; }
+    public int UserId { get; set; }
+    public DateTime LogIn { get; set; }
+    public DateTime? LogOut { get; set; }
+}
+
 public class OrderItemDto
 {
     public int OrderItemId { get; set; }
