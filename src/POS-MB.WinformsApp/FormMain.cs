@@ -33,14 +33,20 @@ public class FormMain : Form
             BackColor = Color.FromArgb(33, 37, 41)
         };
 
+        // Username + Log Out live together in their own column on the far right,
+        // permanently separated from the nav button flow (and from New Order
+        // specifically) so wrapping/resizing can never put Log Out next to a
+        // frequently-tapped button by accident.
+        var rightPanel = new Panel { Dock = DockStyle.Right, Width = 220 };
+
         _lblActiveUser = new Label
         {
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             AutoSize = false,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Dock = DockStyle.Right,
-            Width = 260
+            TextAlign = ContentAlignment.MiddleCenter,
+            Dock = DockStyle.Top,
+            Height = 85
         };
 
         _btnNewOrder = CreateNavButton("New Order");
@@ -70,8 +76,16 @@ public class FormMain : Form
         _btnLogs = CreateNavButton("Logs");
         _btnLogs.Click += (_, _) => ShowContent(new LogsControl());
 
-        _btnLogout = CreateNavButton("Log Out");
-        _btnLogout.Click += async (_, _) => await LogoutAsync();
+        _btnLogout = new Button
+        {
+            Text = "Log Out",
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(176, 42, 55),
+            ForeColor = Color.White
+        };
+        _btnLogout.Click += async (_, _) => await ConfirmAndLogoutAsync();
 
         var navButtonsPanel = new FlowLayoutPanel
         {
@@ -93,10 +107,12 @@ public class FormMain : Form
         navButtonsPanel.Controls.Add(_btnReports);
         navButtonsPanel.Controls.Add(_btnSettings);
         navButtonsPanel.Controls.Add(_btnLogs);
-        navButtonsPanel.Controls.Add(_btnLogout);
+
+        rightPanel.Controls.Add(_btnLogout);
+        rightPanel.Controls.Add(_lblActiveUser);
 
         _navBar.Controls.Add(navButtonsPanel);
-        _navBar.Controls.Add(_lblActiveUser);
+        _navBar.Controls.Add(rightPanel);
 
         _contentArea = new Panel { Dock = DockStyle.Fill };
 
@@ -155,6 +171,15 @@ public class FormMain : Form
         control.Dock = DockStyle.Fill;
         _contentArea.Controls.Clear();
         _contentArea.Controls.Add(control);
+    }
+
+    private async Task ConfirmAndLogoutAsync()
+    {
+        var result = MessageBox.Show("Are you sure you want to log out?", "Log Out",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        if (result != DialogResult.Yes) return;
+
+        await LogoutAsync();
     }
 
     private bool _loggedOut;
