@@ -15,6 +15,7 @@ public class ItemDto
     public decimal Price { get; set; }
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
+    public bool IsAvailable { get; set; }
 }
 
 public class UserDto

@@ -8,6 +8,7 @@ public class Item
     public decimal Price { get; set; }
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
+    public bool IsAvailable { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

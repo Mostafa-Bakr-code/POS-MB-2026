@@ -56,8 +56,10 @@ public class ItemsControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "ItemName", HeaderText = "Name", DataPropertyName = "ItemName", Width = 180 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "CategoryId", HeaderText = "Category", DataPropertyName = "CategoryId", Width = 150 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Price", HeaderText = "Price", DataPropertyName = "Price", Width = 100 });
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 80 });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 70 });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsAvailable", HeaderText = "In Stock", DataPropertyName = "IsAvailable", Width = 70 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Availability", HeaderText = "", Width = 150 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
         _grid.CellClick += Grid_CellClick;
         _grid.CellFormatting += Grid_CellFormatting;
@@ -70,10 +72,18 @@ public class ItemsControl : UserControl
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
-        if (_grid.Columns[e.ColumnIndex].Name != "CategoryId" || e.Value is null) return;
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
 
-        e.Value = CategoryName(Convert.ToInt32(e.Value));
-        e.FormattingApplied = true;
+        if (columnName == "CategoryId" && e.Value is not null)
+        {
+            e.Value = CategoryName(Convert.ToInt32(e.Value));
+            e.FormattingApplied = true;
+        }
+        else if (columnName == "Availability" && e.RowIndex < _items.Count)
+        {
+            e.Value = _items[e.RowIndex].IsAvailable ? "Mark Out of Stock" : "Mark In Stock";
+            e.FormattingApplied = true;
+        }
     }
 
     private async void CategoryFilter_SelectedIndexChanged(object? sender, EventArgs e) => await LoadAsync();
@@ -131,6 +141,11 @@ public class ItemsControl : UserControl
                 await _apiClient.DeactivateItemAsync(item.ItemId);
                 await LoadAsync();
             }
+        }
+        else if (columnName == "Availability")
+        {
+            await _apiClient.SetItemAvailabilityAsync(item.ItemId, !item.IsAvailable);
+            await LoadAsync();
         }
     }
 

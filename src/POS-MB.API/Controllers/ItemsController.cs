@@ -8,9 +8,9 @@ namespace POS_MB.API.Controllers;
 public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false, [FromQuery] int? categoryId = null)
+    public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false, [FromQuery] int? categoryId = null, [FromQuery] bool availableOnly = false)
     {
-        var items = await itemBusiness.GetAllAsync(includeInactive, categoryId);
+        var items = await itemBusiness.GetAllAsync(includeInactive, categoryId, availableOnly);
         return Ok(items);
     }
 
@@ -42,7 +42,15 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
         var deactivated = await itemBusiness.DeactivateAsync(id);
         return deactivated ? NoContent() : NotFound();
     }
+
+    [HttpPost("{id:int}/availability")]
+    public async Task<IActionResult> SetAvailability(int id, [FromBody] SetItemAvailabilityRequest request)
+    {
+        var updated = await itemBusiness.SetAvailabilityAsync(id, request.IsAvailable);
+        return updated ? NoContent() : NotFound();
+    }
 }
 
 public record CreateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate);
 public record UpdateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate);
+public record SetItemAvailabilityRequest(bool IsAvailable);

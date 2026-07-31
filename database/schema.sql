@@ -44,7 +44,8 @@ CREATE TABLE dbo.Items
     CategoryId INT              NOT NULL,
     Price     DECIMAL(18,4)     NOT NULL,
     TaxRate   DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Items_TaxRate DEFAULT (14.00),
-    IsActive  BIT               NOT NULL CONSTRAINT DF_Items_IsActive DEFAULT (1),
+    IsActive  BIT               NOT NULL CONSTRAINT DF_Items_IsActive DEFAULT (1), -- permanent retirement (admin action)
+    IsAvailable BIT             NOT NULL CONSTRAINT DF_Items_IsAvailable DEFAULT (1), -- temporary "out of stock right now" toggle, independent of IsActive
     CreatedAt DATETIME2(3)      NOT NULL CONSTRAINT DF_Items_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt DATETIME2(3)      NOT NULL CONSTRAINT DF_Items_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Items PRIMARY KEY CLUSTERED (ItemId),

@@ -144,7 +144,7 @@ public class OrderTakingControl : UserControl
     private async Task LoadItemsAsync(int categoryId)
     {
         _itemsPanel.Controls.Clear();
-        _items = await _apiClient.GetItemsAsync(categoryId);
+        _items = await _apiClient.GetItemsAsync(categoryId, availableOnly: true);
 
         foreach (var item in _items)
         {

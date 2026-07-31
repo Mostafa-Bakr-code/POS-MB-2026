@@ -9,8 +9,8 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
     private const string DefaultTaxRateSettingKey = "DefaultTaxRate";
     private const decimal FallbackTaxRate = 14.00m;
 
-    public Task<IEnumerable<Item>> GetAllAsync(bool includeInactive = false, int? categoryId = null) =>
-        dataAccess.GetAllAsync(includeInactive, categoryId);
+    public Task<IEnumerable<Item>> GetAllAsync(bool includeInactive = false, int? categoryId = null, bool availableOnly = false) =>
+        dataAccess.GetAllAsync(includeInactive, categoryId, availableOnly);
 
     public Task<Item?> GetByIdAsync(int id) =>
         dataAccess.GetByIdAsync(id);
@@ -44,6 +44,9 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
 
     public Task<bool> DeactivateAsync(int id) =>
         dataAccess.DeactivateAsync(id);
+
+    public Task<bool> SetAvailabilityAsync(int id, bool isAvailable) =>
+        dataAccess.SetAvailabilityAsync(id, isAvailable);
 
     private async Task<decimal> GetDefaultTaxRateAsync()
     {

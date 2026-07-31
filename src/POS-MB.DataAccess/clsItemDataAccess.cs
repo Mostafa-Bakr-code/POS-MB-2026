@@ -5,12 +5,13 @@ namespace POS_MB.DataAccess;
 
 public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
 {
-    public async Task<IEnumerable<Item>> GetAllAsync(bool includeInactive = false, int? categoryId = null)
+    public async Task<IEnumerable<Item>> GetAllAsync(bool includeInactive = false, int? categoryId = null, bool availableOnly = false)
     {
         using var connection = connectionFactory.CreateConnection();
 
         var query = "SELECT * FROM Items WHERE 1 = 1";
         if (!includeInactive) query += " AND IsActive = 1";
+        if (availableOnly) query += " AND IsAvailable = 1";
         if (categoryId is not null) query += " AND CategoryId = @CategoryId";
 
         return await connection.QueryAsync<Item>(query, new { CategoryId = categoryId });
@@ -77,6 +78,21 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
             WHERE ItemId = @Id";
 
         var rowsAffected = await connection.ExecuteAsync(query, new { Id = id });
+
+        return rowsAffected > 0;
+    }
+
+    public async Task<bool> SetAvailabilityAsync(int id, bool isAvailable)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Items
+            SET IsAvailable = @IsAvailable,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE ItemId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, IsAvailable = isAvailable });
 
         return rowsAffected > 0;
     }

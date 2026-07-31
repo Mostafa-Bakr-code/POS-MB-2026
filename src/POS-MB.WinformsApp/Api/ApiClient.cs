@@ -70,9 +70,9 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool includeInactive = false)
+    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool includeInactive = false, bool availableOnly = false)
     {
-        var url = $"api/items?includeInactive={includeInactive}";
+        var url = $"api/items?includeInactive={includeInactive}&availableOnly={availableOnly}";
         if (categoryId is not null) url += $"&categoryId={categoryId}";
         var result = await _httpClient.GetFromJsonAsync<List<ItemDto>>(url);
         return result ?? [];
@@ -95,6 +95,12 @@ public class ApiClient
     public async Task DeactivateItemAsync(int itemId)
     {
         var response = await _httpClient.PostAsync($"api/items/{itemId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task SetItemAvailabilityAsync(int itemId, bool isAvailable)
+    {
+        var response = await _httpClient.PostAsJsonAsync($"api/items/{itemId}/availability", new { IsAvailable = isAvailable });
         response.EnsureSuccessStatusCode();
     }
 
