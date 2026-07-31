@@ -71,7 +71,7 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         if (startDate is not null) query += " AND o.OrderDate >= @StartDate";
         if (endDate is not null) query += " AND o.OrderDate <= @EndDate";
         query += $@"
-            GROUP BY {dateColumn} c.CategoryName, i.ItemName
+            GROUP BY {dateColumn} i.ItemId, c.CategoryName, i.ItemName
             ORDER BY {dateOrder} c.CategoryName, i.ItemName";
 
         return await connection.QueryAsync<ItemSalesRow>(
@@ -102,7 +102,7 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         if (startDate is not null) query += " AND o.OrderDate >= @StartDate";
         if (endDate is not null) query += " AND o.OrderDate <= @EndDate";
         query += $@"
-            GROUP BY c.CategoryName, i.ItemName
+            GROUP BY i.ItemId, c.CategoryName, i.ItemName
             ORDER BY {sortColumn} DESC";
 
         return await connection.QueryAsync<ItemSalesRow>(
