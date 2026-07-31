@@ -109,7 +109,7 @@ public class FormMain : Form
         _btnCategories.Enabled = AppSession.HasPermission(Permission.Categories);
         _btnItems.Enabled = AppSession.HasPermission(Permission.Items);
         _btnUsers.Enabled = AppSession.HasPermission(Permission.Users);
-        _btnOrderHistory.Enabled = AppSession.HasPermission(Permission.Orders);
+        _btnOrderHistory.Enabled = AppSession.HasPermission(Permission.OrderHistory);
         _btnReports.Enabled = AppSession.HasPermission(Permission.Reports);
 
         ShowOrderTaking();

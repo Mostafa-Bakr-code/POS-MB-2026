@@ -13,6 +13,7 @@ public class FormUserEditDialog : Form
     private readonly CheckBox _chkOrders;
     private readonly CheckBox _chkUsers;
     private readonly CheckBox _chkReports;
+    private readonly CheckBox _chkOrderHistory;
 
     public string UserNameValue => _txtUserName.Text.Trim();
     public string? PasswordValue => string.IsNullOrWhiteSpace(_txtPassword.Text) ? null : _txtPassword.Text;
@@ -29,6 +30,7 @@ public class FormUserEditDialog : Form
             if (_chkOrders.Checked) permission |= Permission.Orders;
             if (_chkUsers.Checked) permission |= Permission.Users;
             if (_chkReports.Checked) permission |= Permission.Reports;
+            if (_chkOrderHistory.Checked) permission |= Permission.OrderHistory;
             return (int)permission;
         }
     }
@@ -66,8 +68,9 @@ public class FormUserEditDialog : Form
         _chkOrders = new CheckBox { Text = "Orders", Location = new Point(20, 268), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Orders) };
         _chkUsers = new CheckBox { Text = "Users", Location = new Point(210, 268), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Users) };
         _chkReports = new CheckBox { Text = "Reports", Location = new Point(20, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Reports) };
+        _chkOrderHistory = new CheckBox { Text = "Order History", Location = new Point(210, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.OrderHistory) };
 
-        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports };
+        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory };
         _chkFullAccess.CheckedChanged += (_, _) =>
         {
             foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
@@ -88,6 +91,7 @@ public class FormUserEditDialog : Form
         Controls.Add(_chkOrders);
         Controls.Add(_chkUsers);
         Controls.Add(_chkReports);
+        Controls.Add(_chkOrderHistory);
         Controls.Add(btnSave);
         Controls.Add(btnCancel);
 
