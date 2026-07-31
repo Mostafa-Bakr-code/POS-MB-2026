@@ -1,4 +1,5 @@
 using POS_MB.WinformsApp.Api;
+using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
 using POS_MB.WinformsApp.Session;
 
@@ -186,7 +187,7 @@ public class OrderTakingControl : UserControl
 
         foreach (var line in _cart)
         {
-            var row = new Panel { Width = _cartPanel.Width - 25, Height = 60, Margin = new Padding(0, 0, 0, 6) };
+            var row = new Panel { Width = _cartPanel.Width - 25, Height = 90, Margin = new Padding(0, 0, 0, 6) };
 
             var lblName = new Label
             {
@@ -204,11 +205,40 @@ public class OrderTakingControl : UserControl
             btnPlus.Click += (_, _) => { ChangeQuantity(line, 1); };
             btnRemove.Click += (_, _) => { _cart.Remove(line); RenderCart(); };
 
+            var lblComment = new Label
+            {
+                Text = string.IsNullOrWhiteSpace(line.Comment) ? "No comment" : line.Comment,
+                Font = new Font("Segoe UI", 9F, FontStyle.Italic),
+                ForeColor = string.IsNullOrWhiteSpace(line.Comment) ? Color.Gray : Color.Black,
+                Location = new Point(0, 64),
+                Size = new Size(140, 24),
+                AutoEllipsis = true
+            };
+            var btnComment = new Button
+            {
+                Text = string.IsNullOrWhiteSpace(line.Comment) ? "Add Comment" : "Edit Comment",
+                Location = new Point(145, 58),
+                Size = new Size(170, 30),
+                Font = new Font("Segoe UI", 9F),
+                FlatStyle = FlatStyle.Flat
+            };
+            btnComment.Click += (_, _) =>
+            {
+                using var dialog = new FormTextInputDialog($"Comment for {line.Item.ItemName}", "Comment (e.g. no onions)", line.Comment ?? "");
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    line.Comment = dialog.Value.Length == 0 ? null : dialog.Value;
+                    RenderCart();
+                }
+            };
+
             row.Controls.Add(lblName);
             row.Controls.Add(btnMinus);
             row.Controls.Add(lblQty);
             row.Controls.Add(btnPlus);
             row.Controls.Add(btnRemove);
+            row.Controls.Add(lblComment);
+            row.Controls.Add(btnComment);
 
             _cartPanel.Controls.Add(row);
         }
@@ -243,7 +273,7 @@ public class OrderTakingControl : UserControl
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
                 IsComplimentary: _chkComplimentary.Checked,
-                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, null)).ToList());
+                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
 
             var order = await _apiClient.CreateOrderAsync(request);
 
@@ -269,5 +299,6 @@ public class OrderTakingControl : UserControl
     {
         public ItemDto Item { get; } = item;
         public int Quantity { get; set; } = quantity;
+        public string? Comment { get; set; }
     }
 }
