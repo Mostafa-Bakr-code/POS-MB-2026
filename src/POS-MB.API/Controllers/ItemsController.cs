@@ -32,8 +32,15 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateItemRequest request)
     {
-        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate);
+        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, request.ChangedByUserId);
         return updated ? NoContent() : NotFound();
+    }
+
+    [HttpGet("{id:int}/price-history")]
+    public async Task<IActionResult> GetPriceHistory(int id)
+    {
+        var history = await itemBusiness.GetPriceHistoryAsync(id);
+        return Ok(history);
     }
 
     [HttpPost("{id:int}/deactivate")]
@@ -52,5 +59,5 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
 }
 
 public record CreateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate);
-public record UpdateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate);
+public record UpdateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate, int? ChangedByUserId);
 public record SetItemAvailabilityRequest(bool IsAvailable);

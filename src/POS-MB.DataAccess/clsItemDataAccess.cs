@@ -96,4 +96,37 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
 
         return rowsAffected > 0;
     }
+
+    public async Task LogPriceChangeAsync(int itemId, decimal oldPrice, decimal newPrice, decimal oldTaxRate, decimal newTaxRate, int? changedByUserId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            INSERT INTO ItemPriceHistory (ItemId, OldPrice, NewPrice, OldTaxRate, NewTaxRate, ChangedByUserId)
+            VALUES (@ItemId, @OldPrice, @NewPrice, @OldTaxRate, @NewTaxRate, @ChangedByUserId);";
+
+        await connection.ExecuteAsync(query, new
+        {
+            ItemId = itemId,
+            OldPrice = oldPrice,
+            NewPrice = newPrice,
+            OldTaxRate = oldTaxRate,
+            NewTaxRate = newTaxRate,
+            ChangedByUserId = changedByUserId
+        });
+    }
+
+    public async Task<IEnumerable<ItemPriceHistory>> GetPriceHistoryAsync(int itemId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            SELECT h.*, u.UserName AS ChangedByUserName
+            FROM ItemPriceHistory h
+            LEFT JOIN Users u ON u.UserId = h.ChangedByUserId
+            WHERE h.ItemId = @ItemId
+            ORDER BY h.ChangedAt DESC";
+
+        return await connection.QueryAsync<ItemPriceHistory>(query, new { ItemId = itemId });
+    }
 }

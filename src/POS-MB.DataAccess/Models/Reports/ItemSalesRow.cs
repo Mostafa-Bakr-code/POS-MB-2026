@@ -3,6 +3,9 @@ namespace POS_MB.DataAccess.Models.Reports;
 public class ItemSalesRow
 {
     public DateTime? OrderDate { get; set; }
+    // Only populated when the report is grouped by price (see groupByPrice) - the exact
+    // historical price this row's units were sold at, not today's catalog price.
+    public decimal? SoldAtPrice { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public int Quantity { get; set; }

@@ -1,6 +1,7 @@
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
+using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Controls;
 
@@ -60,6 +61,7 @@ public class ItemsControl : UserControl
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsAvailable", HeaderText = "In Stock", DataPropertyName = "IsAvailable", Width = 70 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Availability", HeaderText = "", Width = 200 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "History", HeaderText = "", Text = "Price History", UseColumnTextForButtonValue = true, Width = 130 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
         _grid.CellClick += Grid_CellClick;
         _grid.CellFormatting += Grid_CellFormatting;
@@ -136,9 +138,15 @@ public class ItemsControl : UserControl
             using var dialog = new FormItemEditDialog("Edit Item", _categories, item.ItemName, item.CategoryId, item.Price);
             if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
             {
-                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price);
+                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price, AppSession.CurrentUser?.UserId);
                 await LoadAsync();
             }
+        }
+        else if (columnName == "History")
+        {
+            var history = await _apiClient.GetItemPriceHistoryAsync(item.ItemId);
+            using var dialog = new FormItemPriceHistoryDialog(item.ItemName, history);
+            dialog.ShowDialog(this);
         }
         else if (columnName == "Deactivate")
         {

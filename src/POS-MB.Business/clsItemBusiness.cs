@@ -30,7 +30,7 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
         return await dataAccess.AddAsync(name, categoryId, price, resolvedTaxRate);
     }
 
-    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal? taxRate = null)
+    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal? taxRate = null, int? changedByUserId = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Item name is required.", nameof(name));
@@ -39,7 +39,17 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
 
         var resolvedTaxRate = taxRate ?? await GetDefaultTaxRateAsync();
 
-        return await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate);
+        var existing = await dataAccess.GetByIdAsync(id);
+        if (existing is null) return false;
+
+        var updated = await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate);
+
+        if (updated && (existing.Price != price || existing.TaxRate != resolvedTaxRate))
+        {
+            await dataAccess.LogPriceChangeAsync(id, existing.Price, price, existing.TaxRate, resolvedTaxRate, changedByUserId);
+        }
+
+        return updated;
     }
 
     public Task<bool> DeactivateAsync(int id) =>
@@ -47,6 +57,9 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
 
     public Task<bool> SetAvailabilityAsync(int id, bool isAvailable) =>
         dataAccess.SetAvailabilityAsync(id, isAvailable);
+
+    public Task<IEnumerable<ItemPriceHistory>> GetPriceHistoryAsync(int id) =>
+        dataAccess.GetPriceHistoryAsync(id);
 
     private async Task<decimal> GetDefaultTaxRateAsync()
     {

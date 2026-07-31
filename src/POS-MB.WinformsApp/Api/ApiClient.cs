@@ -85,11 +85,17 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price)
+    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price, int? changedByUserId)
     {
         var response = await _httpClient.PutAsJsonAsync(
-            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price });
+            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price, ChangedByUserId = changedByUserId });
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<ItemPriceHistoryDto>> GetItemPriceHistoryAsync(int itemId)
+    {
+        var result = await _httpClient.GetFromJsonAsync<List<ItemPriceHistoryDto>>($"api/items/{itemId}/price-history");
+        return result ?? [];
     }
 
     public async Task DeactivateItemAsync(int itemId)
@@ -161,9 +167,9 @@ public class ApiClient
         return (await _httpClient.GetFromJsonAsync<SalesSummaryDto>(url))!;
     }
 
-    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay)
+    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay, bool groupByPrice = false)
     {
-        var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}";
+        var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}&groupByPrice={groupByPrice}";
         var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
         return result ?? [];
     }

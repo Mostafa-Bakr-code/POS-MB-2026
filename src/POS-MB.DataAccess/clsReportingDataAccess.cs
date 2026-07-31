@@ -46,17 +46,28 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         return summary;
     }
 
-    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? startDate = null, DateTime? endDate = null, bool groupByDay = false)
+    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? startDate = null, DateTime? endDate = null, bool groupByDay = false, bool groupByPrice = false)
     {
         using var connection = connectionFactory.CreateConnection();
 
         var dateColumn = groupByDay ? "CAST(o.[Date] AS DATE)," : string.Empty;
         var dateSelect = groupByDay ? $"{dateColumn.TrimEnd(',')} AS OrderDate," : string.Empty;
-        var dateOrder = groupByDay ? "OrderDate," : string.Empty;
+
+        // Uses oi.Price - each line's own historical snapshot - not today's Items.Price,
+        // so this reflects exactly what was charged at the time, no matter how many times
+        // the catalog price has changed since.
+        var priceColumn = groupByPrice ? "oi.Price," : string.Empty;
+        var priceSelect = groupByPrice ? "oi.Price AS SoldAtPrice," : string.Empty;
+
+        var orderParts = new List<string> { "c.CategoryName", "i.ItemName" };
+        if (groupByDay) orderParts.Add("OrderDate");
+        if (groupByPrice) orderParts.Add("SoldAtPrice");
+        var orderBy = string.Join(", ", orderParts);
 
         var query = $@"
             SELECT
                 {dateSelect}
+                {priceSelect}
                 c.CategoryName,
                 i.ItemName,
                 SUM(oi.Quantity) AS Quantity,
@@ -71,8 +82,8 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         if (startDate is not null) query += " AND o.OrderDate >= @StartDate";
         if (endDate is not null) query += " AND o.OrderDate <= @EndDate";
         query += $@"
-            GROUP BY {dateColumn} i.ItemId, c.CategoryName, i.ItemName
-            ORDER BY {dateOrder} c.CategoryName, i.ItemName";
+            GROUP BY {dateColumn} {priceColumn} i.ItemId, c.CategoryName, i.ItemName
+            ORDER BY {orderBy}";
 
         return await connection.QueryAsync<ItemSalesRow>(
             query, new { StartDate = startDate?.Date, EndDate = endDate?.Date });

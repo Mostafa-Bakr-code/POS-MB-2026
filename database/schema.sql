@@ -88,6 +88,22 @@ CREATE TABLE dbo.OrderItems
 );
 GO
 
+CREATE TABLE dbo.ItemPriceHistory
+(
+    ItemPriceHistoryId INT IDENTITY(1,1) NOT NULL,
+    ItemId          INT           NOT NULL,
+    OldPrice        DECIMAL(18,4) NOT NULL,
+    NewPrice        DECIMAL(18,4) NOT NULL,
+    OldTaxRate      DECIMAL(18,4) NOT NULL,
+    NewTaxRate      DECIMAL(18,4) NOT NULL,
+    ChangedByUserId INT           NULL, -- who made the change; client-asserted (no server-side auth yet, see project memory)
+    ChangedAt       DATETIME2(3)  NOT NULL CONSTRAINT DF_ItemPriceHistory_ChangedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_ItemPriceHistory PRIMARY KEY CLUSTERED (ItemPriceHistoryId),
+    CONSTRAINT FK_ItemPriceHistory_Items FOREIGN KEY (ItemId) REFERENCES dbo.Items (ItemId),
+    CONSTRAINT FK_ItemPriceHistory_Users FOREIGN KEY (ChangedByUserId) REFERENCES dbo.Users (UserId)
+);
+GO
+
 CREATE TABLE dbo.Logs
 (
     LogId  INT IDENTITY(1,1) NOT NULL,
