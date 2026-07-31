@@ -106,6 +106,21 @@ public class ApiClient
         return (await response.Content.ReadFromJsonAsync<OrderDto>())!;
     }
 
+    public async Task<List<OrderDto>> GetOrdersAsync(DateTime? startDate, DateTime? endDate, OrderSource? orderSource)
+    {
+        var url = "api/orders" + DateQuery(startDate, endDate);
+        if (orderSource is not null) url += $"&orderSource={orderSource}";
+        var result = await _httpClient.GetFromJsonAsync<List<OrderDto>>(url);
+        return result ?? [];
+    }
+
+    public async Task<OrderDto?> GetOrderByIdAsync(int orderId)
+    {
+        var response = await _httpClient.GetAsync($"api/orders/{orderId}");
+        if (!response.IsSuccessStatusCode) return null;
+        return await response.Content.ReadFromJsonAsync<OrderDto>();
+    }
+
     public async Task<List<UserDto>> GetUsersAsync(bool includeInactive = false)
     {
         var url = $"api/users?includeInactive={includeInactive}";
