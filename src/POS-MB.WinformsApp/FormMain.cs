@@ -75,8 +75,11 @@ public class FormMain : Form
 
         var navButtonsPanel = new FlowLayoutPanel
         {
-            Dock = DockStyle.Left,
-            AutoSize = true,
+            // Fill (not Left+AutoSize) so this panel stops at the label's reserved
+            // width instead of growing over it as more nav buttons get added;
+            // AutoScroll lets it scroll horizontally if buttons still don't all fit.
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             Padding = new Padding(10)
