@@ -103,18 +103,21 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QueryAsync<OrderItem>(query, new { OrderId = orderId });
     }
 
-    public async Task<IEnumerable<Order>> GetAllAsync(DateTime? startDate = null, DateTime? endDate = null, OrderSource? orderSource = null)
+    // utcStart/utcEndExclusive are already-resolved UTC instants (local-timezone conversion
+    // happens in clsOrderBusiness) - filtering on the raw Date column, not the OrderDate
+    // shortcut, since OrderDate reflects the UTC calendar day, not the caller's local day.
+    public async Task<IEnumerable<Order>> GetAllAsync(DateTime? utcStart = null, DateTime? utcEndExclusive = null, OrderSource? orderSource = null)
     {
         using var connection = connectionFactory.CreateConnection();
 
         var query = "SELECT * FROM Orders WHERE 1 = 1";
-        if (startDate is not null) query += " AND OrderDate >= @StartDate";
-        if (endDate is not null) query += " AND OrderDate <= @EndDate";
+        if (utcStart is not null) query += " AND Date >= @UtcStart";
+        if (utcEndExclusive is not null) query += " AND Date < @UtcEndExclusive";
         if (orderSource is not null) query += " AND OrderSource = @OrderSource";
         query += " ORDER BY OrderId DESC";
 
         return await connection.QueryAsync<Order>(
-            query, new { StartDate = startDate?.Date, EndDate = endDate?.Date, OrderSource = orderSource });
+            query, new { UtcStart = utcStart, UtcEndExclusive = utcEndExclusive, OrderSource = orderSource });
     }
 
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)
