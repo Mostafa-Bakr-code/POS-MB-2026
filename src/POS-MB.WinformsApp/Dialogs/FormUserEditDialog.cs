@@ -15,6 +15,7 @@ public class FormUserEditDialog : Form
     private readonly CheckBox _chkReports;
     private readonly CheckBox _chkOrderHistory;
     private readonly CheckBox _chkDailySummary;
+    private readonly CheckBox _chkSettings;
 
     public string UserNameValue => _txtUserName.Text.Trim();
     public string? PasswordValue => string.IsNullOrWhiteSpace(_txtPassword.Text) ? null : _txtPassword.Text;
@@ -33,6 +34,7 @@ public class FormUserEditDialog : Form
             if (_chkReports.Checked) permission |= Permission.Reports;
             if (_chkOrderHistory.Checked) permission |= Permission.OrderHistory;
             if (_chkDailySummary.Checked) permission |= Permission.DailySummary;
+            if (_chkSettings.Checked) permission |= Permission.Settings;
             return (int)permission;
         }
     }
@@ -72,8 +74,9 @@ public class FormUserEditDialog : Form
         _chkReports = new CheckBox { Text = "Reports", Location = new Point(20, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Reports) };
         _chkOrderHistory = new CheckBox { Text = "Order History", Location = new Point(210, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.OrderHistory) };
         _chkDailySummary = new CheckBox { Text = "Daily Summary Only", Location = new Point(20, 332), Size = new Size(200, 28), Checked = existing.HasFlag(Permission.DailySummary) };
+        _chkSettings = new CheckBox { Text = "Settings", Location = new Point(230, 332), Size = new Size(150, 28), Checked = existing.HasFlag(Permission.Settings) };
 
-        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary };
+        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary, _chkSettings };
         _chkFullAccess.CheckedChanged += (_, _) =>
         {
             foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
@@ -96,6 +99,7 @@ public class FormUserEditDialog : Form
         Controls.Add(_chkReports);
         Controls.Add(_chkOrderHistory);
         Controls.Add(_chkDailySummary);
+        Controls.Add(_chkSettings);
         Controls.Add(btnSave);
         Controls.Add(btnCancel);
 

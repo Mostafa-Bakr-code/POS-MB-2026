@@ -13,5 +13,6 @@ public enum Permission
     Reports = 16,
     OrderHistory = 32,
     DailySummary = 64,
-    FullAccess = Categories | Items | Orders | Users | Reports | OrderHistory | DailySummary
+    Settings = 128,
+    FullAccess = Categories | Items | Orders | Users | Reports | OrderHistory | DailySummary | Settings
 }

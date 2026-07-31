@@ -190,6 +190,21 @@ public class ApiClient
         return await response.Content.ReadAsByteArrayAsync();
     }
 
+    public async Task<string?> GetSettingValueAsync(string key)
+    {
+        var response = await _httpClient.GetAsync($"api/settings/{key}");
+        if (!response.IsSuccessStatusCode) return null;
+
+        var setting = await response.Content.ReadFromJsonAsync<SettingDto>();
+        return setting?.Value;
+    }
+
+    public async Task SetSettingValueAsync(string key, string value)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/settings/{key}", new { Value = value });
+        response.EnsureSuccessStatusCode();
+    }
+
     private static string DateQuery(DateTime? startDate, DateTime? endDate)
     {
         var query = "?x=1";
@@ -199,4 +214,5 @@ public class ApiClient
     }
 
     private record StartSessionResponse(int LogId);
+    private record SettingDto(int Id, string Key, string? Value);
 }
