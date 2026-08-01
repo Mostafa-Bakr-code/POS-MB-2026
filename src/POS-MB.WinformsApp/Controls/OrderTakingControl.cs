@@ -35,9 +35,11 @@ public class OrderTakingControl : UserControl
         };
 
         // Typing a quantity here (instead of tapping a tile N times) is how a
-        // cashier adds e.g. 100 burgers without 100 clicks. Resets to 1 after each
-        // add - each unit still becomes its own cart line, so per-unit comments
-        // still work for whichever of the 100 need one.
+        // cashier adds e.g. 100 burgers without 100 clicks - collapses into one
+        // "Burger x100" line with one shared comment, since 100 individually
+        // commentable lines would be unusable on a receipt. Tapping a tile directly
+        // (or the "+" on a cart row) still always adds a separate quantity-1 line,
+        // so per-unit comments stay available for small orders that need them.
         var quantityToolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 56, Padding = new Padding(10, 8, 10, 8) };
         var lblQuantity = new Label { Text = "Quantity to add:", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 10, 10, 0) };
         _numQuantity = new NumericUpDown { Width = 90, Height = 36, Minimum = 1, Maximum = 999, Value = 1, Font = new Font("Segoe UI", 12F) };
@@ -184,13 +186,14 @@ public class OrderTakingControl : UserControl
         return button;
     }
 
-    // Every unit is its own cart line (not a shared Quantity on one line) so each
-    // one can carry its own comment - 3 marghretas can be "no cheese", "extra
-    // spicy", and plain, not one comment shared across all 3.
+    // Tapping a tile (quantity == 1, the common case) always adds its own separate
+    // line so it can carry its own comment - 3 individual taps means 3 marghretas
+    // that can each be "no cheese", "extra spicy", and plain. Typing a bulk quantity
+    // first (quantity > 1) instead adds ONE line with that quantity - "Burger x100"
+    // with one shared comment, not 100 unreadable lines.
     private void AddToCart(ItemDto item, int quantity = 1)
     {
-        for (var i = 0; i < quantity; i++)
-            _cart.Add(new CartLine(item));
+        _cart.Add(new CartLine(item, quantity));
 
         if (_numQuantity.Value != 1) _numQuantity.Value = 1;
 
@@ -207,7 +210,9 @@ public class OrderTakingControl : UserControl
 
             var lblName = new Label
             {
-                Text = $"{line.Item.ItemName}\n{line.Item.Price:0.00}",
+                Text = line.Quantity > 1
+                    ? $"{line.Item.ItemName} x{line.Quantity}\n{(line.Item.Price * line.Quantity):0.00}"
+                    : $"{line.Item.ItemName}\n{line.Item.Price:0.00}",
                 Location = new Point(0, 0),
                 Size = new Size(150, 60)
             };
@@ -254,7 +259,7 @@ public class OrderTakingControl : UserControl
             _cartPanel.Controls.Add(row);
         }
 
-        var total = _cart.Sum(c => c.Item.Price);
+        var total = _cart.Sum(c => c.Item.Price * c.Quantity);
         _lblTotal.Text = $"Total: {total:0.00}";
         _btnPlaceOrder.Enabled = _cart.Count > 0;
     }
@@ -275,7 +280,7 @@ public class OrderTakingControl : UserControl
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
                 IsComplimentary: _chkComplimentary.Checked,
-                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, 1, c.Comment)).ToList());
+                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
 
             var order = await _apiClient.CreateOrderAsync(request);
 
@@ -297,9 +302,10 @@ public class OrderTakingControl : UserControl
         }
     }
 
-    private class CartLine(ItemDto item)
+    private class CartLine(ItemDto item, int quantity = 1)
     {
         public ItemDto Item { get; } = item;
+        public int Quantity { get; } = quantity;
         public string? Comment { get; set; }
     }
 }
