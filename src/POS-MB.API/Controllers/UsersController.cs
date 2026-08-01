@@ -44,6 +44,13 @@ public class UsersController(clsUserBusiness userBusiness) : ControllerBase
         return deactivated ? NoContent() : NotFound();
     }
 
+    [HttpPost("{id:int}/reactivate")]
+    public async Task<IActionResult> Reactivate(int id)
+    {
+        var reactivated = await userBusiness.ReactivateAsync(id);
+        return reactivated ? NoContent() : NotFound();
+    }
+
     [HttpPost("verify-credentials")]
     public async Task<IActionResult> VerifyCredentials([FromBody] VerifyCredentialsRequest request)
     {

@@ -50,6 +50,13 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
         return deactivated ? NoContent() : NotFound();
     }
 
+    [HttpPost("{id:int}/reactivate")]
+    public async Task<IActionResult> Reactivate(int id)
+    {
+        var reactivated = await itemBusiness.ReactivateAsync(id);
+        return reactivated ? NoContent() : NotFound();
+    }
+
     [HttpPost("{id:int}/availability")]
     public async Task<IActionResult> SetAvailability(int id, [FromBody] SetItemAvailabilityRequest request)
     {

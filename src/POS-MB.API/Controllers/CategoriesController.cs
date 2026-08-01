@@ -42,6 +42,13 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
         var deactivated = await categoryBusiness.DeactivateAsync(id);
         return deactivated ? NoContent() : NotFound();
     }
+
+    [HttpPost("{id:int}/reactivate")]
+    public async Task<IActionResult> Reactivate(int id)
+    {
+        var reactivated = await categoryBusiness.ReactivateAsync(id);
+        return reactivated ? NoContent() : NotFound();
+    }
 }
 
 public record CreateCategoryRequest(string Name);

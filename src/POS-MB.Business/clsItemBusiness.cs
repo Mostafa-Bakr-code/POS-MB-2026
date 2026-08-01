@@ -55,6 +55,9 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
     public Task<bool> DeactivateAsync(int id) =>
         dataAccess.DeactivateAsync(id);
 
+    public Task<bool> ReactivateAsync(int id) =>
+        dataAccess.ReactivateAsync(id);
+
     public Task<bool> SetAvailabilityAsync(int id, bool isAvailable) =>
         dataAccess.SetAvailabilityAsync(id, isAvailable);
 

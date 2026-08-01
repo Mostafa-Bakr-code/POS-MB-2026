@@ -56,6 +56,9 @@ public class clsUserBusiness(clsUserDataAccess dataAccess)
     public Task<bool> DeactivateAsync(int id) =>
         dataAccess.DeactivateAsync(id);
 
+    public Task<bool> ReactivateAsync(int id) =>
+        dataAccess.ReactivateAsync(id);
+
     /// <summary>
     /// Verifies a username/password pair. Returns the user on success, null on any failure
     /// (unknown username or wrong password look identical to the caller, to avoid leaking

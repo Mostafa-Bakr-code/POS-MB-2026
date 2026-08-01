@@ -70,6 +70,12 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task ReactivateCategoryAsync(int categoryId)
+    {
+        var response = await _httpClient.PostAsync($"api/categories/{categoryId}/reactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool includeInactive = false, bool availableOnly = false)
     {
         var url = $"api/items?includeInactive={includeInactive}&availableOnly={availableOnly}";
@@ -101,6 +107,12 @@ public class ApiClient
     public async Task DeactivateItemAsync(int itemId)
     {
         var response = await _httpClient.PostAsync($"api/items/{itemId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task ReactivateItemAsync(int itemId)
+    {
+        var response = await _httpClient.PostAsync($"api/items/{itemId}/reactivate", null);
         response.EnsureSuccessStatusCode();
     }
 
@@ -165,6 +177,12 @@ public class ApiClient
     public async Task DeactivateUserAsync(int userId)
     {
         var response = await _httpClient.PostAsync($"api/users/{userId}/deactivate", null);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task ReactivateUserAsync(int userId)
+    {
+        var response = await _httpClient.PostAsync($"api/users/{userId}/reactivate", null);
         response.EnsureSuccessStatusCode();
     }
 

@@ -35,4 +35,7 @@ public class clsCategoryBusiness(clsCategoryDataAccess dataAccess)
 
     public Task<bool> DeactivateAsync(int id) =>
         dataAccess.DeactivateAsync(id);
+
+    public Task<bool> ReactivateAsync(int id) =>
+        dataAccess.ReactivateAsync(id);
 }

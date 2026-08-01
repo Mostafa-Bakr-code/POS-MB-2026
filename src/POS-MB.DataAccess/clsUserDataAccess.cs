@@ -92,4 +92,19 @@ public class clsUserDataAccess(ISqlConnectionFactory connectionFactory)
 
         return rowsAffected > 0;
     }
+
+    public async Task<bool> ReactivateAsync(int id)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Users
+            SET IsActive = 1,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE UserId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id });
+
+        return rowsAffected > 0;
+    }
 }
