@@ -17,6 +17,7 @@ public class FormUserEditDialog : Form
     private readonly CheckBox _chkDailySummary;
     private readonly CheckBox _chkSettings;
     private readonly CheckBox _chkLogs;
+    private readonly CheckBox _chkComplimentary;
 
     public string UserNameValue => _txtUserName.Text.Trim();
     public string? PasswordValue => string.IsNullOrWhiteSpace(_txtPassword.Text) ? null : _txtPassword.Text;
@@ -37,6 +38,7 @@ public class FormUserEditDialog : Form
             if (_chkDailySummary.Checked) permission |= Permission.DailySummary;
             if (_chkSettings.Checked) permission |= Permission.Settings;
             if (_chkLogs.Checked) permission |= Permission.Logs;
+            if (_chkComplimentary.Checked) permission |= Permission.Complimentary;
             return (int)permission;
         }
     }
@@ -47,7 +49,7 @@ public class FormUserEditDialog : Form
     {
         _isEdit = isEdit;
         Text = title;
-        ClientSize = new Size(420, 550);
+        ClientSize = new Size(420, 590);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -71,23 +73,27 @@ public class FormUserEditDialog : Form
         _chkFullAccess = new CheckBox { Text = "Full Access", Location = new Point(20, 204), Size = new Size(360, 28), Checked = existing == Permission.FullAccess };
         _chkCategories = new CheckBox { Text = "Categories", Location = new Point(20, 236), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Categories) };
         _chkItems = new CheckBox { Text = "Items", Location = new Point(210, 236), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Items) };
-        _chkOrders = new CheckBox { Text = "Orders", Location = new Point(20, 268), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Orders) };
+        // Labeled to match the actual nav button ("New Order") it gates, not the
+        // underlying Permission.Orders enum name - "Orders" alone reads like it
+        // means Order History and is easy to leave unchecked by mistake.
+        _chkOrders = new CheckBox { Text = "New Order", Location = new Point(20, 268), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Orders) };
         _chkUsers = new CheckBox { Text = "Users", Location = new Point(210, 268), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Users) };
         _chkReports = new CheckBox { Text = "Reports", Location = new Point(20, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Reports) };
         _chkOrderHistory = new CheckBox { Text = "Order History", Location = new Point(210, 300), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.OrderHistory) };
         _chkDailySummary = new CheckBox { Text = "Daily Summary Only", Location = new Point(20, 332), Size = new Size(200, 28), Checked = existing.HasFlag(Permission.DailySummary) };
         _chkSettings = new CheckBox { Text = "Settings", Location = new Point(230, 332), Size = new Size(150, 28), Checked = existing.HasFlag(Permission.Settings) };
         _chkLogs = new CheckBox { Text = "Logs", Location = new Point(20, 364), Size = new Size(170, 28), Checked = existing.HasFlag(Permission.Logs) };
+        _chkComplimentary = new CheckBox { Text = "Complimentary Orders", Location = new Point(20, 396), Size = new Size(280, 28), Checked = existing.HasFlag(Permission.Complimentary) };
 
-        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary, _chkSettings, _chkLogs };
+        var individualChecks = new[] { _chkCategories, _chkItems, _chkOrders, _chkUsers, _chkReports, _chkOrderHistory, _chkDailySummary, _chkSettings, _chkLogs, _chkComplimentary };
         _chkFullAccess.CheckedChanged += (_, _) =>
         {
             foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
         };
         foreach (var chk in individualChecks) chk.Enabled = !_chkFullAccess.Checked;
 
-        var btnSave = new Button { Text = "Save", Location = new Point(20, 482), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F, FontStyle.Bold), DialogResult = DialogResult.OK };
-        var btnCancel = new Button { Text = "Cancel", Location = new Point(210, 482), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F), DialogResult = DialogResult.Cancel };
+        var btnSave = new Button { Text = "Save", Location = new Point(20, 522), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F, FontStyle.Bold), DialogResult = DialogResult.OK };
+        var btnCancel = new Button { Text = "Cancel", Location = new Point(210, 522), Size = new Size(170, 50), Font = new Font("Segoe UI", 12F), DialogResult = DialogResult.Cancel };
 
         Controls.Add(lblUserName);
         Controls.Add(_txtUserName);
@@ -104,6 +110,7 @@ public class FormUserEditDialog : Form
         Controls.Add(_chkDailySummary);
         Controls.Add(_chkSettings);
         Controls.Add(_chkLogs);
+        Controls.Add(_chkComplimentary);
         Controls.Add(btnSave);
         Controls.Add(btnCancel);
 

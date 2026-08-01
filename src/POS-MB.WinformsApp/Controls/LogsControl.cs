@@ -16,6 +16,8 @@ public class LogsControl : UserControl
     private readonly DataGridView _grid;
 
     private List<LogRow> _rows = [];
+    private string? _sortColumn;
+    private bool _sortAscending = true;
 
     public LogsControl()
     {
@@ -23,10 +25,13 @@ public class LogsControl : UserControl
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 70, Padding = new Padding(10), AutoScroll = true };
 
-        _chkUseDateRange = new CheckBox { Text = "Filter by Date Range", AutoSize = true, Margin = new Padding(0, 14, 10, 0) };
+        // Defaults to today only, not all-time - loading every session ever recorded
+        // on every screen open is unnecessary and gets slower as history grows.
+        // Unchecking the filter still gets the full history on demand.
+        _chkUseDateRange = new CheckBox { Text = "Filter by Date Range", AutoSize = true, Checked = true, Margin = new Padding(0, 14, 10, 0) };
 
-        _dtpStart = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Enabled = false, Margin = new Padding(0, 6, 10, 6) };
-        _dtpEnd = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Enabled = false, Margin = new Padding(0, 6, 20, 6) };
+        _dtpStart = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 6, 10, 6) };
+        _dtpEnd = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 6, 20, 6) };
 
         _chkUseDateRange.CheckedChanged += (_, _) => { _dtpStart.Enabled = _chkUseDateRange.Checked; _dtpEnd.Enabled = _chkUseDateRange.Checked; };
 
@@ -42,6 +47,7 @@ public class LogsControl : UserControl
         {
             Dock = DockStyle.Fill,
             AutoGenerateColumns = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -50,11 +56,16 @@ public class LogsControl : UserControl
             RowTemplate = { Height = 40 },
             Font = new Font("Segoe UI", 11F)
         };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserName", HeaderText = "User", DataPropertyName = "UserName", Width = 180 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LogIn", HeaderText = "Log In", DataPropertyName = "LogIn", Width = 160 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LogOut", HeaderText = "Log Out", DataPropertyName = "LogOut", Width = 160 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Duration", HeaderText = "Duration", DataPropertyName = "Duration", Width = 120 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserName", HeaderText = "User", DataPropertyName = "UserName", FillWeight = 130, MinimumWidth = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LogIn", HeaderText = "Log In", DataPropertyName = "LogIn", FillWeight = 120, MinimumWidth = 160 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "LogOut", HeaderText = "Log Out", DataPropertyName = "LogOut", FillWeight = 120, MinimumWidth = 160 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Duration", HeaderText = "Duration", DataPropertyName = "Duration", FillWeight = 90, MinimumWidth = 120 });
+        // Programmatic (not the default Automatic) so the grid never attempts its own
+        // built-in sort-on-click, letting Grid_ColumnHeaderMouseClick handle sorting
+        // manually and consistently with the other grids.
+        foreach (DataGridViewColumn column in _grid.Columns) column.SortMode = DataGridViewColumnSortMode.Programmatic;
         _grid.CellFormatting += Grid_CellFormatting;
+        _grid.ColumnHeaderMouseClick += Grid_ColumnHeaderMouseClick;
 
         Controls.Add(_grid);
         Controls.Add(toolbar);
@@ -92,9 +103,46 @@ public class LogsControl : UserControl
             UserName = userNamesById.GetValueOrDefault(log.UserId, "(unknown)"),
             LogIn = log.LogIn,
             LogOut = log.LogOut,
-            Duration = log.LogOut is DateTime logOut ? FormatDuration(logOut - log.LogIn) : "(active)"
+            DurationSpan = log.LogOut is DateTime logOut ? logOut - log.LogIn : null,
+            Duration = log.LogOut is DateTime logOut2 ? FormatDuration(logOut2 - log.LogIn) : "(active)"
         }).ToList();
 
+        ApplySortAndBind();
+    }
+
+    // DataGridView doesn't support click-to-sort out of the box when bound to a
+    // plain List<T> (only IBindingList sources with SupportsSortingCore do) - sort
+    // manually and rebind instead.
+    private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
+        if (columnName is not ("UserName" or "LogIn" or "LogOut" or "Duration")) return;
+
+        _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
+        _sortColumn = columnName;
+        ApplySortAndBind();
+    }
+
+    private void ApplySortAndBind()
+    {
+        // Still-active sessions have no LogOut/Duration - sort them last regardless
+        // of direction, rather than letting nulls jump to the front on descending.
+        IEnumerable<LogRow> sorted = _sortColumn switch
+        {
+            "UserName" => _rows.OrderBy(r => r.UserName, StringComparer.OrdinalIgnoreCase),
+            "LogIn" => _rows.OrderBy(r => r.LogIn),
+            "LogOut" => _rows.OrderBy(r => r.LogOut ?? DateTime.MaxValue),
+            "Duration" => _rows.OrderBy(r => r.DurationSpan ?? TimeSpan.MaxValue),
+            _ => _rows
+        };
+        if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();
+
+        foreach (DataGridViewColumn column in _grid.Columns)
+            column.HeaderCell.SortGlyphDirection = column.Name == _sortColumn
+                ? (_sortAscending ? SortOrder.Ascending : SortOrder.Descending)
+                : SortOrder.None;
+
+        _rows = sorted.ToList();
         _grid.DataSource = null;
         _grid.DataSource = _rows;
     }
@@ -109,6 +157,7 @@ public class LogsControl : UserControl
         public string UserName { get; set; } = string.Empty;
         public DateTime LogIn { get; set; }
         public DateTime? LogOut { get; set; }
+        public TimeSpan? DurationSpan { get; set; }
         public string Duration { get; set; } = string.Empty;
     }
 }

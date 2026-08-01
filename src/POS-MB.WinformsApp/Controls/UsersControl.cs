@@ -10,6 +10,8 @@ public class UsersControl : UserControl
     private readonly DataGridView _grid;
     private readonly CheckBox _chkShowInactive;
     private List<UserDto> _users = [];
+    private string? _sortColumn;
+    private bool _sortAscending = true;
 
     public UsersControl()
     {
@@ -47,9 +49,15 @@ public class UsersControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Permissions", HeaderText = "Permissions", DataPropertyName = "Permissions", FillWeight = 130, MinimumWidth = 160 });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", FillWeight = 60, MinimumWidth = 70 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, FillWeight = 70, MinimumWidth = 90 });
-        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, FillWeight = 80, MinimumWidth = 110 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "ToggleActive", HeaderText = "", FillWeight = 80, MinimumWidth = 110 });
+        // Programmatic (not the default Automatic) so the grid never attempts its own
+        // built-in sort-on-click - that path collides with checkbox columns (they try
+        // to commit cell edit state mid-sort) and throws. Grid_ColumnHeaderMouseClick
+        // handles all sorting manually instead.
+        foreach (DataGridViewColumn column in _grid.Columns) column.SortMode = DataGridViewColumnSortMode.Programmatic;
         _grid.CellClick += Grid_CellClick;
         _grid.CellFormatting += Grid_CellFormatting;
+        _grid.ColumnHeaderMouseClick += Grid_ColumnHeaderMouseClick;
 
         Controls.Add(_grid);
         Controls.Add(toolbar);
@@ -60,17 +68,59 @@ public class UsersControl : UserControl
     private async Task LoadAsync()
     {
         _users = await _apiClient.GetUsersAsync(_chkShowInactive.Checked);
+        ApplySortAndBind();
+    }
+
+    // DataGridView doesn't support click-to-sort out of the box when bound to a
+    // plain List<T> (only IBindingList sources with SupportsSortingCore do) - sort
+    // manually and rebind instead.
+    private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
+        if (columnName is not ("UserId" or "UserName" or "Permissions" or "IsActive")) return;
+
+        _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
+        _sortColumn = columnName;
+        ApplySortAndBind();
+    }
+
+    private void ApplySortAndBind()
+    {
+        IEnumerable<UserDto> sorted = _sortColumn switch
+        {
+            "UserId" => _users.OrderBy(u => u.UserId),
+            "UserName" => _users.OrderBy(u => u.UserName, StringComparer.OrdinalIgnoreCase),
+            "Permissions" => _users.OrderBy(u => u.Permissions),
+            "IsActive" => _users.OrderBy(u => u.IsActive),
+            _ => _users
+        };
+        if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();
+
+        foreach (DataGridViewColumn column in _grid.Columns)
+            column.HeaderCell.SortGlyphDirection = column.Name == _sortColumn
+                ? (_sortAscending ? SortOrder.Ascending : SortOrder.Descending)
+                : SortOrder.None;
+
+        _users = sorted.ToList();
         _grid.DataSource = null;
         _grid.DataSource = _users;
     }
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
-        if (_grid.Columns[e.ColumnIndex].Name != "Permissions" || e.Value is null) return;
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
 
-        var permission = (Permission)Convert.ToInt32(e.Value);
-        e.Value = permission == Permission.FullAccess ? "Full Access" : permission.ToString();
-        e.FormattingApplied = true;
+        if (columnName == "Permissions" && e.Value is not null)
+        {
+            var permission = (Permission)Convert.ToInt32(e.Value);
+            e.Value = permission == Permission.FullAccess ? "Full Access" : permission.ToString();
+            e.FormattingApplied = true;
+        }
+        else if (columnName == "ToggleActive" && e.RowIndex < _users.Count)
+        {
+            e.Value = _users[e.RowIndex].IsActive ? "Deactivate" : "Reactivate";
+            e.FormattingApplied = true;
+        }
     }
 
     private async void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
@@ -89,17 +139,23 @@ public class UsersControl : UserControl
                 await LoadAsync();
             }
         }
-        else if (columnName == "Deactivate")
+        else if (columnName == "ToggleActive")
         {
-            var confirm = MessageBox.Show(
-                $"Deactivate '{user.UserName}'? They will no longer be able to log in.",
-                "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-            if (confirm == DialogResult.Yes)
+            if (user.IsActive)
             {
+                var confirm = MessageBox.Show(
+                    $"Deactivate '{user.UserName}'? They will no longer be able to log in.",
+                    "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
                 await _apiClient.DeactivateUserAsync(user.UserId);
-                await LoadAsync();
             }
+            else
+            {
+                await _apiClient.ReactivateUserAsync(user.UserId);
+            }
+
+            await LoadAsync();
         }
     }
 

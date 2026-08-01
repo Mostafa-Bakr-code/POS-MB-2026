@@ -18,6 +18,7 @@ public class FormItemPriceHistoryDialog : Form
         var grid = new DataGridView
         {
             Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -27,10 +28,10 @@ public class FormItemPriceHistoryDialog : Form
             RowTemplate = { Height = 36 },
             Font = new Font("Segoe UI", 11F)
         };
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Date", Width = 140 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Changed By", Width = 130 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Price", Width = 140 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tax Rate", Width = 110 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Date", FillWeight = 110, MinimumWidth = 140 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Changed By", FillWeight = 100, MinimumWidth = 130 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Price", FillWeight = 110, MinimumWidth = 140 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tax Rate", FillWeight = 90, MinimumWidth = 110 });
 
         if (history.Count == 0)
         {

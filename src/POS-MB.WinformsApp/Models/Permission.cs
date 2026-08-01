@@ -15,5 +15,6 @@ public enum Permission
     DailySummary = 64,
     Settings = 128,
     Logs = 256,
-    FullAccess = Categories | Items | Orders | Users | Reports | OrderHistory | DailySummary | Settings | Logs
+    Complimentary = 512,
+    FullAccess = Categories | Items | Orders | Users | Reports | OrderHistory | DailySummary | Settings | Logs | Complimentary
 }

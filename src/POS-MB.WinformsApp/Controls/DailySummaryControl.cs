@@ -39,6 +39,7 @@ public class DailySummaryControl : UserControl
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -48,8 +49,8 @@ public class DailySummaryControl : UserControl
             RowTemplate = { Height = 40 },
             Font = new Font("Segoe UI", 11F)
         };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Metric", Width = 260 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Value", Width = 200 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Metric", FillWeight = 130, MinimumWidth = 260 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Value", FillWeight = 100, MinimumWidth = 200 });
 
         Controls.Add(_grid);
         Controls.Add(toolbar);

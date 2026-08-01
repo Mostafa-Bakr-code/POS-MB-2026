@@ -17,6 +17,8 @@ public class OrderHistoryControl : UserControl
 
     private List<OrderDto> _orders = [];
     private List<UserDto> _users = [];
+    private string? _sortColumn;
+    private bool _sortAscending = true;
 
     public OrderHistoryControl()
     {
@@ -24,10 +26,13 @@ public class OrderHistoryControl : UserControl
 
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 70, Padding = new Padding(10), AutoScroll = true };
 
-        _chkUseDateRange = new CheckBox { Text = "Filter by Date Range", AutoSize = true, Margin = new Padding(0, 14, 10, 0) };
+        // Defaults to today only, not all-time - loading every order ever placed on
+        // every screen open is unnecessary and gets slower as history grows. "Refresh"
+        // (or unchecking the filter) still gets the full history on demand.
+        _chkUseDateRange = new CheckBox { Text = "Filter by Date Range", AutoSize = true, Checked = true, Margin = new Padding(0, 14, 10, 0) };
 
-        _dtpStart = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Enabled = false, Margin = new Padding(0, 6, 10, 6) };
-        _dtpEnd = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Enabled = false, Margin = new Padding(0, 6, 20, 6) };
+        _dtpStart = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 6, 10, 6) };
+        _dtpEnd = new DateTimePicker { Width = 150, Height = 36, Format = DateTimePickerFormat.Short, Margin = new Padding(0, 6, 20, 6) };
 
         _chkUseDateRange.CheckedChanged += (_, _) => { _dtpStart.Enabled = _chkUseDateRange.Checked; _dtpEnd.Enabled = _chkUseDateRange.Checked; };
 
@@ -48,6 +53,7 @@ public class OrderHistoryControl : UserControl
         {
             Dock = DockStyle.Fill,
             AutoGenerateColumns = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -56,15 +62,21 @@ public class OrderHistoryControl : UserControl
             RowTemplate = { Height = 40 },
             Font = new Font("Segoe UI", 11F)
         };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "SerialNumber", HeaderText = "Order #", DataPropertyName = "SerialNumber", Width = 90 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Date", HeaderText = "Date", DataPropertyName = "Date", Width = 150 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", Width = 90 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", Width = 100 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Total", HeaderText = "Total", DataPropertyName = "Total", Width = 90 });
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsComplimentary", HeaderText = "Comp.", DataPropertyName = "IsComplimentary", Width = 60 });
-        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "View", HeaderText = "", Text = "View", UseColumnTextForButtonValue = true, Width = 90 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "SerialNumber", HeaderText = "Order #", DataPropertyName = "SerialNumber", FillWeight = 70, MinimumWidth = 90 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Date", HeaderText = "Date", DataPropertyName = "Date", FillWeight = 110, MinimumWidth = 150 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", FillWeight = 70, MinimumWidth = 90 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", FillWeight = 80, MinimumWidth = 100 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Total", HeaderText = "Total", DataPropertyName = "Total", FillWeight = 70, MinimumWidth = 90 });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsComplimentary", HeaderText = "Comp.", DataPropertyName = "IsComplimentary", FillWeight = 50, MinimumWidth = 60 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "View", HeaderText = "", Text = "View", UseColumnTextForButtonValue = true, FillWeight = 70, MinimumWidth = 90 });
+        // Programmatic (not the default Automatic) so the grid never attempts its own
+        // built-in sort-on-click - that path collides with checkbox columns (they try
+        // to commit cell edit state mid-sort) and throws. Grid_ColumnHeaderMouseClick
+        // handles all sorting manually instead.
+        foreach (DataGridViewColumn column in _grid.Columns) column.SortMode = DataGridViewColumnSortMode.Programmatic;
         _grid.CellFormatting += Grid_CellFormatting;
         _grid.CellClick += Grid_CellClick;
+        _grid.ColumnHeaderMouseClick += Grid_ColumnHeaderMouseClick;
 
         Controls.Add(_grid);
         Controls.Add(toolbar);
@@ -106,6 +118,42 @@ public class OrderHistoryControl : UserControl
         _orders = await _apiClient.GetOrdersAsync(start, end, source);
         _users = await _apiClient.GetUsersAsync(includeInactive: true);
 
+        ApplySortAndBind();
+    }
+
+    // DataGridView doesn't support click-to-sort out of the box when bound to a
+    // plain List<T> (only IBindingList sources with SupportsSortingCore do) - sort
+    // manually and rebind instead.
+    private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        var columnName = _grid.Columns[e.ColumnIndex].Name;
+        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary")) return;
+
+        _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
+        _sortColumn = columnName;
+        ApplySortAndBind();
+    }
+
+    private void ApplySortAndBind()
+    {
+        IEnumerable<OrderDto> sorted = _sortColumn switch
+        {
+            "SerialNumber" => _orders.OrderBy(o => o.SerialNumber),
+            "Date" => _orders.OrderBy(o => o.Date),
+            "OrderSource" => _orders.OrderBy(o => o.OrderSource),
+            "Status" => _orders.OrderBy(o => o.Status),
+            "Total" => _orders.OrderBy(o => o.Total),
+            "IsComplimentary" => _orders.OrderBy(o => o.IsComplimentary),
+            _ => _orders
+        };
+        if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();
+
+        foreach (DataGridViewColumn column in _grid.Columns)
+            column.HeaderCell.SortGlyphDirection = column.Name == _sortColumn
+                ? (_sortAscending ? SortOrder.Ascending : SortOrder.Descending)
+                : SortOrder.None;
+
+        _orders = sorted.ToList();
         _grid.DataSource = null;
         _grid.DataSource = _orders;
     }

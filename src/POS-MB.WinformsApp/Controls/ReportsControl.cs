@@ -66,6 +66,7 @@ public class ReportsControl : UserControl
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -160,7 +161,7 @@ public class ReportsControl : UserControl
         _grid.Columns.Clear();
         _grid.AutoGenerateColumns = false;
         foreach (var header in headers)
-            _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, Width = 220 });
+            _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, MinimumWidth = 120 });
 
         _grid.Rows.Clear();
         foreach (var row in rows)

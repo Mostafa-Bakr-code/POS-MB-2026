@@ -30,6 +30,7 @@ public class FormOrderDetailDialog : Form
         var grid = new DataGridView
         {
             Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -39,11 +40,11 @@ public class FormOrderDetailDialog : Form
             RowTemplate = { Height = 36 },
             Font = new Font("Segoe UI", 11F)
         };
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Item", Width = 180 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Qty", Width = 60 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Unit Price", Width = 100 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Line Total", Width = 100 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Comment", Width = 110 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Item", FillWeight = 130, MinimumWidth = 150 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Qty", FillWeight = 50, MinimumWidth = 60 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Unit Price", FillWeight = 80, MinimumWidth = 100 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Line Total", FillWeight = 80, MinimumWidth = 100 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Comment", FillWeight = 90, MinimumWidth = 110 });
 
         foreach (var line in order.Items)
         {

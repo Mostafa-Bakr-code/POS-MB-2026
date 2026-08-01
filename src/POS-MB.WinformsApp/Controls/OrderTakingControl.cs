@@ -10,6 +10,7 @@ public class OrderTakingControl : UserControl
     private readonly ApiClient _apiClient = new();
 
     private readonly FlowLayoutPanel _categoryPanel;
+    private readonly NumericUpDown _numQuantity;
     private readonly FlowLayoutPanel _itemsPanel;
     private readonly FlowLayoutPanel _cartPanel;
     private readonly Label _lblTotal;
@@ -32,6 +33,16 @@ public class OrderTakingControl : UserControl
             AutoScroll = true,
             Padding = new Padding(10)
         };
+
+        // Typing a quantity here (instead of tapping a tile N times) is how a
+        // cashier adds e.g. 100 burgers without 100 clicks. Resets to 1 after each
+        // add - each unit still becomes its own cart line, so per-unit comments
+        // still work for whichever of the 100 need one.
+        var quantityToolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 56, Padding = new Padding(10, 8, 10, 8) };
+        var lblQuantity = new Label { Text = "Quantity to add:", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 10, 10, 0) };
+        _numQuantity = new NumericUpDown { Width = 90, Height = 36, Minimum = 1, Maximum = 999, Value = 1, Font = new Font("Segoe UI", 12F) };
+        quantityToolbar.Controls.Add(lblQuantity);
+        quantityToolbar.Controls.Add(_numQuantity);
 
         var cartContainer = new Panel
         {
@@ -66,13 +77,15 @@ public class OrderTakingControl : UserControl
             TextAlign = ContentAlignment.MiddleLeft
         };
 
+        var canMarkComplimentary = AppSession.HasPermission(Permission.Complimentary);
         _chkComplimentary = new CheckBox
         {
-            Text = "Complimentary Order (no charge)",
+            Text = canMarkComplimentary ? "Complimentary Order (no charge)" : "Complimentary Order (no permission)",
             Dock = DockStyle.Bottom,
             Height = 40,
             Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-            ForeColor = Color.FromArgb(220, 53, 69)
+            ForeColor = Color.FromArgb(220, 53, 69),
+            Enabled = canMarkComplimentary
         };
 
         _btnPlaceOrder = new Button
@@ -102,6 +115,7 @@ public class OrderTakingControl : UserControl
 
         Controls.Add(_itemsPanel);
         Controls.Add(cartContainer);
+        Controls.Add(quantityToolbar);
         Controls.Add(_categoryPanel);
 
         Load += async (_, _) => await LoadCategoriesAsync();
@@ -149,7 +163,7 @@ public class OrderTakingControl : UserControl
         foreach (var item in _items)
         {
             var button = CreateTileButton(item.ItemName, item.Price.ToString("0.00"), 160, 110);
-            button.Click += (_, _) => AddToCart(item);
+            button.Click += (_, _) => AddToCart(item, (int)_numQuantity.Value);
             _itemsPanel.Controls.Add(button);
         }
     }
@@ -170,13 +184,15 @@ public class OrderTakingControl : UserControl
         return button;
     }
 
-    private void AddToCart(ItemDto item)
+    // Every unit is its own cart line (not a shared Quantity on one line) so each
+    // one can carry its own comment - 3 marghretas can be "no cheese", "extra
+    // spicy", and plain, not one comment shared across all 3.
+    private void AddToCart(ItemDto item, int quantity = 1)
     {
-        var existing = _cart.FirstOrDefault(c => c.Item.ItemId == item.ItemId);
-        if (existing is not null)
-            existing.Quantity++;
-        else
-            _cart.Add(new CartLine(item, 1));
+        for (var i = 0; i < quantity; i++)
+            _cart.Add(new CartLine(item));
+
+        if (_numQuantity.Value != 1) _numQuantity.Value = 1;
 
         RenderCart();
     }
@@ -191,18 +207,15 @@ public class OrderTakingControl : UserControl
 
             var lblName = new Label
             {
-                Text = $"{line.Item.ItemName}\n{(line.Item.Price * line.Quantity):0.00}",
+                Text = $"{line.Item.ItemName}\n{line.Item.Price:0.00}",
                 Location = new Point(0, 0),
                 Size = new Size(150, 60)
             };
 
-            var btnMinus = new Button { Text = "-", Location = new Point(155, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
-            var lblQty = new Label { Text = line.Quantity.ToString(), Location = new Point(200, 5), Size = new Size(35, 40), TextAlign = ContentAlignment.MiddleCenter };
-            var btnPlus = new Button { Text = "+", Location = new Point(240, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
-            var btnRemove = new Button { Text = "X", Location = new Point(290, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat, ForeColor = Color.Red };
+            var btnAddOne = new Button { Text = "+", Location = new Point(245, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
+            btnAddOne.Click += (_, _) => AddToCart(line.Item);
 
-            btnMinus.Click += (_, _) => { ChangeQuantity(line, -1); };
-            btnPlus.Click += (_, _) => { ChangeQuantity(line, 1); };
+            var btnRemove = new Button { Text = "X", Location = new Point(290, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat, ForeColor = Color.Red };
             btnRemove.Click += (_, _) => { _cart.Remove(line); RenderCart(); };
 
             var lblComment = new Label
@@ -233,9 +246,7 @@ public class OrderTakingControl : UserControl
             };
 
             row.Controls.Add(lblName);
-            row.Controls.Add(btnMinus);
-            row.Controls.Add(lblQty);
-            row.Controls.Add(btnPlus);
+            row.Controls.Add(btnAddOne);
             row.Controls.Add(btnRemove);
             row.Controls.Add(lblComment);
             row.Controls.Add(btnComment);
@@ -243,18 +254,9 @@ public class OrderTakingControl : UserControl
             _cartPanel.Controls.Add(row);
         }
 
-        var total = _cart.Sum(c => c.Item.Price * c.Quantity);
+        var total = _cart.Sum(c => c.Item.Price);
         _lblTotal.Text = $"Total: {total:0.00}";
         _btnPlaceOrder.Enabled = _cart.Count > 0;
-    }
-
-    private void ChangeQuantity(CartLine line, int delta)
-    {
-        line.Quantity += delta;
-        if (line.Quantity <= 0)
-            _cart.Remove(line);
-
-        RenderCart();
     }
 
     private async void BtnPlaceOrder_Click(object? sender, EventArgs e)
@@ -273,7 +275,7 @@ public class OrderTakingControl : UserControl
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
                 IsComplimentary: _chkComplimentary.Checked,
-                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
+                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, 1, c.Comment)).ToList());
 
             var order = await _apiClient.CreateOrderAsync(request);
 
@@ -295,10 +297,9 @@ public class OrderTakingControl : UserControl
         }
     }
 
-    private class CartLine(ItemDto item, int quantity)
+    private class CartLine(ItemDto item)
     {
         public ItemDto Item { get; } = item;
-        public int Quantity { get; set; } = quantity;
         public string? Comment { get; set; }
     }
 }
