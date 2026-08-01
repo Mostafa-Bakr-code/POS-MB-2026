@@ -30,6 +30,7 @@ public class UsersControl : UserControl
         {
             Dock = DockStyle.Fill,
             AutoGenerateColumns = false,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
             ReadOnly = true,
             AllowUserToAddRows = false,
             AllowUserToDeleteRows = false,
@@ -38,12 +39,15 @@ public class UsersControl : UserControl
             RowTemplate = { Height = 40 },
             Font = new Font("Segoe UI", 11F)
         };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserId", HeaderText = "Id", DataPropertyName = "UserId", Width = 60 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserName", HeaderText = "Username", DataPropertyName = "UserName", Width = 200 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Permissions", HeaderText = "Permissions", DataPropertyName = "Permissions", Width = 100 });
-        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", Width = 80 });
-        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, Width = 100 });
-        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, Width = 120 });
+        // FillWeight (not Width) drives sizing in Fill mode - proportional shares of
+        // whatever width is available, instead of fixed pixel columns leaving dead
+        // space on a wide window.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserId", HeaderText = "Id", DataPropertyName = "UserId", FillWeight = 40, MinimumWidth = 60 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "UserName", HeaderText = "Username", DataPropertyName = "UserName", FillWeight = 150, MinimumWidth = 160 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Permissions", HeaderText = "Permissions", DataPropertyName = "Permissions", FillWeight = 130, MinimumWidth = 160 });
+        _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsActive", HeaderText = "Active", DataPropertyName = "IsActive", FillWeight = 60, MinimumWidth = 70 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Edit", HeaderText = "", Text = "Edit", UseColumnTextForButtonValue = true, FillWeight = 70, MinimumWidth = 90 });
+        _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Deactivate", HeaderText = "", Text = "Deactivate", UseColumnTextForButtonValue = true, FillWeight = 80, MinimumWidth = 110 });
         _grid.CellClick += Grid_CellClick;
         _grid.CellFormatting += Grid_CellFormatting;
 
