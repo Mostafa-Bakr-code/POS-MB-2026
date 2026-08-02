@@ -1,4 +1,5 @@
 using System.Transactions;
+using Dapper;
 using POS_MB.Business;
 using POS_MB.DataAccess;
 
@@ -50,6 +51,17 @@ public abstract class DatabaseTestBase : IDisposable
 
     protected async Task<int> CreateUserAsync(string userName = "test-cashier") =>
         await UserBusiness.CreateAsync(userName, "password123", permissions: 0);
+
+    // CreateOrderAsync always stamps Date as DateTime.UtcNow (correctly - see project
+    // notes on why), which makes "an order placed right after local midnight" only
+    // reproducible at whatever moment the test happens to run. Backdating it directly
+    // lets the timezone-boundary tests be deterministic regardless of when they run.
+    protected async Task SetOrderDateAsync(int orderId, DateTime utcDate)
+    {
+        using var connection = ConnectionFactory.CreateConnection();
+        await connection.ExecuteAsync("UPDATE Orders SET [Date] = @Date WHERE OrderId = @OrderId",
+            new { Date = utcDate, OrderId = orderId });
+    }
 
     public void Dispose()
     {
