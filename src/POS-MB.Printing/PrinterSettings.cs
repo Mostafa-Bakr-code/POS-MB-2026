@@ -18,7 +18,14 @@ public class PrinterSettings
     // exact order timestamp on the customer's own copy invites disputes over how
     // long it took, so it's opt-in, not opt-out.
     public bool ShowOrderTimeOnReceipt { get; set; }
-    public bool ShowTaxBreakdownOnReceipt { get; set; } = true;
+    public TaxDisplayMode TaxDisplayMode { get; set; } = TaxDisplayMode.PerItem;
+
+    // 1 = normal size, 2 = double, up to 8 (ESC/POS's own limit). The kitchen
+    // ticket defaults larger than normal so it's easy to read at a glance while
+    // cooking; the client receipt defaults to normal since nothing prompted a
+    // bigger default there, but it's independently adjustable the same way.
+    public int KitchenTicketFontSize { get; set; } = 2;
+    public int ClientReceiptFontSize { get; set; } = 1;
 
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "POS-MB", "printer-settings.json");

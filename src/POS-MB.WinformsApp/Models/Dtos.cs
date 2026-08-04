@@ -54,6 +54,7 @@ public class OrderItemDto
     public int Quantity { get; set; }
     public decimal Price { get; set; }
     public decimal TotalItemsPrice { get; set; }
+    public decimal TaxRate { get; set; }
     public string? Comment { get; set; }
 }
 

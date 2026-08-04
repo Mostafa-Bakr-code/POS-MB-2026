@@ -38,6 +38,7 @@ public class EscPosDocument
     private readonly StringBuilder _currentLine = new();
     private bool _bold;
     private bool _centered;
+    private int _sizeMultiplier = 1;
 
     public EscPosDocument()
     {
@@ -74,10 +75,17 @@ public class EscPosDocument
         return this;
     }
 
-    public EscPosDocument DoubleHeight(bool on)
+    public EscPosDocument DoubleHeight(bool on) => Size(1, on ? 2 : 1);
+
+    // GS ! n - n packs width (bits 0-2) and height (bits 4-6) magnification, each
+    // as (multiplier - 1), so 1 = normal size, up to 8 = 8x. Used for the
+    // configurable kitchen-ticket font size, and internally by DoubleHeight.
+    public EscPosDocument Size(int width, int height)
     {
-        // GS ! n - bit 0x10 doubles height, 0x00 is normal size.
-        _bytes.AddRange([0x1D, 0x21, (byte)(on ? 0x10 : 0x00)]);
+        width = Math.Clamp(width, 1, 8);
+        height = Math.Clamp(height, 1, 8);
+        _bytes.AddRange([0x1D, 0x21, (byte)(((height - 1) << 4) | (width - 1))]);
+        _sizeMultiplier = Math.Max(width, height);
         return this;
     }
 
@@ -124,6 +132,7 @@ public class EscPosDocument
         _currentLine.Clear();
 
         if (_bold) text = $"**{text}**";
+        if (_sizeMultiplier > 1) text = $"[{_sizeMultiplier}x] {text}";
         if (_centered && text.Length < Width)
         {
             var padding = (Width - text.Length) / 2;

@@ -27,7 +27,9 @@ public class SettingsControl : UserControl
     private readonly TextBox _txtKitchenIp;
     private readonly NumericUpDown _numKitchenPort;
     private readonly CheckBox _chkShowOrderTime;
-    private readonly CheckBox _chkShowTaxBreakdown;
+    private readonly ComboBox _cboTaxDisplayMode;
+    private readonly NumericUpDown _numClientFontSize;
+    private readonly NumericUpDown _numKitchenFontSize;
     private readonly Button _btnSavePrinters;
     private readonly Label _lblPrinterStatus;
 
@@ -153,11 +155,39 @@ public class SettingsControl : UserControl
             Size = new Size(400, 28)
         };
 
-        _chkShowTaxBreakdown = new CheckBox
+        var lblTaxDisplayMode = new Label { Text = "VAT display on customer receipt", Location = new Point(20, 616), Size = new Size(300, 28) };
+        _cboTaxDisplayMode = new ComboBox
         {
-            Text = "Show tax breakdown on customer receipt",
-            Location = new Point(20, 616),
-            Size = new Size(400, 28)
+            Location = new Point(20, 648),
+            Size = new Size(260, 36),
+            Font = new Font("Segoe UI", 12F),
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        // Order matches the TaxDisplayMode enum values (None=0, TotalOnly=1,
+        // PerItem=2) so SelectedIndex can be cast directly to the enum.
+        _cboTaxDisplayMode.Items.AddRange(["Don't show VAT", "VAT on total only", "VAT on every item"]);
+        _cboTaxDisplayMode.SelectedIndex = (int)TaxDisplayMode.PerItem;
+
+        var lblClientFontSize = new Label { Text = "Client receipt font size (1 = normal, up to 8)", Location = new Point(20, 696), Size = new Size(400, 28) };
+        _numClientFontSize = new NumericUpDown
+        {
+            Location = new Point(20, 728),
+            Size = new Size(100, 36),
+            Font = new Font("Segoe UI", 14F),
+            Minimum = 1,
+            Maximum = 8,
+            Value = 1
+        };
+
+        var lblKitchenFontSize = new Label { Text = "Kitchen ticket font size (1 = normal, up to 8)", Location = new Point(20, 776), Size = new Size(400, 28) };
+        _numKitchenFontSize = new NumericUpDown
+        {
+            Location = new Point(20, 808),
+            Size = new Size(100, 36),
+            Font = new Font("Segoe UI", 14F),
+            Minimum = 1,
+            Maximum = 8,
+            Value = 2
         };
 
         // Same reasoning as the shared-settings Save button above - on its own
@@ -165,7 +195,7 @@ public class SettingsControl : UserControl
         _btnSavePrinters = new Button
         {
             Text = "Save Printer Settings",
-            Location = new Point(20, 660),
+            Location = new Point(20, 856),
             Size = new Size(220, 40),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
@@ -173,7 +203,7 @@ public class SettingsControl : UserControl
 
         _lblPrinterStatus = new Label
         {
-            Location = new Point(20, 708),
+            Location = new Point(20, 904),
             Size = new Size(500, 28),
             ForeColor = Color.Green
         };
@@ -201,7 +231,12 @@ public class SettingsControl : UserControl
         Controls.Add(btnTestKitchen);
         Controls.Add(lblReceiptOptions);
         Controls.Add(_chkShowOrderTime);
-        Controls.Add(_chkShowTaxBreakdown);
+        Controls.Add(lblTaxDisplayMode);
+        Controls.Add(_cboTaxDisplayMode);
+        Controls.Add(lblClientFontSize);
+        Controls.Add(_numClientFontSize);
+        Controls.Add(lblKitchenFontSize);
+        Controls.Add(_numKitchenFontSize);
         Controls.Add(_btnSavePrinters);
         Controls.Add(_lblPrinterStatus);
 
@@ -228,7 +263,9 @@ public class SettingsControl : UserControl
         _txtKitchenIp.Text = printerSettings.KitchenPrinterIp;
         _numKitchenPort.Value = printerSettings.KitchenPrinterPort;
         _chkShowOrderTime.Checked = printerSettings.ShowOrderTimeOnReceipt;
-        _chkShowTaxBreakdown.Checked = printerSettings.ShowTaxBreakdownOnReceipt;
+        _cboTaxDisplayMode.SelectedIndex = (int)printerSettings.TaxDisplayMode;
+        _numClientFontSize.Value = printerSettings.ClientReceiptFontSize;
+        _numKitchenFontSize.Value = printerSettings.KitchenTicketFontSize;
     }
 
     private async Task SaveSharedAsync()
@@ -262,7 +299,9 @@ public class SettingsControl : UserControl
             KitchenPrinterIp = _txtKitchenIp.Text.Trim(),
             KitchenPrinterPort = (int)_numKitchenPort.Value,
             ShowOrderTimeOnReceipt = _chkShowOrderTime.Checked,
-            ShowTaxBreakdownOnReceipt = _chkShowTaxBreakdown.Checked
+            TaxDisplayMode = (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex,
+            ClientReceiptFontSize = (int)_numClientFontSize.Value,
+            KitchenTicketFontSize = (int)_numKitchenFontSize.Value
         };
         settings.Save();
 
@@ -285,8 +324,8 @@ public class SettingsControl : UserControl
         try
         {
             var bytes = isClient
-                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, _chkShowTaxBreakdown.Checked)
-                : ReceiptBuilder.BuildKitchenTicket(SampleOrder());
+                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
+                : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
 
             await new NetworkReceiptPrinter(ip, port).PrintAsync(bytes);
 
@@ -307,8 +346,8 @@ public class SettingsControl : UserControl
     private void ShowPreview(bool isClient)
     {
         var text = isClient
-            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, _chkShowTaxBreakdown.Checked)
-            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder());
+            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
+            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
 
         using var dialog = new FormReceiptPreviewDialog(
             isClient ? "Client Receipt Preview" : "Kitchen Ticket Preview", text);

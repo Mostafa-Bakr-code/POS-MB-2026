@@ -301,10 +301,23 @@ public class OrderTakingControl : UserControl
 
             var order = await _apiClient.CreateOrderAsync(request);
 
+            // Built from order.Items (what the server actually confirmed and
+            // stored), not from the local _cart - if a price changed between
+            // adding to cart and placing the order, the receipt must match what
+            // was really charged, not a stale client-side snapshot. order.Items
+            // has no item name, so it's resolved from the cart's own items,
+            // whose names can't have changed mid-order.
+            var itemNamesById = _cart
+                .Select(c => c.Item)
+                .DistinctBy(i => i.ItemId)
+                .ToDictionary(i => i.ItemId, i => i.ItemName);
+
             var receiptOrder = new ReceiptOrder(
                 order.SerialNumber ?? order.OrderId,
                 AppSession.ToLocalDisplay(order.Date),
-                _cart.Select(c => new ReceiptItem(c.Item.ItemName, c.Quantity, c.Item.Price, c.Item.TaxRate, c.Comment)).ToList(),
+                order.Items.Select(oi => new ReceiptItem(
+                    itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
+                    oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
                 order.Total,
                 order.IsComplimentary);
 
@@ -336,8 +349,24 @@ public class OrderTakingControl : UserControl
     private async Task PrintOrderAsync(ReceiptOrder order)
     {
         var settings = PrinterSettings.Load();
-        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(order);
-        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(order, settings.ShowOrderTimeOnReceipt, settings.ShowTaxBreakdownOnReceipt);
+        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(order, settings.KitchenTicketFontSize);
+        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(order, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize);
+
+        // No real printer set up yet (see Settings) - show what would have
+        // printed for this actual order instead of failing/timing out against an
+        // empty address. Once a printer IP is configured, this stops happening
+        // automatically and a real print is attempted instead.
+        if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
+        {
+            using var clientPreview = new FormReceiptPreviewDialog("Client Receipt (no printer configured - preview only)",
+                ReceiptBuilder.PreviewCustomerReceipt(order, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize));
+            clientPreview.ShowDialog(this);
+
+            using var kitchenPreview = new FormReceiptPreviewDialog("Kitchen Ticket (no printer configured - preview only)",
+                ReceiptBuilder.PreviewKitchenTicket(order, settings.KitchenTicketFontSize));
+            kitchenPreview.ShowDialog(this);
+            return;
+        }
 
         var clientTask = PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort,
             customerReceipt, "Client receipt");
