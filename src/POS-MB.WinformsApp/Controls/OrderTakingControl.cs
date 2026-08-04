@@ -1,3 +1,4 @@
+using POS_MB.Printing;
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
@@ -16,6 +17,7 @@ public class OrderTakingControl : UserControl
     private readonly Label _lblTotal;
     private readonly CheckBox _chkComplimentary;
     private readonly Button _btnPlaceOrder;
+    private readonly Label _lblPrintStatus;
 
     private List<CategoryDto> _categories = [];
     private List<ItemDto> _items = [];
@@ -102,7 +104,22 @@ public class OrderTakingControl : UserControl
         };
         _btnPlaceOrder.Click += BtnPlaceOrder_Click;
 
+        // Printing happens in the background right after an order is placed (see
+        // BtnPlaceOrder_Click) - the cashier is never blocked waiting on it. This
+        // label is just a quiet, non-blocking way to surface "a printer didn't
+        // respond" without interrupting the next order with a popup.
+        _lblPrintStatus = new Label
+        {
+            Text = "",
+            Dock = DockStyle.Bottom,
+            Height = 26,
+            Font = new Font("Segoe UI", 9F),
+            ForeColor = Color.FromArgb(220, 53, 69),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+
         cartContainer.Controls.Add(_cartPanel);
+        cartContainer.Controls.Add(_lblPrintStatus);
         cartContainer.Controls.Add(_lblTotal);
         cartContainer.Controls.Add(_chkComplimentary);
         cartContainer.Controls.Add(_btnPlaceOrder);
@@ -284,13 +301,21 @@ public class OrderTakingControl : UserControl
 
             var order = await _apiClient.CreateOrderAsync(request);
 
-            MessageBox.Show(
-                $"Order #{order.SerialNumber} placed successfully.\nTotal: {order.Total:0.00}",
-                "Order Placed", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            var receiptOrder = new ReceiptOrder(
+                order.SerialNumber ?? order.OrderId,
+                AppSession.ToLocalDisplay(order.Date),
+                _cart.Select(c => new ReceiptItem(c.Item.ItemName, c.Quantity, c.Item.Price, c.Item.TaxRate, c.Comment)).ToList(),
+                order.Total,
+                order.IsComplimentary);
 
+            ShowStatus($"Order #{receiptOrder.SerialNumber} placed - Total {order.Total:0.00}", success: true);
             _cart.Clear();
             _chkComplimentary.Checked = false;
             RenderCart();
+
+            // Fired in the background, not awaited here - the cashier moves on to
+            // the next order immediately instead of waiting on two printers.
+            _ = PrintOrderAsync(receiptOrder);
         }
         catch (Exception ex)
         {
@@ -300,6 +325,79 @@ public class OrderTakingControl : UserControl
         {
             _btnPlaceOrder.Enabled = true;
         }
+    }
+
+    // Both printers fire at the same time (not one-then-the-other) so the total
+    // wall-clock delay is however long the slower one takes, not the sum of both.
+    // A failure here never throws back into the cashier flow - the order is
+    // already placed and the cart already cleared by the time this runs; a
+    // printer being offline/out of paper should never block or interrupt the
+    // next order, just quietly surface which ticket didn't go out.
+    private async Task PrintOrderAsync(ReceiptOrder order)
+    {
+        var settings = PrinterSettings.Load();
+        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(order);
+        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(order, settings.ShowOrderTimeOnReceipt, settings.ShowTaxBreakdownOnReceipt);
+
+        var clientTask = PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort,
+            customerReceipt, "Client receipt");
+        var kitchenTask = PrintSafelyAsync(settings.KitchenPrinterIp, settings.KitchenPrinterPort,
+            kitchenTicket, "Kitchen ticket");
+
+        var clientFailure = await clientTask;
+        var kitchenFailure = await kitchenTask;
+
+        // Kitchen printer down/unreachable - the order still has to reach the
+        // kitchen somehow, so fall back to printing the kitchen ticket on the
+        // client printer too (the cashier can hand it over physically) instead
+        // of the order silently never reaching the kitchen at all.
+        string? fallbackFailure = null;
+        var usedFallback = false;
+        if (kitchenFailure is not null)
+        {
+            usedFallback = true;
+            fallbackFailure = await PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort,
+                kitchenTicket, "Kitchen ticket (fallback)");
+        }
+
+        if (clientFailure is not null && kitchenFailure is not null && fallbackFailure is not null)
+            ShowStatus("Print failed: both printers unreachable.", success: false);
+        else if (clientFailure is not null)
+            ShowStatus($"Print failed: {clientFailure}", success: false);
+        else if (usedFallback && fallbackFailure is null)
+            ShowStatus("Kitchen printer unreachable - ticket printed on client printer instead.", success: false);
+        else if (fallbackFailure is not null)
+            ShowStatus($"Print failed: {fallbackFailure}", success: false);
+    }
+
+    // Returns null on success, or a short failure label on failure - avoids
+    // multiple concurrent tasks writing into a shared, non-thread-safe collection.
+    private static async Task<string?> PrintSafelyAsync(string ip, int port, byte[] data, string label)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+            return $"{label} (not configured)";
+
+        try
+        {
+            await new NetworkReceiptPrinter(ip, port).PrintAsync(data);
+            return null;
+        }
+        catch
+        {
+            return label;
+        }
+    }
+
+    private void ShowStatus(string text, bool success)
+    {
+        void Apply()
+        {
+            _lblPrintStatus.Text = text;
+            _lblPrintStatus.ForeColor = success ? Color.FromArgb(25, 135, 84) : Color.FromArgb(220, 53, 69);
+        }
+
+        if (InvokeRequired) BeginInvoke(Apply);
+        else Apply();
     }
 
     private class CartLine(ItemDto item, int quantity = 1)
