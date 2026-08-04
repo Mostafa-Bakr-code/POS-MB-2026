@@ -23,7 +23,7 @@ public class FormItemEditDialog : Form
         Font = new Font("Segoe UI", 12F);
 
         var lblName = new Label { Text = "Item Name", Location = new Point(20, 20), Size = new Size(360, 28) };
-        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F) };
+        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 50 };
 
         var lblCategory = new Label { Text = "Category", Location = new Point(20, 96), Size = new Size(360, 28) };
         _cboCategory = new ComboBox

@@ -57,7 +57,7 @@ public class FormUserEditDialog : Form
         Font = new Font("Segoe UI", 12F);
 
         var lblUserName = new Label { Text = "Username", Location = new Point(20, 20), Size = new Size(360, 28) };
-        _txtUserName = new TextBox { Text = initialUserName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F) };
+        _txtUserName = new TextBox { Text = initialUserName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 50 };
 
         var lblPassword = new Label
         {

@@ -7,7 +7,11 @@ public class FormTextInputDialog : Form
 
     public string Value => _txtValue.Text.Trim();
 
-    public FormTextInputDialog(string title, string label, string initialValue = "")
+    // maxLength should match the target database column's size (e.g. NVARCHAR(50))
+    // - without it, nothing stops the user from typing more than the database can
+    // store, which surfaces as an unhelpful raw 500 error when saving instead of
+    // being caught here where it can't happen at all.
+    public FormTextInputDialog(string title, string label, string initialValue = "", int maxLength = 100)
     {
         Text = title;
         ClientSize = new Size(420, 190);
@@ -18,7 +22,7 @@ public class FormTextInputDialog : Form
         Font = new Font("Segoe UI", 12F);
 
         var lbl = new Label { Text = label, Location = new Point(20, 20), Size = new Size(360, 28) };
-        _txtValue = new TextBox { Text = initialValue, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F) };
+        _txtValue = new TextBox { Text = initialValue, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = maxLength };
 
         var btnSave = new Button
         {

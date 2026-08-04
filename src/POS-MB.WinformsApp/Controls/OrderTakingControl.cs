@@ -259,7 +259,7 @@ public class OrderTakingControl : UserControl
             };
             btnComment.Click += (_, _) =>
             {
-                using var dialog = new FormTextInputDialog($"Comment for {line.Item.ItemName}", "Comment (e.g. no onions)", line.Comment ?? "");
+                using var dialog = new FormTextInputDialog($"Comment for {line.Item.ItemName}", "Comment (e.g. no onions)", line.Comment ?? "", maxLength: 50);
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     line.Comment = dialog.Value.Length == 0 ? null : dialog.Value;

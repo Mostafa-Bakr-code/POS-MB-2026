@@ -118,7 +118,7 @@ public class CategoriesControl : UserControl
 
         if (columnName == "Edit")
         {
-            using var dialog = new FormTextInputDialog("Edit Category", "Category Name", category.CategoryName);
+            using var dialog = new FormTextInputDialog("Edit Category", "Category Name", category.CategoryName, maxLength: 20);
             if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Value.Length > 0)
             {
                 await _apiClient.UpdateCategoryAsync(category.CategoryId, dialog.Value);
@@ -147,7 +147,7 @@ public class CategoriesControl : UserControl
 
     private async Task AddCategoryAsync()
     {
-        using var dialog = new FormTextInputDialog("Add Category", "Category Name");
+        using var dialog = new FormTextInputDialog("Add Category", "Category Name", maxLength: 20);
         if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Value.Length > 0)
         {
             await _apiClient.CreateCategoryAsync(dialog.Value);
