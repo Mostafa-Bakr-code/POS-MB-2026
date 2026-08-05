@@ -10,6 +10,10 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class UsersController(clsUserBusiness userBusiness, JwtTokenService tokenService) : ControllerBase
 {
+    // Open to any authenticated user (not gated behind Permission.Users) -
+    // the Logs and Order History screens both need this to resolve user names
+    // for display, without either of those permissions implying user management
+    // rights. No password hash is ever included in the response.
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false)
     {
@@ -25,6 +29,7 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
     }
 
     [HttpPost]
+    [RequirePermission(Permission.Users)]
     public async Task<IActionResult> Create([FromBody] CreateUserRequest request)
     {
         var id = await userBusiness.CreateAsync(request.UserName, request.Password, request.Permissions);
@@ -33,6 +38,7 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission(Permission.Users)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
     {
         var updated = await userBusiness.UpdateAsync(id, request.UserName, request.Password, request.Permissions);
@@ -40,6 +46,7 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
     }
 
     [HttpPost("{id:int}/deactivate")]
+    [RequirePermission(Permission.Users)]
     public async Task<IActionResult> Deactivate(int id)
     {
         var deactivated = await userBusiness.DeactivateAsync(id);
@@ -47,6 +54,7 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
     }
 
     [HttpPost("{id:int}/reactivate")]
+    [RequirePermission(Permission.Users)]
     public async Task<IActionResult> Reactivate(int id)
     {
         var reactivated = await userBusiness.ReactivateAsync(id);

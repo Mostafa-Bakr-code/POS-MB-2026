@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 
 namespace POS_MB.API.Controllers;
@@ -7,6 +8,9 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class CategoriesController(clsCategoryBusiness categoryBusiness) : ControllerBase
 {
+    // Read-only endpoints stay open to any authenticated user - the order-taking
+    // screen needs the category list for every cashier, not just ones with the
+    // Categories management permission.
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false)
     {
@@ -22,6 +26,7 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
     }
 
     [HttpPost]
+    [RequirePermission(Permission.Categories)]
     public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
     {
         var id = await categoryBusiness.CreateAsync(request.Name);
@@ -30,6 +35,7 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission(Permission.Categories)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateCategoryRequest request)
     {
         var updated = await categoryBusiness.UpdateAsync(id, request.Name);
@@ -37,6 +43,7 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
     }
 
     [HttpPost("{id:int}/deactivate")]
+    [RequirePermission(Permission.Categories)]
     public async Task<IActionResult> Deactivate(int id)
     {
         var deactivated = await categoryBusiness.DeactivateAsync(id);
@@ -44,6 +51,7 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
     }
 
     [HttpPost("{id:int}/reactivate")]
+    [RequirePermission(Permission.Categories)]
     public async Task<IActionResult> Reactivate(int id)
     {
         var reactivated = await categoryBusiness.ReactivateAsync(id);

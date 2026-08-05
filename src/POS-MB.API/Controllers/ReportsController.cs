@@ -1,5 +1,6 @@
 using ClosedXML.Excel;
 using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 using POS_MB.DataAccess.Models.Reports;
 
@@ -9,7 +10,11 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class ReportsController(clsReportingBusiness reportingBusiness) : ControllerBase
 {
+    // Shared by both the Reports screen and the Daily Summary screen (including
+    // each one's own Excel export), which are gated behind two different
+    // permissions - either one is enough to call this.
     [HttpGet("sales-summary")]
+    [RequirePermission(Permission.Reports | Permission.DailySummary)]
     public async Task<IActionResult> GetSalesSummary(
         [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null, [FromQuery] string format = "json")
     {
@@ -33,6 +38,7 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
     }
 
     [HttpGet("item-sales")]
+    [RequirePermission(Permission.Reports)]
     public async Task<IActionResult> GetItemSales(
         [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null,
         [FromQuery] bool groupByDay = false, [FromQuery] bool groupByPrice = false, [FromQuery] string format = "json")
@@ -59,6 +65,7 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
     }
 
     [HttpGet("top-sellers")]
+    [RequirePermission(Permission.Reports)]
     public async Task<IActionResult> GetTopSellers(
         [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null,
         [FromQuery] TopSellersSortBy sortBy = TopSellersSortBy.Quantity, [FromQuery] int take = 10,
@@ -75,6 +82,7 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
     }
 
     [HttpGet("staff-performance")]
+    [RequirePermission(Permission.Reports)]
     public async Task<IActionResult> GetStaffPerformance(
         [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null, [FromQuery] string format = "json")
     {

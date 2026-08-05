@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 
 namespace POS_MB.API.Controllers;
@@ -7,6 +8,8 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class SettingsController(clsSettingsBusiness settingsBusiness) : ControllerBase
 {
+    // Open to any authenticated user - FormLogIn reads TimeZoneOffsetHours right
+    // after login regardless of the logging-in user's permissions.
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -22,6 +25,7 @@ public class SettingsController(clsSettingsBusiness settingsBusiness) : Controll
     }
 
     [HttpPut("{key}")]
+    [RequirePermission(Permission.Settings)]
     public async Task<IActionResult> Set(string key, [FromBody] SetSettingRequest request)
     {
         await settingsBusiness.SetAsync(key, request.Value);
@@ -30,6 +34,7 @@ public class SettingsController(clsSettingsBusiness settingsBusiness) : Controll
     }
 
     [HttpDelete("{key}")]
+    [RequirePermission(Permission.Settings)]
     public async Task<IActionResult> Delete(string key)
     {
         var deleted = await settingsBusiness.DeleteAsync(key);

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 
 namespace POS_MB.API.Controllers;
@@ -7,6 +8,9 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
 {
+    // Read-only endpoints stay open to any authenticated user - order-taking
+    // needs the item catalog for every cashier, not just ones with the Items
+    // management permission.
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false, [FromQuery] int? categoryId = null, [FromQuery] bool availableOnly = false)
     {
@@ -22,6 +26,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Create([FromBody] CreateItemRequest request)
     {
         var id = await itemBusiness.CreateAsync(request.Name, request.CategoryId, request.Price, request.TaxRate);
@@ -30,6 +35,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateItemRequest request)
     {
         var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, request.ChangedByUserId);
@@ -44,6 +50,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 
     [HttpPost("{id:int}/deactivate")]
+    [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Deactivate(int id)
     {
         var deactivated = await itemBusiness.DeactivateAsync(id);
@@ -51,6 +58,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 
     [HttpPost("{id:int}/reactivate")]
+    [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Reactivate(int id)
     {
         var reactivated = await itemBusiness.ReactivateAsync(id);
@@ -58,6 +66,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 
     [HttpPost("{id:int}/availability")]
+    [RequirePermission(Permission.Items)]
     public async Task<IActionResult> SetAvailability(int id, [FromBody] SetItemAvailabilityRequest request)
     {
         var updated = await itemBusiness.SetAvailabilityAsync(id, request.IsAvailable);

@@ -38,6 +38,7 @@ builder.Services.AddScoped<clsReportingDataAccess>();
 builder.Services.AddScoped<clsReportingBusiness>();
 
 builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is not configured.");
