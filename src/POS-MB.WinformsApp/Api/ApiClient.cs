@@ -31,6 +31,19 @@ public class ApiClient
         return await response.Content.ReadFromJsonAsync<LoginResponse>();
     }
 
+    public async Task<LoginResponse?> RefreshTokenAsync(string refreshToken)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/users/refresh-token", new { RefreshToken = refreshToken });
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<LoginResponse>();
+    }
+
+    public async Task LogoutAsync(string refreshToken)
+    {
+        await _httpClient.PostAsJsonAsync("api/users/logout", new { RefreshToken = refreshToken });
+    }
+
     public async Task<int> StartSessionAsync(int userId)
     {
         var response = await _httpClient.PostAsJsonAsync("api/logs/start", new { UserId = userId });

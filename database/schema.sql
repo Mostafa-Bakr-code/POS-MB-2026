@@ -131,3 +131,19 @@ CREATE UNIQUE INDEX UQ_Orders_Date_SerialNumber
     ON dbo.Orders (OrderDate, SerialNumber)
     WHERE SerialNumber IS NOT NULL;
 GO
+
+CREATE TABLE dbo.RefreshTokens
+(
+    RefreshTokenId INT IDENTITY(1,1) NOT NULL,
+    UserId         INT               NOT NULL,
+    TokenHash      NVARCHAR(200)     NOT NULL, -- SHA-256 of the token; the plaintext itself is never stored, same reasoning as passwords
+    ExpiresAt      DATETIME2(3)      NOT NULL,
+    RevokedAt      DATETIME2(3)      NULL, -- set on logout, on rotation (a new token replaces it), or on reuse-detected theft response
+    CreatedAt      DATETIME2(3)      NOT NULL CONSTRAINT DF_RefreshTokens_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_RefreshTokens PRIMARY KEY CLUSTERED (RefreshTokenId),
+    CONSTRAINT FK_RefreshTokens_Users FOREIGN KEY (UserId) REFERENCES dbo.Users (UserId)
+);
+GO
+
+CREATE INDEX IX_RefreshTokens_TokenHash ON dbo.RefreshTokens (TokenHash);
+GO

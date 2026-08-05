@@ -30,6 +30,8 @@ builder.Services.AddScoped<clsOrderDataAccess>();
 builder.Services.AddScoped<clsOrderBusiness>();
 builder.Services.AddScoped<clsUserDataAccess>();
 builder.Services.AddScoped<clsUserBusiness>();
+builder.Services.AddScoped<clsRefreshTokenDataAccess>();
+builder.Services.AddScoped<clsRefreshTokenBusiness>();
 builder.Services.AddScoped<clsSettingsDataAccess>();
 builder.Services.AddScoped<clsSettingsBusiness>();
 builder.Services.AddScoped<clsLogsDataAccess>();

@@ -9,6 +9,7 @@ public static class AppSession
     public static UserDto? CurrentUser { get; set; }
     public static int? LogId { get; set; }
     public static string? Token { get; set; }
+    public static string? RefreshToken { get; set; }
 
     // Orders/timestamps come from the API in UTC. Loaded at login from the
     // TimeZoneOffsetHours setting so displayed times match the local calendar
@@ -27,6 +28,7 @@ public static class AppSession
         CurrentUser = null;
         LogId = null;
         Token = null;
+        RefreshToken = null;
         TimeZoneOffsetHours = 0m;
     }
 }

@@ -8,7 +8,8 @@ namespace POS_MB.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UsersController(clsUserBusiness userBusiness, JwtTokenService tokenService) : ControllerBase
+public class UsersController(
+    clsUserBusiness userBusiness, JwtTokenService tokenService, clsRefreshTokenBusiness refreshTokenBusiness) : ControllerBase
 {
     // Open to any authenticated user (not gated behind Permission.Users) -
     // the Logs and Order History screens both need this to resolve user names
@@ -70,7 +71,34 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
         if (user is null) return Unauthorized();
 
         var token = tokenService.GenerateToken(user);
-        return Ok(new LoginResponse(token, ToResponse(user)));
+        var refreshToken = await refreshTokenBusiness.IssueAsync(user.UserId);
+        return Ok(new LoginResponse(token, refreshToken, ToResponse(user)));
+    }
+
+    // Exchanges a still-valid refresh token for a new access token, without
+    // needing the password again - this is what lets a shift stay logged in
+    // past the access token's short lifetime. AllowAnonymous because the
+    // access token has typically already expired by the time this is called;
+    // the refresh token itself is the credential being presented here.
+    [HttpPost("refresh-token")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
+    {
+        var result = await refreshTokenBusiness.ValidateAndRotateAsync(request.RefreshToken);
+        if (result is null) return Unauthorized();
+
+        var user = await userBusiness.GetByIdAsync(result.Value.UserId);
+        if (user is null || !user.IsActive) return Unauthorized();
+
+        var token = tokenService.GenerateToken(user);
+        return Ok(new LoginResponse(token, result.Value.NewToken, ToResponse(user)));
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
+    {
+        await refreshTokenBusiness.RevokeAsync(request.RefreshToken);
+        return NoContent();
     }
 
     private static UserResponse ToResponse(User user) =>
@@ -80,5 +108,6 @@ public class UsersController(clsUserBusiness userBusiness, JwtTokenService token
 public record CreateUserRequest(string UserName, string Password, int Permissions);
 public record UpdateUserRequest(string UserName, string? Password, int Permissions);
 public record VerifyCredentialsRequest(string UserName, string Password);
+public record RefreshTokenRequest(string RefreshToken);
 public record UserResponse(int UserId, string UserName, int Permissions, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
-public record LoginResponse(string Token, UserResponse User);
+public record LoginResponse(string Token, string RefreshToken, UserResponse User);

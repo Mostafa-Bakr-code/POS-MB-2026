@@ -1,3 +1,4 @@
+using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Controls;
 using POS_MB.WinformsApp.Models;
 using POS_MB.WinformsApp.Session;
@@ -6,6 +7,8 @@ namespace POS_MB.WinformsApp;
 
 public class FormMain : Form
 {
+    private readonly ApiClient _apiClient = new();
+    private TokenRefreshTimer? _refreshTimer;
     private readonly Panel _navBar;
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
@@ -161,7 +164,20 @@ public class FormMain : Form
         _btnSettings.Enabled = AppSession.HasPermission(Permission.Settings);
         _btnLogs.Enabled = AppSession.HasPermission(Permission.Logs);
 
+        _refreshTimer = new TokenRefreshTimer(RefreshTokenAsync, TimeSpan.FromMinutes(20));
+
         ShowOrderTaking();
+    }
+
+    private async Task RefreshTokenAsync()
+    {
+        if (AppSession.RefreshToken is not { } refreshToken) return;
+
+        var result = await _apiClient.RefreshTokenAsync(refreshToken);
+        if (result is null) return;
+
+        AppSession.Token = result.Token;
+        AppSession.RefreshToken = result.RefreshToken;
     }
 
     private void ShowOrderTaking() => ShowContent(new OrderTakingControl());
@@ -189,9 +205,17 @@ public class FormMain : Form
         if (_loggedOut) return;
         _loggedOut = true;
 
+        _refreshTimer?.Dispose();
+
         if (AppSession.LogId is int logId)
         {
-            try { await new POS_MB.WinformsApp.Api.ApiClient().EndSessionAsync(logId); }
+            try { await _apiClient.EndSessionAsync(logId); }
+            catch { /* best-effort - don't block logout on a network hiccup */ }
+        }
+
+        if (AppSession.RefreshToken is string refreshToken)
+        {
+            try { await _apiClient.LogoutAsync(refreshToken); }
             catch { /* best-effort - don't block logout on a network hiccup */ }
         }
 
