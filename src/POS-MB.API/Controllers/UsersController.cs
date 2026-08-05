@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using POS_MB.API.Auth;
 using POS_MB.Business;
 using POS_MB.DataAccess.Models;
@@ -65,6 +66,7 @@ public class UsersController(
     // The only endpoint reachable without a token - this is what issues one.
     [HttpPost("verify-credentials")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> VerifyCredentials([FromBody] VerifyCredentialsRequest request)
     {
         var user = await userBusiness.VerifyCredentialsAsync(request.UserName, request.Password);
@@ -82,6 +84,7 @@ public class UsersController(
     // the refresh token itself is the credential being presented here.
     [HttpPost("refresh-token")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         var result = await refreshTokenBusiness.ValidateAndRotateAsync(request.RefreshToken);

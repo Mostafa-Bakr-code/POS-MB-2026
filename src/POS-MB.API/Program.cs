@@ -1,6 +1,8 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using POS_MB.API;
 using POS_MB.API.Auth;
@@ -72,6 +74,37 @@ builder.Services.AddAuthorization(options =>
         .Build();
 });
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Baseline for every endpoint - general abuse/DoS protection, not aimed at
+    // brute-force specifically (that's the tighter "login" policy below).
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+
+    // Applied to verify-credentials and refresh-token - the two endpoints that
+    // accept a guessable secret without already requiring a valid token. A
+    // handful of genuine typos is fine; hundreds of attempts per minute from
+    // one IP is a brute-force script.
+    options.AddPolicy("login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
 // Locked down by default (Cors:AllowedOrigins is empty in appsettings.json) -
 // the chef tablet is served same-origin from this same API in production, so
 // CORS doesn't need to allow anything there. Development.json adds the local
@@ -111,6 +144,10 @@ else
 }
 
 app.UseHttpsRedirection();
+
+// Ahead of auth on purpose: a flood of login attempts should be rejected before
+// spending CPU on password verification, not after.
+app.UseRateLimiter();
 
 app.UseCors("Default");
 
