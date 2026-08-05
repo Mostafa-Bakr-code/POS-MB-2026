@@ -27,6 +27,13 @@ public class PrinterSettings
     public int KitchenTicketFontSize { get; set; } = 2;
     public int ClientReceiptFontSize { get; set; } = 1;
 
+    // The real, unique order number always stays in the database untouched (Order
+    // History, reports, etc. are unaffected) - this only changes what number gets
+    // printed on the two receipts, so a customer can't tell how many orders have
+    // been placed that day just from their own receipt. 0 = don't wrap, print the
+    // real number as-is.
+    public int ReceiptOrderNumberWrapAt { get; set; } = 100;
+
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "POS-MB", "printer-settings.json");
 

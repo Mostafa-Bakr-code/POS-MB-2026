@@ -26,6 +26,7 @@ public class SettingsControl : UserControl
     private readonly NumericUpDown _numClientPort;
     private readonly TextBox _txtKitchenIp;
     private readonly NumericUpDown _numKitchenPort;
+    private readonly NumericUpDown _numOrderNumberWrapAt;
     private readonly CheckBox _chkShowOrderTime;
     private readonly ComboBox _cboTaxDisplayMode;
     private readonly NumericUpDown _numClientFontSize;
@@ -136,10 +137,32 @@ public class SettingsControl : UserControl
         var btnTestKitchen = new Button { Text = "Test Print", Location = new Point(480, 504), Size = new Size(130, 36), Font = new Font("Segoe UI", 11F) };
         btnTestKitchen.Click += async (_, _) => await TestPrintAsync(_txtKitchenIp.Text, (int)_numKitchenPort.Value, isClient: false);
 
+        var lblBothReceiptsSection = new Label
+        {
+            Text = "Both Receipts",
+            Location = new Point(20, 552),
+            Size = new Size(400, 26),
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold)
+        };
+
+        // Doesn't touch the real order number anywhere else (Order History,
+        // reports, the cashier's own screen) - only what gets printed. 0 = print
+        // the real number as-is; cancelling this later is just setting it back to
+        // 0, no code change needed.
+        var lblWrapAt = new Label { Text = "Wrap order number on receipts after (0 = don't wrap)", Location = new Point(20, 584), Size = new Size(400, 28) };
+        _numOrderNumberWrapAt = new NumericUpDown
+        {
+            Location = new Point(20, 616),
+            Size = new Size(120, 36),
+            Font = new Font("Segoe UI", 14F),
+            Minimum = 0,
+            Maximum = 9999
+        };
+
         var lblReceiptOptions = new Label
         {
             Text = "Customer Receipt Options",
-            Location = new Point(20, 552),
+            Location = new Point(20, 664),
             Size = new Size(400, 26),
             Font = new Font("Segoe UI", 11F, FontStyle.Bold)
         };
@@ -151,14 +174,14 @@ public class SettingsControl : UserControl
         _chkShowOrderTime = new CheckBox
         {
             Text = "Show order time on customer receipt",
-            Location = new Point(20, 584),
+            Location = new Point(20, 696),
             Size = new Size(400, 28)
         };
 
-        var lblTaxDisplayMode = new Label { Text = "VAT display on customer receipt", Location = new Point(20, 616), Size = new Size(300, 28) };
+        var lblTaxDisplayMode = new Label { Text = "VAT display on customer receipt", Location = new Point(20, 728), Size = new Size(300, 28) };
         _cboTaxDisplayMode = new ComboBox
         {
-            Location = new Point(20, 648),
+            Location = new Point(20, 760),
             Size = new Size(260, 36),
             Font = new Font("Segoe UI", 12F),
             DropDownStyle = ComboBoxStyle.DropDownList
@@ -168,10 +191,10 @@ public class SettingsControl : UserControl
         _cboTaxDisplayMode.Items.AddRange(["Don't show VAT", "VAT on total only", "VAT on every item"]);
         _cboTaxDisplayMode.SelectedIndex = (int)TaxDisplayMode.PerItem;
 
-        var lblClientFontSize = new Label { Text = "Client receipt font size (1 = normal, up to 8)", Location = new Point(20, 696), Size = new Size(400, 28) };
+        var lblClientFontSize = new Label { Text = "Client receipt font size (1 = normal, up to 8)", Location = new Point(20, 808), Size = new Size(400, 28) };
         _numClientFontSize = new NumericUpDown
         {
-            Location = new Point(20, 728),
+            Location = new Point(20, 840),
             Size = new Size(100, 36),
             Font = new Font("Segoe UI", 14F),
             Minimum = 1,
@@ -179,10 +202,10 @@ public class SettingsControl : UserControl
             Value = 1
         };
 
-        var lblKitchenFontSize = new Label { Text = "Kitchen ticket font size (1 = normal, up to 8)", Location = new Point(20, 776), Size = new Size(400, 28) };
+        var lblKitchenFontSize = new Label { Text = "Kitchen ticket font size (1 = normal, up to 8)", Location = new Point(20, 888), Size = new Size(400, 28) };
         _numKitchenFontSize = new NumericUpDown
         {
-            Location = new Point(20, 808),
+            Location = new Point(20, 920),
             Size = new Size(100, 36),
             Font = new Font("Segoe UI", 14F),
             Minimum = 1,
@@ -195,7 +218,7 @@ public class SettingsControl : UserControl
         _btnSavePrinters = new Button
         {
             Text = "Save Printer Settings",
-            Location = new Point(20, 856),
+            Location = new Point(20, 968),
             Size = new Size(220, 40),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
@@ -203,7 +226,7 @@ public class SettingsControl : UserControl
 
         _lblPrinterStatus = new Label
         {
-            Location = new Point(20, 904),
+            Location = new Point(20, 1016),
             Size = new Size(500, 28),
             ForeColor = Color.Green
         };
@@ -229,6 +252,9 @@ public class SettingsControl : UserControl
         Controls.Add(_numKitchenPort);
         Controls.Add(btnPreviewKitchen);
         Controls.Add(btnTestKitchen);
+        Controls.Add(lblBothReceiptsSection);
+        Controls.Add(lblWrapAt);
+        Controls.Add(_numOrderNumberWrapAt);
         Controls.Add(lblReceiptOptions);
         Controls.Add(_chkShowOrderTime);
         Controls.Add(lblTaxDisplayMode);
@@ -262,6 +288,7 @@ public class SettingsControl : UserControl
         _numClientPort.Value = printerSettings.ClientPrinterPort;
         _txtKitchenIp.Text = printerSettings.KitchenPrinterIp;
         _numKitchenPort.Value = printerSettings.KitchenPrinterPort;
+        _numOrderNumberWrapAt.Value = printerSettings.ReceiptOrderNumberWrapAt;
         _chkShowOrderTime.Checked = printerSettings.ShowOrderTimeOnReceipt;
         _cboTaxDisplayMode.SelectedIndex = (int)printerSettings.TaxDisplayMode;
         _numClientFontSize.Value = printerSettings.ClientReceiptFontSize;
@@ -298,6 +325,7 @@ public class SettingsControl : UserControl
             ClientPrinterPort = (int)_numClientPort.Value,
             KitchenPrinterIp = _txtKitchenIp.Text.Trim(),
             KitchenPrinterPort = (int)_numKitchenPort.Value,
+            ReceiptOrderNumberWrapAt = (int)_numOrderNumberWrapAt.Value,
             ShowOrderTimeOnReceipt = _chkShowOrderTime.Checked,
             TaxDisplayMode = (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex,
             ClientReceiptFontSize = (int)_numClientFontSize.Value,
