@@ -66,6 +66,25 @@ builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHand
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is not configured.");
 
+// User Secrets (Development) always overrides the CHANGE_ME placeholders in
+// appsettings.json, so this never fires locally - it's specifically a
+// production/staging safety net for the day this gets deployed somewhere,
+// catching the single most common deployment mistake (forgetting to set real
+// secrets via environment variables or a secrets vault) before it can run with
+// a publicly-known, guessable configuration.
+if (!builder.Environment.IsDevelopment())
+{
+    if (connectionString.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+            "ConnectionStrings:DefaultConnection is still the CHANGE_ME placeholder from appsettings.json - " +
+            "set a real value via an environment variable or secrets store before running outside Development.");
+
+    if (jwtKey.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
+        throw new InvalidOperationException(
+            "Jwt:Key is missing, still the CHANGE_ME placeholder, or too short (needs at least 32 bytes) - " +
+            "set a strong random value via an environment variable or secrets store before running outside Development.");
+}
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
