@@ -81,16 +81,18 @@ public class FormLogIn : Form
         _btnLogin.Enabled = false;
         try
         {
-            var user = await _apiClient.VerifyCredentialsAsync(_txtUserName.Text.Trim(), _txtPassword.Text);
-            if (user is null)
+            var login = await _apiClient.VerifyCredentialsAsync(_txtUserName.Text.Trim(), _txtPassword.Text);
+            if (login is null)
             {
                 _lblError.Text = "Invalid username or password.";
                 return;
             }
 
-            var logId = await _apiClient.StartSessionAsync(user.UserId);
+            AppSession.Token = login.Token;
 
-            AppSession.CurrentUser = user;
+            var logId = await _apiClient.StartSessionAsync(login.User.UserId);
+
+            AppSession.CurrentUser = login.User;
             AppSession.LogId = logId;
 
             var offsetValue = await _apiClient.GetSettingValueAsync("TimeZoneOffsetHours");

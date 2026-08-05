@@ -1,4 +1,9 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.IdentityModel.Tokens;
 using POS_MB.API;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 using POS_MB.DataAccess;
 
@@ -31,6 +36,38 @@ builder.Services.AddScoped<clsLogsDataAccess>();
 builder.Services.AddScoped<clsLogsBusiness>();
 builder.Services.AddScoped<clsReportingDataAccess>();
 builder.Services.AddScoped<clsReportingBusiness>();
+
+builder.Services.AddSingleton<JwtTokenService>();
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key is not configured.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+// Secure by default: every endpoint requires a valid token unless explicitly
+// marked [AllowAnonymous] (currently just the login endpoint) - so a future
+// controller added without thinking about auth is protected automatically
+// instead of silently wide open.
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 // Locked down by default (Cors:AllowedOrigins is empty in appsettings.json) -
 // the chef tablet is served same-origin from this same API in production, so
@@ -74,6 +111,7 @@ app.UseHttpsRedirection();
 
 app.UseCors("Default");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

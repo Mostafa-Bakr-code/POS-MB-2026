@@ -72,6 +72,7 @@ public class OrderDto
 }
 
 public record VerifyCredentialsRequest(string UserName, string Password);
+public record LoginResponse(string Token, UserDto User);
 
 public record NewOrderItemRequest(int ItemId, int Quantity, string? Comment);
 

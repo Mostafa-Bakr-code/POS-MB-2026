@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
 using POS_MB.Business;
 using POS_MB.DataAccess.Models;
 
@@ -6,7 +8,7 @@ namespace POS_MB.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class UsersController(clsUserBusiness userBusiness) : ControllerBase
+public class UsersController(clsUserBusiness userBusiness, JwtTokenService tokenService) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool includeInactive = false)
@@ -51,11 +53,16 @@ public class UsersController(clsUserBusiness userBusiness) : ControllerBase
         return reactivated ? NoContent() : NotFound();
     }
 
+    // The only endpoint reachable without a token - this is what issues one.
     [HttpPost("verify-credentials")]
+    [AllowAnonymous]
     public async Task<IActionResult> VerifyCredentials([FromBody] VerifyCredentialsRequest request)
     {
         var user = await userBusiness.VerifyCredentialsAsync(request.UserName, request.Password);
-        return user is null ? Unauthorized() : Ok(ToResponse(user));
+        if (user is null) return Unauthorized();
+
+        var token = tokenService.GenerateToken(user);
+        return Ok(new LoginResponse(token, ToResponse(user)));
     }
 
     private static UserResponse ToResponse(User user) =>
@@ -66,3 +73,4 @@ public record CreateUserRequest(string UserName, string Password, int Permission
 public record UpdateUserRequest(string UserName, string? Password, int Permissions);
 public record VerifyCredentialsRequest(string UserName, string Password);
 public record UserResponse(int UserId, string UserName, int Permissions, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
+public record LoginResponse(string Token, UserResponse User);

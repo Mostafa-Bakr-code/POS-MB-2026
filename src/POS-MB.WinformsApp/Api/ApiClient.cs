@@ -18,17 +18,17 @@ public class ApiClient
         var baseUrl = configuration["ApiBaseUrl"]
             ?? throw new InvalidOperationException("ApiBaseUrl is not configured in appsettings.json.");
 
-        _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
+        _httpClient = new HttpClient(new AuthHeaderHandler()) { BaseAddress = new Uri(baseUrl) };
     }
 
-    public async Task<UserDto?> VerifyCredentialsAsync(string userName, string password)
+    public async Task<LoginResponse?> VerifyCredentialsAsync(string userName, string password)
     {
         var response = await _httpClient.PostAsJsonAsync(
             "api/users/verify-credentials", new VerifyCredentialsRequest(userName, password));
 
         if (!response.IsSuccessStatusCode) return null;
 
-        return await response.Content.ReadFromJsonAsync<UserDto>();
+        return await response.Content.ReadFromJsonAsync<LoginResponse>();
     }
 
     public async Task<int> StartSessionAsync(int userId)
