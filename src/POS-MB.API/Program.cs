@@ -32,6 +32,18 @@ builder.Services.AddScoped<clsLogsBusiness>();
 builder.Services.AddScoped<clsReportingDataAccess>();
 builder.Services.AddScoped<clsReportingBusiness>();
 
+// Locked down by default (Cors:AllowedOrigins is empty in appsettings.json) -
+// the chef tablet is served same-origin from this same API in production, so
+// CORS doesn't need to allow anything there. Development.json adds the local
+// preview server's origin so the tablet can be built/tested against the API
+// before it's deployed alongside it.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Default", policy =>
+        policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod());
+});
+
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
@@ -49,8 +61,18 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    // Tells browsers to remember (for the default 30 days) that this host is
+    // HTTPS-only, so even a typed/bookmarked http:// link never gets sent in
+    // plain text - HttpsRedirection alone still lets that one first request
+    // go out unencrypted before the redirect happens.
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
+
+app.UseCors("Default");
 
 app.UseAuthorization();
 
