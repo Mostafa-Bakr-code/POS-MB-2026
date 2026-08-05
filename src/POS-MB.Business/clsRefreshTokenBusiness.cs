@@ -46,11 +46,25 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess)
         return (existing.UserId, plainText);
     }
 
-    public async Task RevokeAsync(string presentedToken)
+    /// <summary>
+    /// Revokes a refresh token on logout - but only if it actually belongs to
+    /// the caller. Without this check, any authenticated user could submit any
+    /// refresh token value and log someone else out (an ownership violation:
+    /// logout should only ever be able to end your own session). Returns false
+    /// if the token doesn't exist or belongs to a different user - the caller
+    /// treats both the same as "nothing to revoke" either way, without
+    /// distinguishing which, so a mismatch doesn't confirm whether a given
+    /// token value belongs to someone else.
+    /// </summary>
+    public async Task<bool> RevokeAsync(string presentedToken, int expectedUserId)
     {
         var existing = await dataAccess.GetByTokenHashAsync(Hash(presentedToken));
-        if (existing is not null && existing.RevokedAt is null)
+        if (existing is null || existing.UserId != expectedUserId) return false;
+
+        if (existing.RevokedAt is null)
             await dataAccess.RevokeAsync(existing.RefreshTokenId);
+
+        return true;
     }
 
     private static (string PlainText, string Hash) GenerateToken()

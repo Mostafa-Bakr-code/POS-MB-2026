@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -122,7 +123,15 @@ public class UsersController(
     [HttpPost("logout")]
     public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
     {
-        await refreshTokenBusiness.RevokeAsync(request.RefreshToken);
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var revoked = await refreshTokenBusiness.RevokeAsync(request.RefreshToken, userId);
+
+        if (!revoked)
+        {
+            logger.LogWarning("User {UserName} attempted to log out with a refresh token that isn't theirs",
+                CurrentUserName);
+        }
+
         return NoContent();
     }
 
