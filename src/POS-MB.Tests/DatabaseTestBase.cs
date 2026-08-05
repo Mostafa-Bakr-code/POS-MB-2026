@@ -1,5 +1,6 @@
 using System.Transactions;
 using Dapper;
+using Microsoft.Extensions.Configuration;
 using POS_MB.Business;
 using POS_MB.DataAccess;
 
@@ -12,8 +13,15 @@ namespace POS_MB.Tests;
 // the real one) - the real POS-MB database is never touched by any test.
 public abstract class DatabaseTestBase : IDisposable
 {
-    private const string ConnectionString =
-        "Server=.;Database=POS-MB-Test;User Id=sa;Password=sa123456;TrustServerCertificate=True;";
+    // Read from local user secrets (dotnet user-secrets, scoped to this project),
+    // never hardcoded - same reasoning as the API project's connection string, even
+    // though this only ever points at the throwaway test database.
+    private static readonly string ConnectionString = new ConfigurationBuilder()
+        .AddUserSecrets<DatabaseTestBase>()
+        .Build()
+        .GetConnectionString("TestConnection")
+        ?? throw new InvalidOperationException(
+            "ConnectionStrings:TestConnection is not set. Run: dotnet user-secrets set \"ConnectionStrings:TestConnection\" \"...\" in POS-MB.Tests.");
 
     private readonly TransactionScope _scope;
 

@@ -1,10 +1,11 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>POS_MB.API</RootNamespace>
+    <UserSecretsId>f4cd9b01-adbb-404c-9ee5-577e57a5daa7</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
