@@ -4,7 +4,7 @@ using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Business;
 
-public class clsUserBusiness(clsUserDataAccess dataAccess)
+public class clsUserBusiness(clsUserDataAccess dataAccess, clsRefreshTokenBusiness refreshTokenBusiness)
 {
     private static readonly PasswordHasher<User> Hasher = new();
 
@@ -38,8 +38,10 @@ public class clsUserBusiness(clsUserDataAccess dataAccess)
         if (string.IsNullOrWhiteSpace(userName))
             throw new ArgumentException("Username is required.", nameof(userName));
 
+        var passwordChanged = !string.IsNullOrWhiteSpace(password);
+
         string passwordHash;
-        if (string.IsNullOrWhiteSpace(password))
+        if (!passwordChanged)
         {
             var existing = await dataAccess.GetByIdAsync(id)
                 ?? throw new InvalidOperationException($"User {id} does not exist.");
@@ -47,14 +49,27 @@ public class clsUserBusiness(clsUserDataAccess dataAccess)
         }
         else
         {
-            passwordHash = Hasher.HashPassword(new User(), password);
+            passwordHash = Hasher.HashPassword(new User(), password!);
         }
 
-        return await dataAccess.UpdateAsync(id, userName, passwordHash, permissions);
+        var updated = await dataAccess.UpdateAsync(id, userName, passwordHash, permissions);
+
+        // A password change is how an admin locks out a compromised account -
+        // that only works if it also kills any refresh token already issued
+        // (stolen or otherwise), not just future login attempts.
+        if (updated && passwordChanged)
+            await refreshTokenBusiness.RevokeAllForUserAsync(id);
+
+        return updated;
     }
 
-    public Task<bool> DeactivateAsync(int id) =>
-        dataAccess.DeactivateAsync(id);
+    public async Task<bool> DeactivateAsync(int id)
+    {
+        var deactivated = await dataAccess.DeactivateAsync(id);
+        if (deactivated)
+            await refreshTokenBusiness.RevokeAllForUserAsync(id);
+        return deactivated;
+    }
 
     public Task<bool> ReactivateAsync(int id) =>
         dataAccess.ReactivateAsync(id);

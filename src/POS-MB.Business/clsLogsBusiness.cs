@@ -8,8 +8,8 @@ public class clsLogsBusiness(clsLogsDataAccess dataAccess, clsSettingsBusiness s
     public Task<int> StartSessionAsync(int userId) =>
         dataAccess.StartSessionAsync(userId);
 
-    public Task<bool> EndSessionAsync(int logId) =>
-        dataAccess.EndSessionAsync(logId);
+    public Task<bool> EndSessionAsync(int logId, int expectedUserId) =>
+        dataAccess.EndSessionAsync(logId, expectedUserId);
 
     public async Task<IEnumerable<Log>> GetAllAsync(DateTime? startDate = null, DateTime? endDate = null)
     {

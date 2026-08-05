@@ -1,10 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using POS_MB.DataAccess;
 
 namespace POS_MB.Business;
 
-public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess)
+public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogger<clsRefreshTokenBusiness> logger)
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(1);
 
@@ -16,35 +17,50 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess)
     }
 
     /// <summary>
-    /// Validates a refresh token and rotates it: the presented token is revoked and
-    /// a new one issued in its place, so each token is only ever usable once. Returns
-    /// null if the token is unknown, expired, or already revoked - a revoked token
-    /// being presented again means someone is replaying a token that was already
-    /// rotated away (the legitimate holder would have the newer one instead), which
-    /// is treated as a sign of theft: every refresh token for that user is revoked
-    /// as a precaution, forcing a fresh login everywhere.
+    /// Validates a refresh token and rotates it: the presented token is atomically
+    /// found-and-revoked in a single UPDATE (TryClaimActiveTokenAsync), so two
+    /// concurrent requests presenting the same token can never both succeed - only
+    /// one can ever win the claim, closing a check-then-update race a separate
+    /// SELECT-then-UPDATE would leave open. Returns null if the token is unknown,
+    /// expired, or already revoked - a revoked token being presented again means
+    /// someone is replaying a token that was already rotated away (the legitimate
+    /// holder would have the newer one instead), which is treated as a sign of
+    /// theft: every refresh token for that user is revoked as a precaution,
+    /// forcing a fresh login everywhere.
     /// </summary>
     public async Task<(int UserId, string NewToken)?> ValidateAndRotateAsync(string presentedToken)
     {
         var hash = Hash(presentedToken);
-        var existing = await dataAccess.GetByTokenHashAsync(hash);
-        if (existing is null) return null;
+        var claimed = await dataAccess.TryClaimActiveTokenAsync(hash);
 
-        if (existing.RevokedAt is not null)
+        if (claimed is null)
         {
-            await dataAccess.RevokeAllForUserAsync(existing.UserId);
+            // The atomic claim above is what actually enforces single-use; this
+            // lookup is purely diagnostic, to tell "already revoked" (a real
+            // theft signal) apart from "unknown/expired" (routine).
+            var existing = await dataAccess.GetByTokenHashAsync(hash);
+            if (existing is not null && existing.RevokedAt is not null)
+            {
+                logger.LogWarning("Refresh-token reuse detected for UserId={UserId} - all refresh tokens revoked",
+                    existing.UserId);
+                await dataAccess.RevokeAllForUserAsync(existing.UserId);
+            }
             return null;
         }
 
-        if (existing.ExpiresAt <= DateTime.UtcNow) return null;
-
-        await dataAccess.RevokeAsync(existing.RefreshTokenId);
-
         var (plainText, newHash) = GenerateToken();
-        await dataAccess.AddAsync(existing.UserId, newHash, DateTime.UtcNow.Add(Lifetime));
+        await dataAccess.AddAsync(claimed.UserId, newHash, DateTime.UtcNow.Add(Lifetime));
 
-        return (existing.UserId, plainText);
+        return (claimed.UserId, plainText);
     }
+
+    /// <summary>
+    /// Revokes every refresh token a user currently holds - used when a password
+    /// changes or an account is deactivated, so a session token issued before
+    /// either of those (stolen or otherwise) doesn't keep working afterward.
+    /// </summary>
+    public Task RevokeAllForUserAsync(int userId) =>
+        dataAccess.RevokeAllForUserAsync(userId);
 
     /// <summary>
     /// Revokes a refresh token on logout - but only if it actually belongs to

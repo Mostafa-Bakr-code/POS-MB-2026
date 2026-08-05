@@ -1,6 +1,7 @@
 using System.Transactions;
 using Dapper;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using POS_MB.Business;
 using POS_MB.DataAccess;
 
@@ -41,9 +42,12 @@ public abstract class DatabaseTestBase : IDisposable
         var settingsDataAccess = new clsSettingsDataAccess(ConnectionFactory);
         SettingsBusiness = new clsSettingsBusiness(settingsDataAccess);
 
+        var refreshTokenBusiness = new clsRefreshTokenBusiness(
+            new clsRefreshTokenDataAccess(ConnectionFactory), NullLogger<clsRefreshTokenBusiness>.Instance);
+
         CategoryBusiness = new clsCategoryBusiness(new clsCategoryDataAccess(ConnectionFactory));
         ItemBusiness = new clsItemBusiness(new clsItemDataAccess(ConnectionFactory), SettingsBusiness);
-        UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory));
+        UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory), refreshTokenBusiness);
         OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness);
         ReportingBusiness = new clsReportingBusiness(new clsReportingDataAccess(ConnectionFactory), SettingsBusiness);
     }

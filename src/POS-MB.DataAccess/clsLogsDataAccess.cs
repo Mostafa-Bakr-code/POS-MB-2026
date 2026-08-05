@@ -17,16 +17,19 @@ public class clsLogsDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.ExecuteScalarAsync<int>(query, new { UserId = userId });
     }
 
-    public async Task<bool> EndSessionAsync(int logId)
+    // expectedUserId scopes the update to the caller's own session row - without
+    // it, any authenticated user could end (or, if guessed early, prematurely
+    // stamp LogOut on) someone else's active shift by guessing a sequential LogId.
+    public async Task<bool> EndSessionAsync(int logId, int expectedUserId)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             UPDATE Logs
             SET LogOut = SYSUTCDATETIME()
-            WHERE LogId = @LogId AND LogOut IS NULL";
+            WHERE LogId = @LogId AND UserId = @UserId AND LogOut IS NULL";
 
-        var rowsAffected = await connection.ExecuteAsync(query, new { LogId = logId });
+        var rowsAffected = await connection.ExecuteAsync(query, new { LogId = logId, UserId = expectedUserId });
 
         return rowsAffected > 0;
     }

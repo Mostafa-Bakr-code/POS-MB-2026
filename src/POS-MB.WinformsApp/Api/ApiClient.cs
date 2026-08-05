@@ -44,9 +44,11 @@ public class ApiClient
         await _httpClient.PostAsJsonAsync("api/users/logout", new { RefreshToken = refreshToken });
     }
 
-    public async Task<int> StartSessionAsync(int userId)
+    // The API derives who's starting a session from the caller's own token, not
+    // a client-supplied id - nothing needs to be sent in the body.
+    public async Task<int> StartSessionAsync()
     {
-        var response = await _httpClient.PostAsJsonAsync("api/logs/start", new { UserId = userId });
+        var response = await _httpClient.PostAsync("api/logs/start", null);
         response.EnsureSuccessStatusCode();
 
         var result = await response.Content.ReadFromJsonAsync<StartSessionResponse>();

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -47,7 +48,16 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
             .Select(i => new NewOrderItem(i.ItemId, i.Quantity, i.Comment))
             .ToList();
 
-        var id = await orderBusiness.CreateOrderAsync(request.OrderSource, request.UserId, request.IsComplimentary, items);
+        // A cashier order is always attributed to whoever is actually logged in -
+        // never a client-supplied id, which would let any cashier attribute their
+        // sale to a coworker and corrupt the staff performance report. Mobile
+        // orders have no staff attribution yet (no student accounts exist), so
+        // request.UserId (always null for those today) passes through unchanged.
+        var userId = request.OrderSource == OrderSource.Cashier
+            ? int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value)
+            : request.UserId;
+
+        var id = await orderBusiness.CreateOrderAsync(request.OrderSource, userId, request.IsComplimentary, items);
         return await GetByIdInternal(id);
     }
 

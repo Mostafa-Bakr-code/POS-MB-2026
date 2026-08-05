@@ -176,6 +176,14 @@ public class FormMain : Form
         var result = await _apiClient.RefreshTokenAsync(refreshToken);
         if (result is null) return;
 
+        // If logout happened while the HTTP call above was in flight, _loggedOut
+        // is already true by the time we get here (it's set synchronously as the
+        // first line of LogoutAsync) - writing the newly-rotated tokens back now
+        // would resurrect a session AppSession.Clear() just tore down, and leave
+        // a live refresh token server-side that /logout never got a chance to
+        // revoke (it revoked the OLD one, this is a NEW one from the race).
+        if (_loggedOut) return;
+
         AppSession.Token = result.Token;
         AppSession.RefreshToken = result.RefreshToken;
     }

@@ -91,7 +91,7 @@ public class FormLogIn : Form
             AppSession.Token = login.Token;
             AppSession.RefreshToken = login.RefreshToken;
 
-            var logId = await _apiClient.StartSessionAsync(login.User.UserId);
+            var logId = await _apiClient.StartSessionAsync();
 
             AppSession.CurrentUser = login.User;
             AppSession.LogId = logId;
