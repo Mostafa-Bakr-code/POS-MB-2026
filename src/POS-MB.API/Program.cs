@@ -1,9 +1,17 @@
+using POS_MB.API;
 using POS_MB.Business;
 using POS_MB.DataAccess;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+// AddProblemDetails is required alongside AddExceptionHandler for the
+// parameterless UseExceptionHandler() below - it's used as ASP.NET Core's own
+// fallback only if GlobalExceptionHandler ever doesn't handle something (it
+// always does), but the framework requires it to be registered regardless.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
@@ -32,6 +40,10 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+// Registered first so it wraps everything below it - any unhandled exception
+// from any endpoint gets caught here instead of crashing raw.
+app.UseExceptionHandler();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
