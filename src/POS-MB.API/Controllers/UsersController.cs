@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -108,9 +109,23 @@ public class UsersController(
         new(user.UserId, user.UserName, user.Permissions, user.IsActive, user.CreatedAt, user.UpdatedAt);
 }
 
-public record CreateUserRequest(string UserName, string Password, int Permissions);
-public record UpdateUserRequest(string UserName, string? Password, int Permissions);
-public record VerifyCredentialsRequest(string UserName, string Password);
-public record RefreshTokenRequest(string RefreshToken);
+// UserName length matches Users.UserName NVARCHAR(50). Password has no DB length
+// limit (only the resulting hash is stored), but a bound still avoids hashing an
+// arbitrarily huge input.
+public record CreateUserRequest(
+    [Required, StringLength(50)] string UserName,
+    [Required, StringLength(200)] string Password,
+    int Permissions);
+
+public record UpdateUserRequest(
+    [Required, StringLength(50)] string UserName,
+    [StringLength(200)] string? Password,
+    int Permissions);
+
+public record VerifyCredentialsRequest(
+    [Required, StringLength(50)] string UserName,
+    [Required, StringLength(200)] string Password);
+
+public record RefreshTokenRequest([Required, StringLength(1000)] string RefreshToken);
 public record UserResponse(int UserId, string UserName, int Permissions, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
 public record LoginResponse(string Token, string RefreshToken, UserResponse User);

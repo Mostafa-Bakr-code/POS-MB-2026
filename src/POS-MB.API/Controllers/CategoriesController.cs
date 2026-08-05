@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -59,5 +60,8 @@ public class CategoriesController(clsCategoryBusiness categoryBusiness) : Contro
     }
 }
 
-public record CreateCategoryRequest(string Name);
-public record UpdateCategoryRequest(string Name);
+// Length matches Categories.CategoryName NVARCHAR(20) in schema.sql - caught
+// here with a clean 400 instead of an unhandled SQL truncation error 500 steps
+// further down (the same category of bug the order-comment crash was).
+public record CreateCategoryRequest([Required, StringLength(20)] string Name);
+public record UpdateCategoryRequest([Required, StringLength(20)] string Name);

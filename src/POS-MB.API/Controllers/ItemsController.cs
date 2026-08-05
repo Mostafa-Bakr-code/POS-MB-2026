@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -74,6 +75,20 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     }
 }
 
-public record CreateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate);
-public record UpdateItemRequest(string Name, int CategoryId, decimal Price, decimal? TaxRate, int? ChangedByUserId);
+// Name length matches Items.ItemName NVARCHAR(50). Price/TaxRate ranges are
+// sanity bounds, not DB limits - DECIMAL(18,4) could hold far more than a real
+// menu price or tax rate should ever be.
+public record CreateItemRequest(
+    [Required, StringLength(50)] string Name,
+    int CategoryId,
+    [Range(typeof(decimal), "0", "100000")] decimal Price,
+    [Range(typeof(decimal), "0", "100")] decimal? TaxRate);
+
+public record UpdateItemRequest(
+    [Required, StringLength(50)] string Name,
+    int CategoryId,
+    [Range(typeof(decimal), "0", "100000")] decimal Price,
+    [Range(typeof(decimal), "0", "100")] decimal? TaxRate,
+    int? ChangedByUserId);
+
 public record SetItemAvailabilityRequest(bool IsAvailable);

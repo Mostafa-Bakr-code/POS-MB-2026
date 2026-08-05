@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -77,6 +78,9 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
     }
 }
 
-public record CreateOrderRequest(OrderSource OrderSource, int? UserId, bool IsComplimentary, List<CreateOrderItemRequest> Items);
-public record CreateOrderItemRequest(int ItemId, int Quantity, string? Comment);
+// Comment length matches OrderItems.Comment NVARCHAR(50) - this is the exact
+// column that originally crashed with an unhandled 500 (see GlobalExceptionHandler)
+// before any length validation existed anywhere in the request pipeline.
+public record CreateOrderRequest(OrderSource OrderSource, int? UserId, bool IsComplimentary, [Required, MinLength(1)] List<CreateOrderItemRequest> Items);
+public record CreateOrderItemRequest(int ItemId, [Range(1, int.MaxValue)] int Quantity, [StringLength(50)] string? Comment);
 public record UpdateOrderStatusRequest(OrderStatus Status);
