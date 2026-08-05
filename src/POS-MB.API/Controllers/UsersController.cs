@@ -11,8 +11,13 @@ namespace POS_MB.API.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController(
-    clsUserBusiness userBusiness, JwtTokenService tokenService, clsRefreshTokenBusiness refreshTokenBusiness) : ControllerBase
+    clsUserBusiness userBusiness, JwtTokenService tokenService, clsRefreshTokenBusiness refreshTokenBusiness,
+    ILogger<UsersController> logger) : ControllerBase
 {
+    // Who's making this request, for audit log lines below - not the caller's
+    // own identity for authorization (that's RequirePermission), just "who did
+    // this" for the log entry.
+    private string CurrentUserName => User.Identity?.Name ?? "unknown";
     // Open to any authenticated user (not gated behind Permission.Users) -
     // the Logs and Order History screens both need this to resolve user names
     // for display, without either of those permissions implying user management
@@ -37,6 +42,8 @@ public class UsersController(
     {
         var id = await userBusiness.CreateAsync(request.UserName, request.Password, request.Permissions);
         var user = await userBusiness.GetByIdAsync(id);
+        logger.LogInformation("User {ActingUser} created user {TargetUser} (UserId={UserId}, Permissions={Permissions})",
+            CurrentUserName, request.UserName, id, request.Permissions);
         return CreatedAtAction(nameof(GetById), new { id }, ToResponse(user!));
     }
 
@@ -45,6 +52,11 @@ public class UsersController(
     public async Task<IActionResult> Update(int id, [FromBody] UpdateUserRequest request)
     {
         var updated = await userBusiness.UpdateAsync(id, request.UserName, request.Password, request.Permissions);
+        if (updated)
+        {
+            logger.LogInformation("User {ActingUser} updated user {TargetUser} (UserId={UserId}, Permissions={Permissions}, PasswordChanged={PasswordChanged})",
+                CurrentUserName, request.UserName, id, request.Permissions, !string.IsNullOrWhiteSpace(request.Password));
+        }
         return updated ? NoContent() : NotFound();
     }
 
@@ -53,6 +65,7 @@ public class UsersController(
     public async Task<IActionResult> Deactivate(int id)
     {
         var deactivated = await userBusiness.DeactivateAsync(id);
+        if (deactivated) logger.LogInformation("User {ActingUser} deactivated user UserId={UserId}", CurrentUserName, id);
         return deactivated ? NoContent() : NotFound();
     }
 
@@ -61,6 +74,7 @@ public class UsersController(
     public async Task<IActionResult> Reactivate(int id)
     {
         var reactivated = await userBusiness.ReactivateAsync(id);
+        if (reactivated) logger.LogInformation("User {ActingUser} reactivated user UserId={UserId}", CurrentUserName, id);
         return reactivated ? NoContent() : NotFound();
     }
 
@@ -71,7 +85,14 @@ public class UsersController(
     public async Task<IActionResult> VerifyCredentials([FromBody] VerifyCredentialsRequest request)
     {
         var user = await userBusiness.VerifyCredentialsAsync(request.UserName, request.Password);
-        if (user is null) return Unauthorized();
+        if (user is null)
+        {
+            logger.LogWarning("Failed login attempt for username {UserName} from {RemoteIp}",
+                request.UserName, HttpContext.Connection.RemoteIpAddress);
+            return Unauthorized();
+        }
+
+        logger.LogInformation("User {UserName} logged in from {RemoteIp}", user.UserName, HttpContext.Connection.RemoteIpAddress);
 
         var token = tokenService.GenerateToken(user);
         var refreshToken = await refreshTokenBusiness.IssueAsync(user.UserId);

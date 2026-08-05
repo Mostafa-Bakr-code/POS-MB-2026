@@ -8,8 +8,27 @@ using POS_MB.API;
 using POS_MB.API.Auth;
 using POS_MB.Business;
 using POS_MB.DataAccess;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Rolling daily file, kept alongside the source tree (not bin/) so a rebuild or
+// dotnet clean never wipes audit history. Security-relevant events (failed
+// logins, permission denials, account changes, order cancellations, rate-limit
+// trips) are logged explicitly at their source below; this just gives every
+// ILogger call - including GlobalExceptionHandler's existing crash logging - a
+// persistent home instead of only the console window.
+builder.Host.UseSerilog((context, configuration) => configuration
+    .MinimumLevel.Information()
+    // The framework's own per-request logging ("Request starting", "Executing
+    // action", ...) is useful for live debugging but drowns out the actual
+    // audit signal in a persisted file - quieted to warnings/errors only.
+    .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
+    .WriteTo.Console()
+    .WriteTo.File(
+        Path.Combine(context.HostingEnvironment.ContentRootPath, "logs", "pos-mb-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30));
 
 // Add services to the container.
 
@@ -77,6 +96,14 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.OnRejected = (context, cancellationToken) =>
+    {
+        var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("Rate limit exceeded for {RemoteIp} on {Path}",
+            context.HttpContext.Connection.RemoteIpAddress, context.HttpContext.Request.Path);
+        return ValueTask.CompletedTask;
+    };
 
     // Baseline for every endpoint - general abuse/DoS protection, not aimed at
     // brute-force specifically (that's the tighter "login" policy below).

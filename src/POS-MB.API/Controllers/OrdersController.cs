@@ -8,7 +8,7 @@ namespace POS_MB.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
+public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersController> logger) : ControllerBase
 {
     [HttpGet]
     [RequirePermission(Permission.OrderHistory)]
@@ -37,7 +37,11 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
         // lack it - a raw request could otherwise mark any order free regardless
         // of the Orders permission check above, so it needs its own check.
         if (request.IsComplimentary && !User.HasPermission(Permission.Complimentary))
+        {
+            logger.LogWarning("User {UserName} denied: attempted a complimentary order without the Complimentary permission",
+                User.Identity?.Name ?? "unknown");
             return Forbid();
+        }
 
         var items = request.Items
             .Select(i => new NewOrderItem(i.ItemId, i.Quantity, i.Comment))
@@ -60,6 +64,8 @@ public class OrdersController(clsOrderBusiness orderBusiness) : ControllerBase
     public async Task<IActionResult> Cancel(int id)
     {
         var cancelled = await orderBusiness.CancelAsync(id);
+        if (cancelled)
+            logger.LogInformation("User {UserName} cancelled order OrderId={OrderId}", User.Identity?.Name ?? "unknown", id);
         return cancelled ? NoContent() : NotFound();
     }
 
