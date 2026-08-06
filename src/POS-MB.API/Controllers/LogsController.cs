@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -26,7 +25,7 @@ public class LogsController(clsLogsBusiness logsBusiness) : ControllerBase
     [HttpPost("start")]
     public async Task<IActionResult> StartSession()
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = User.GetUserId();
         var logId = await logsBusiness.StartSessionAsync(userId);
         return Ok(new { LogId = logId });
     }
@@ -34,7 +33,7 @@ public class LogsController(clsLogsBusiness logsBusiness) : ControllerBase
     [HttpPost("{id:int}/end")]
     public async Task<IActionResult> EndSession(int id)
     {
-        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var userId = User.GetUserId();
         var ended = await logsBusiness.EndSessionAsync(id, userId);
         return ended ? NoContent() : NotFound();
     }

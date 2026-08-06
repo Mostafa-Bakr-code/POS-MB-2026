@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using POS_MB.API.Auth;
 using POS_MB.Business;
@@ -19,16 +18,15 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
         return Ok(orders);
     }
 
+    // GetById() and Create() both need this exact response shape, but GetById()
+    // carries its own [RequirePermission(OrderHistory)] check, which would wrongly
+    // block a cashier (Orders only, no OrderHistory) from seeing the receipt for
+    // the order they just placed - so both call this shared, unchecked builder
+    // instead of Create() calling GetById() directly (previously duplicated
+    // byte-for-byte between the two instead of one delegating to the other).
     [HttpGet("{id:int}")]
     [RequirePermission(Permission.OrderHistory)]
-    public async Task<IActionResult> GetById(int id)
-    {
-        var order = await orderBusiness.GetByIdAsync(id);
-        if (order is null) return NotFound();
-
-        var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
-    }
+    public Task<IActionResult> GetById(int id) => BuildOrderResponseAsync(id);
 
     [HttpPost]
     [RequirePermission(Permission.Orders)]
@@ -40,7 +38,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
         if (request.IsComplimentary && !User.HasPermission(Permission.Complimentary))
         {
             logger.LogWarning("User {UserName} denied: attempted a complimentary order without the Complimentary permission",
-                User.Identity?.Name ?? "unknown");
+                User.GetUserName());
             return Forbid();
         }
 
@@ -50,15 +48,20 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
 
         // A cashier order is always attributed to whoever is actually logged in -
         // never a client-supplied id, which would let any cashier attribute their
-        // sale to a coworker and corrupt the staff performance report. Mobile
-        // orders have no staff attribution yet (no student accounts exist), so
-        // request.UserId (always null for those today) passes through unchanged.
+        // sale to a coworker and corrupt the staff performance report. Any other
+        // OrderSource (today, only Mobile) has no legitimate use for a
+        // client-supplied UserId either - there's no student account system yet
+        // to attribute a mobile order to - so it's forced null rather than
+        // trusted from the body. Originally this only special-cased Cashier and
+        // let non-Cashier values pass request.UserId through unchecked, which
+        // meant a cashier could bypass the whole protection just by sending
+        // OrderSource: Mobile with an arbitrary UserId.
         var userId = request.OrderSource == OrderSource.Cashier
-            ? int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value)
-            : request.UserId;
+            ? User.GetUserId()
+            : (int?)null;
 
         var id = await orderBusiness.CreateOrderAsync(request.OrderSource, userId, request.IsComplimentary, items);
-        return await GetByIdInternal(id);
+        return await BuildOrderResponseAsync(id);
     }
 
     [HttpPut("{id:int}/status")]
@@ -75,16 +78,11 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
     {
         var cancelled = await orderBusiness.CancelAsync(id);
         if (cancelled)
-            logger.LogInformation("User {UserName} cancelled order OrderId={OrderId}", User.Identity?.Name ?? "unknown", id);
+            logger.LogInformation("User {UserName} cancelled order OrderId={OrderId}", User.GetUserName(), id);
         return cancelled ? NoContent() : NotFound();
     }
 
-    // Create() needs to return the same shape as GetById() but GetById() now
-    // carries its own [RequirePermission(OrderHistory)] check, which would
-    // wrongly block a cashier (Orders only, no OrderHistory) from seeing the
-    // receipt for the order they just placed - so Create() builds its own
-    // response via this shared, unchecked helper instead of calling GetById().
-    private async Task<IActionResult> GetByIdInternal(int id)
+    private async Task<IActionResult> BuildOrderResponseAsync(int id)
     {
         var order = await orderBusiness.GetByIdAsync(id);
         if (order is null) return NotFound();

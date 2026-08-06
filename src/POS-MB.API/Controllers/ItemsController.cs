@@ -39,7 +39,13 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateItemRequest request)
     {
-        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, request.ChangedByUserId);
+        // changedByUserId always comes from the caller's own token, never the
+        // request body - a client-supplied id here would let anyone with the
+        // Items permission attribute their own price change to a different
+        // employee in the price-history audit trail (GET .../price-history is
+        // open to any authenticated user). Same class of bug as order attribution
+        // in OrdersController.Create.
+        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, User.GetUserId());
         return updated ? NoContent() : NotFound();
     }
 
@@ -88,7 +94,6 @@ public record UpdateItemRequest(
     [Required, StringLength(50)] string Name,
     int CategoryId,
     [Range(typeof(decimal), "0", "100000")] decimal Price,
-    [Range(typeof(decimal), "0", "100")] decimal? TaxRate,
-    int? ChangedByUserId);
+    [Range(typeof(decimal), "0", "100")] decimal? TaxRate);
 
 public record SetItemAvailabilityRequest(bool IsAvailable);

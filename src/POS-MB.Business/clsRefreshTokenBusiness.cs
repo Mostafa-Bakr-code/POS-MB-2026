@@ -41,9 +41,24 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogg
             var existing = await dataAccess.GetByTokenHashAsync(hash);
             if (existing is not null && existing.RevokedAt is not null)
             {
-                logger.LogWarning("Refresh-token reuse detected for UserId={UserId} - all refresh tokens revoked",
-                    existing.UserId);
-                await dataAccess.RevokeAllForUserAsync(existing.UserId);
+                if (existing.RevokedViaLogout)
+                {
+                    // A background refresh can legitimately race an explicit logout
+                    // (e.g. the 20-minute WinForms timer firing right as the user
+                    // clicks Log Out) - the token really is dead, but this isn't
+                    // theft, just two requests landing on either side of the same
+                    // logout. Treated as routine (401), not escalated to a mass
+                    // revoke + security warning.
+                    logger.LogInformation(
+                        "Refresh attempted on a token revoked via logout for UserId={UserId} - likely a benign race with an in-flight refresh",
+                        existing.UserId);
+                }
+                else
+                {
+                    logger.LogWarning("Refresh-token reuse detected for UserId={UserId} - all refresh tokens revoked",
+                        existing.UserId);
+                    await dataAccess.RevokeAllForUserAsync(existing.UserId);
+                }
             }
             return null;
         }

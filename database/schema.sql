@@ -139,6 +139,7 @@ CREATE TABLE dbo.RefreshTokens
     TokenHash      NVARCHAR(200)     NOT NULL, -- SHA-256 of the token; the plaintext itself is never stored, same reasoning as passwords
     ExpiresAt      DATETIME2(3)      NOT NULL,
     RevokedAt      DATETIME2(3)      NULL, -- set on logout, on rotation (a new token replaces it), or on reuse-detected theft response
+    RevokedViaLogout BIT             NOT NULL CONSTRAINT DF_RefreshTokens_RevokedViaLogout DEFAULT (0), -- distinguishes an explicit logout from a rotation, so a benign logout-vs-in-flight-refresh race isn't misread as token theft
     CreatedAt      DATETIME2(3)      NOT NULL CONSTRAINT DF_RefreshTokens_CreatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_RefreshTokens PRIMARY KEY CLUSTERED (RefreshTokenId),
     CONSTRAINT FK_RefreshTokens_Users FOREIGN KEY (UserId) REFERENCES dbo.Users (UserId)

@@ -106,10 +106,12 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price, int? changedByUserId)
+    // Who made the change is derived server-side from the caller's own token,
+    // not sent from here - the API used to trust a client-supplied id for this.
+    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price)
     {
         var response = await _httpClient.PutAsJsonAsync(
-            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price, ChangedByUserId = changedByUserId });
+            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price });
         response.EnsureSuccessStatusCode();
     }
 

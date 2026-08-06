@@ -199,7 +199,7 @@ public class ItemsControl : UserControl
             using var dialog = new FormItemEditDialog("Edit Item", CategoryOptionsFor(item.CategoryId), item.ItemName, item.CategoryId, item.Price);
             if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
             {
-                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price, AppSession.CurrentUser?.UserId);
+                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price);
                 await LoadAsync();
             }
         }

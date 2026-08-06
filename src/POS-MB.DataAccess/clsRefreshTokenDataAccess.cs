@@ -23,7 +23,7 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
-            SELECT RefreshTokenId, UserId, TokenHash, ExpiresAt, RevokedAt, CreatedAt
+            SELECT RefreshTokenId, UserId, TokenHash, ExpiresAt, RevokedAt, RevokedViaLogout, CreatedAt
             FROM RefreshTokens
             WHERE TokenHash = @TokenHash";
 
@@ -43,19 +43,24 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
         const string query = @"
             UPDATE RefreshTokens
             SET RevokedAt = SYSUTCDATETIME()
-            OUTPUT INSERTED.RefreshTokenId, INSERTED.UserId, INSERTED.TokenHash, INSERTED.ExpiresAt, INSERTED.RevokedAt, INSERTED.CreatedAt
+            OUTPUT INSERTED.RefreshTokenId, INSERTED.UserId, INSERTED.TokenHash, INSERTED.ExpiresAt, INSERTED.RevokedAt, INSERTED.RevokedViaLogout, INSERTED.CreatedAt
             WHERE TokenHash = @TokenHash AND RevokedAt IS NULL AND ExpiresAt > SYSUTCDATETIME();";
 
         return await connection.QuerySingleOrDefaultAsync<RefreshToken>(query, new { TokenHash = tokenHash });
     }
 
+    // Only ever called from the explicit logout flow (clsRefreshTokenBusiness.
+    // RevokeAsync) - RevokedViaLogout is set unconditionally here so the
+    // reuse-detection logic in ValidateAndRotateAsync can tell an intentional
+    // logout apart from a rotation, and not misread a logout racing an
+    // in-flight background refresh as token theft.
     public async Task RevokeAsync(int refreshTokenId)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             UPDATE RefreshTokens
-            SET RevokedAt = SYSUTCDATETIME()
+            SET RevokedAt = SYSUTCDATETIME(), RevokedViaLogout = 1
             WHERE RefreshTokenId = @Id AND RevokedAt IS NULL";
 
         await connection.ExecuteAsync(query, new { Id = refreshTokenId });

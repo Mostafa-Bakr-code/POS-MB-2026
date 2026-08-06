@@ -35,7 +35,7 @@ public class PermissionAuthorizationHandler(ILogger<PermissionAuthorizationHandl
             // this is the single choke point for every permission-denied event across
             // every controller, rather than duplicating a log call into each one.
             logger.LogWarning("User {UserName} denied: missing required permission {RequiredPermission}",
-                context.User.Identity?.Name ?? "unknown", requirement.Required);
+                context.User.GetUserName(), requirement.Required);
         }
 
         return Task.CompletedTask;
