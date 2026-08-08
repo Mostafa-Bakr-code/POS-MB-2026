@@ -11,7 +11,7 @@ public partial class OrderDetailPage : ContentPage
     private readonly ApiClient _apiClient = new();
     private readonly int _orderId;
     private OrderDetailDto? _order;
-    private IDispatcherTimer? _pollTimer;
+    private CancellationTokenSource? _pollCts;
 
     public OrderDetailPage(int orderId)
     {
@@ -37,35 +37,66 @@ public partial class OrderDetailPage : ContentPage
     // kitchen's progress without having to back out and back in. A few
     // seconds of lag is imperceptible for a food order, so polling instead of
     // real-time push (SignalR/notifications) keeps this simple.
+    //
+    // Uses a plain cancellable Task.Delay loop rather than IDispatcherTimer -
+    // MAUI's dispatcher timer has known reliability gaps on some platforms
+    // (WinUI in particular), and an unhandled exception inside its Tick
+    // handler can silently stop it firing forever with no visible error. This
+    // pattern doesn't depend on that infrastructure at all.
     private void StartPolling()
     {
-        _pollTimer ??= Dispatcher.CreateTimer();
-        _pollTimer.Interval = PollInterval;
-        _pollTimer.Tick -= OnPollTick; // avoid double-subscribing across appear/disappear cycles
-        _pollTimer.Tick += OnPollTick;
-        _pollTimer.Start();
+        StopPolling(); // in case OnAppearing ever fires twice without a matching OnDisappearing
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
     }
 
-    private void StopPolling() => _pollTimer?.Stop();
+    private void StopPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts = null;
+    }
 
-    private async void OnPollTick(object? sender, EventArgs e) => await RefreshStatusAsync();
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(PollInterval, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested) return;
+            await RefreshStatusAsync();
+        }
+    }
 
     // Deliberately lighter than LoadAsync - only re-fetches the order itself,
     // not the full item catalog (item names/prices on an already-placed order
     // never change, so re-resolving them every 5 seconds would be wasted work).
     private async Task RefreshStatusAsync()
     {
-        var updated = await _apiClient.GetMyOrderAsync(_orderId);
+        OrderDetailDto? updated;
+        try
+        {
+            updated = await _apiClient.GetMyOrderAsync(_orderId);
+        }
+        catch (Exception)
+        {
+            // A transient failure (brief connectivity blip) should not clear the
+            // screen, interrupt the student, or kill the poll loop - just keep
+            // showing the last known good state and try again next tick.
+            return;
+        }
 
-        // A transient failure (brief connectivity blip) should not clear the
-        // screen or interrupt the student - just keep showing the last known
-        // good state and try again on the next tick.
         if (updated is null || _order is null) return;
-
         if (updated.Status == _order.Status && updated.Total == _order.Total) return;
 
         _order = updated;
-        ApplyOrderToUi();
+        MainThread.BeginInvokeOnMainThread(ApplyOrderToUi);
     }
 
     private async Task LoadAsync()
@@ -107,10 +138,12 @@ public partial class OrderDetailPage : ContentPage
             $"Status: {_order.Status}\n" +
             $"Total: {_order.Total:0.00}";
 
-        // Cancelling something already Completed or already Cancelled makes no
-        // sense - only offer it while the order is still in a state the kitchen
-        // hasn't finished (or given up on) yet.
-        CancelButton.IsVisible = _order.Status is OrderStatus.Placed or OrderStatus.Preparing;
+        // Self-cancel only while the kitchen hasn't started yet - once it's
+        // Preparing, real ingredients/time are already committed, so there's
+        // no turning back for a student (staff retain a broader override
+        // elsewhere). Matches the same rule enforced server-side in
+        // clsOrderBusiness.CancelForStudentAsync, not just hidden here.
+        CancelButton.IsVisible = _order.Status is OrderStatus.Placed;
     }
 
     private async void OnCancelClicked(object? sender, EventArgs e)
@@ -119,12 +152,13 @@ public partial class OrderDetailPage : ContentPage
         if (!confirmed) return;
 
         CancelButton.IsEnabled = false;
-        var success = await _apiClient.CancelOrderAsync(_orderId);
+        var (success, error) = await _apiClient.CancelOrderAsync(_orderId);
         CancelButton.IsEnabled = true;
 
         if (!success)
         {
-            await DisplayAlert("Error", "This order could not be cancelled.", "OK");
+            await DisplayAlert("Error", error ?? "This order could not be cancelled.", "OK");
+            await LoadAsync(); // status may have moved on server-side even though cancel was rejected - refresh to reflect it
             return;
         }
 

@@ -16,9 +16,9 @@ namespace POS_MB.API.Controllers;
 public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<StudentOrdersController> logger) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
     {
-        var orders = await orderBusiness.GetAllForStudentAsync(User.GetUserId());
+        var orders = await orderBusiness.GetAllForStudentAsync(User.GetUserId(), startDate, endDate);
         return Ok(orders);
     }
 

@@ -30,17 +30,36 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     public Task<int> CreateStudentOrderAsync(int studentId, IReadOnlyList<NewOrderItem> items) =>
         CreateOrderAsync(OrderSource.Mobile, userId: null, studentId, isComplimentary: false, items);
 
-    // No date filtering for v1 - a student's own order history is short enough
-    // that "everything" is simpler and correct, rather than reusing the staff
-    // GetAllAsync's timezone-resolution logic for a filter that isn't needed yet.
-    public Task<IEnumerable<Order>> GetAllForStudentAsync(int studentId) =>
-        dataAccess.GetAllForStudentAsync(studentId);
+    // Defaults to today only (see StudentOrdersController) so a student isn't
+    // shown their entire order history every time they open the app - same
+    // timezone-resolution logic as the staff-facing GetAllAsync, so "today"
+    // means the student's actual local day, not the server's UTC day.
+    public async Task<IEnumerable<Order>> GetAllForStudentAsync(int studentId, DateTime? startDate = null, DateTime? endDate = null)
+    {
+        var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
+
+        return await dataAccess.GetAllForStudentAsync(studentId, utcStart, utcEndExclusive);
+    }
 
     public Task<Order?> GetByIdForStudentAsync(int orderId, int studentId) =>
         dataAccess.GetByIdForStudentAsync(orderId, studentId);
 
-    public Task<bool> CancelForStudentAsync(int orderId, int studentId) =>
-        dataAccess.CancelForStudentAsync(orderId, studentId);
+    // A student can only self-cancel while the kitchen hasn't started on the
+    // order yet (Status still Placed) - once it's Preparing, real resources
+    // (ingredients, the chef's time) are already committed, so cancelling at
+    // that point wastes them for nothing. Staff retain a broader override via
+    // clsOrderBusiness.CancelAsync (used from the WinForms Order Status
+    // screen) - that's a deliberate difference in privilege, not an oversight.
+    public async Task<bool> CancelForStudentAsync(int orderId, int studentId)
+    {
+        var order = await dataAccess.GetByIdForStudentAsync(orderId, studentId);
+        if (order is null) return false; // not found / not theirs - controller returns 404
+
+        if (order.Status != OrderStatus.Placed)
+            throw new ArgumentException("This order can no longer be cancelled - the kitchen has already started preparing it.", nameof(orderId));
+
+        return await dataAccess.CancelForStudentAsync(orderId, studentId);
+    }
 
     public Task<Order?> GetByIdAsync(int id) =>
         dataAccess.GetByIdAsync(id);

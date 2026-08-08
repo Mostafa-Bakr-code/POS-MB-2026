@@ -87,9 +87,13 @@ public class ApiClient
         return (null, error, unavailableItems);
     }
 
-    public async Task<List<OrderSummaryDto>> GetMyOrdersAsync()
+    public async Task<List<OrderSummaryDto>> GetMyOrdersAsync(DateTime? startDate = null, DateTime? endDate = null)
     {
-        var result = await _httpClient.GetFromJsonAsync<List<OrderSummaryDto>>("api/students/orders");
+        var url = "api/students/orders";
+        if (startDate is not null && endDate is not null)
+            url += $"?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+
+        var result = await _httpClient.GetFromJsonAsync<List<OrderSummaryDto>>(url);
         return result ?? [];
     }
 
@@ -101,17 +105,25 @@ public class ApiClient
             : null;
     }
 
-    public async Task<bool> CancelOrderAsync(int orderId)
+    public async Task<(bool Success, string? Error)> CancelOrderAsync(int orderId)
     {
+        HttpResponseMessage response;
         try
         {
-            var response = await _httpClient.PostAsync($"api/students/orders/{orderId}/cancel", null);
-            return response.IsSuccessStatusCode;
+            response = await _httpClient.PostAsync($"api/students/orders/{orderId}/cancel", null);
         }
         catch (Exception)
         {
-            return false;
+            return (false, "Could not reach the server. Check your connection and try again.");
         }
+
+        if (response.IsSuccessStatusCode) return (true, null);
+
+        // 404 (order gone/not theirs) has no useful message to show beyond the
+        // generic fallback; a 400 (order already past Placed) carries the real
+        // reason from clsOrderBusiness.CancelForStudentAsync and should be
+        // shown as-is rather than a generic "could not cancel".
+        return (false, await ExtractErrorAsync(response));
     }
 
     public async Task<string?> GetSettingValueAsync(string key)

@@ -57,6 +57,15 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
 
             var total = items.Sum(i => itemInfo[i.ItemId].Price * i.Quantity);
 
+            // A cashier order is paid and handed over at the register in the
+            // same moment it's created - there's no separate prep-tracking
+            // step visible from that side of the counter today, so it starts
+            // (and stays, barring a cashier-side Cancel) at Completed rather
+            // than sitting at Placed forever with nothing to ever advance it.
+            // Mobile orders are the opposite: Placed is the real starting
+            // point of a workflow the kitchen needs to work through.
+            var initialStatus = orderSource == OrderSource.Cashier ? OrderStatus.Completed : OrderStatus.Placed;
+
             const string insertOrderQuery = @"
                 INSERT INTO Orders (Date, Total, SerialNumber, UserId, StudentId, OrderSource, Status, IsComplimentary)
                 OUTPUT INSERTED.OrderId
@@ -69,7 +78,7 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
                 UserId = userId,
                 StudentId = studentId,
                 OrderSource = orderSource,
-                Status = OrderStatus.Placed,
+                Status = initialStatus,
                 IsComplimentary = isComplimentary
             }, transaction);
 
@@ -187,6 +196,11 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QuerySingleOrDefaultAsync<Order>(query, new { Id = id, StudentId = studentId });
     }
 
+    // Status = @PlacedStatus is a defense-in-depth check, not just the
+    // business layer's job - it closes the same race a client could otherwise
+    // exploit by firing the cancel request the instant an order moves out of
+    // Placed (see clsOrderBusiness.CancelForStudentAsync for the primary,
+    // clearer-error-message check).
     public async Task<bool> CancelForStudentAsync(int id, int studentId)
     {
         using var connection = connectionFactory.CreateConnection();
@@ -195,10 +209,10 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             UPDATE Orders
             SET Status = @Status,
                 UpdatedAt = SYSUTCDATETIME()
-            WHERE OrderId = @Id AND StudentId = @StudentId";
+            WHERE OrderId = @Id AND StudentId = @StudentId AND Status = @PlacedStatus";
 
         var rowsAffected = await connection.ExecuteAsync(
-            query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled });
+            query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled, PlacedStatus = OrderStatus.Placed });
 
         return rowsAffected > 0;
     }
