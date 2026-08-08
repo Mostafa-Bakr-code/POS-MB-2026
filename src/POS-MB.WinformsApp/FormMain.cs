@@ -13,6 +13,7 @@ public class FormMain : Form
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
     private readonly Button _btnNewOrder;
+    private readonly Button _btnOrderStatus;
     private readonly Button _btnCategories;
     private readonly Button _btnItems;
     private readonly Button _btnUsers;
@@ -54,6 +55,9 @@ public class FormMain : Form
 
         _btnNewOrder = CreateNavButton("New Order");
         _btnNewOrder.Click += (_, _) => ShowOrderTaking();
+
+        _btnOrderStatus = CreateNavButton("Order Status");
+        _btnOrderStatus.Click += (_, _) => ShowContent(new OrderStatusControl());
 
         _btnCategories = CreateNavButton("Categories");
         _btnCategories.Click += (_, _) => ShowContent(new CategoriesControl());
@@ -102,6 +106,7 @@ public class FormMain : Form
             Padding = new Padding(10)
         };
         navButtonsPanel.Controls.Add(_btnNewOrder);
+        navButtonsPanel.Controls.Add(_btnOrderStatus);
         navButtonsPanel.Controls.Add(_btnCategories);
         navButtonsPanel.Controls.Add(_btnItems);
         navButtonsPanel.Controls.Add(_btnUsers);
@@ -155,6 +160,7 @@ public class FormMain : Form
         _lblActiveUser.Text = AppSession.CurrentUser?.UserName ?? "";
 
         _btnNewOrder.Enabled = AppSession.HasPermission(Permission.Orders);
+        _btnOrderStatus.Enabled = AppSession.HasPermission(Permission.Orders);
         _btnCategories.Enabled = AppSession.HasPermission(Permission.Categories);
         _btnItems.Enabled = AppSession.HasPermission(Permission.Items);
         _btnUsers.Enabled = AppSession.HasPermission(Permission.Users);

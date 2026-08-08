@@ -169,6 +169,18 @@ public class ApiClient
         return await response.Content.ReadFromJsonAsync<OrderDto>();
     }
 
+    public async Task<bool> UpdateOrderStatusAsync(int orderId, OrderStatus status)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/orders/{orderId}/status", new { Status = status });
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> CancelOrderAsync(int orderId)
+    {
+        var response = await _httpClient.PostAsync($"api/orders/{orderId}/cancel", null);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<List<UserDto>> GetUsersAsync(bool includeInactive = false)
     {
         var url = $"api/users?includeInactive={includeInactive}";
