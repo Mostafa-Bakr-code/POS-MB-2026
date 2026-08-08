@@ -5,13 +5,17 @@ using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Controls;
 
-// The kitchen/register's working queue - "what needs to happen to orders placed
-// today", as opposed to OrderHistoryControl which is a read-only historical
-// record. Placed->Preparing->Ready->Completed is a straight line (Advance always
-// means "move to the next status"), plus Cancel for anything gone wrong. This is
-// an interim stand-in for the planned chef-tablet web client (see project notes) -
+// The kitchen's working queue - "what needs to happen to orders placed today",
+// as opposed to OrderHistoryControl which is a read-only historical record.
+// Placed->Preparing->Ready->Completed is a straight line (Advance always means
+// "move to the next status"), plus Cancel for anything gone wrong. This is an
+// interim stand-in for the planned chef-tablet web client (see project notes) -
 // same underlying api/orders/{id}/status endpoint, just from a WinForms screen
 // that exists today.
+//
+// Mobile orders only - a cashier order is paid and handed over in the same
+// moment it's created (starts at Completed, see clsOrderDataAccess.CreateOrderAsync),
+// so there's nothing for a working queue to ever do with one.
 public class OrderStatusControl : UserControl
 {
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(15);
@@ -117,8 +121,14 @@ public class OrderStatusControl : UserControl
 
     private async Task LoadAsync()
     {
+        // Cashier orders are paid and handed over at the register in the same
+        // moment they're created (see clsOrderDataAccess.CreateOrderAsync) -
+        // they start at Completed already, so they'd never meaningfully
+        // appear in a working queue anyway. Filtering by source here mainly
+        // matters for cashier orders that existed before this change (still
+        // sitting at Placed from back then).
         var today = DateTime.Today;
-        _orders = await _apiClient.GetOrdersAsync(today, today, orderSource: null);
+        _orders = await _apiClient.GetOrdersAsync(today, today, orderSource: OrderSource.Mobile);
         ApplyFilterAndBind();
     }
 
@@ -130,9 +140,55 @@ public class OrderStatusControl : UserControl
 
         // Oldest-first, matching a real kitchen queue - the order that's been
         // waiting longest belongs at the top, not buried under newer arrivals.
-        _orders = visible.OrderBy(o => o.Date).ToList();
+        var newOrders = visible.OrderBy(o => o.Date).ToList();
+
+        // Rebinding DataGridView.DataSource unconditionally resets scroll
+        // position to the top every time - disruptive on a screen that
+        // auto-refreshes every 15 seconds, since a tap on Advance/Cancel could
+        // land on the wrong row if the view jumps mid-reach. Most ticks find
+        // nothing actually changed, so skip the rebind entirely in that case;
+        // when something genuinely did change, still preserve where the
+        // cashier was looking instead of snapping back to row 0.
+        if (!HasOrdersChanged(_orders, newOrders))
+        {
+            _orders = newOrders;
+            return;
+        }
+
+        var scrollRowIndex = _grid.FirstDisplayedScrollingRowIndex;
+        var selectedOrderId = _grid.CurrentRow?.DataBoundItem is OrderDto current ? current.OrderId : (int?)null;
+
+        _orders = newOrders;
         _grid.DataSource = null;
         _grid.DataSource = _orders;
+
+        if (_orders.Count == 0) return;
+
+        if (scrollRowIndex >= 0 && scrollRowIndex < _grid.RowCount)
+            _grid.FirstDisplayedScrollingRowIndex = scrollRowIndex;
+
+        var restoredIndex = selectedOrderId is int id ? _orders.FindIndex(o => o.OrderId == id) : -1;
+        if (restoredIndex >= 0)
+            _grid.CurrentCell = _grid.Rows[restoredIndex].Cells[0];
+    }
+
+    // Order rows carry no version/timestamp of their own, so equality is
+    // whatever the grid actually displays: identity, status and total, in the
+    // same order. Anything else changing server-side (e.g. items on an order
+    // still Placed) wouldn't show up on this screen anyway.
+    private static bool HasOrdersChanged(List<OrderDto> previous, List<OrderDto> next)
+    {
+        if (previous.Count != next.Count) return true;
+
+        for (var i = 0; i < previous.Count; i++)
+        {
+            var a = previous[i];
+            var b = next[i];
+            if (a.OrderId != b.OrderId || a.Status != b.Status || a.Total != b.Total)
+                return true;
+        }
+
+        return false;
     }
 
     private async void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
