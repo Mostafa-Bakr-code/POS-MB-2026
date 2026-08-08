@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Transactions;
 using Dapper;
 using Microsoft.Extensions.Configuration;
@@ -31,6 +32,7 @@ public abstract class DatabaseTestBase : IDisposable
     protected clsCategoryBusiness CategoryBusiness { get; }
     protected clsItemBusiness ItemBusiness { get; }
     protected clsUserBusiness UserBusiness { get; }
+    protected clsStudentBusiness StudentBusiness { get; }
     protected clsOrderBusiness OrderBusiness { get; }
     protected clsReportingBusiness ReportingBusiness { get; }
     protected clsSettingsBusiness SettingsBusiness { get; }
@@ -48,6 +50,7 @@ public abstract class DatabaseTestBase : IDisposable
         CategoryBusiness = new clsCategoryBusiness(new clsCategoryDataAccess(ConnectionFactory));
         ItemBusiness = new clsItemBusiness(new clsItemDataAccess(ConnectionFactory), SettingsBusiness);
         UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory), refreshTokenBusiness);
+        StudentBusiness = new clsStudentBusiness(new clsStudentDataAccess(ConnectionFactory));
         OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness);
         ReportingBusiness = new clsReportingBusiness(new clsReportingDataAccess(ConnectionFactory), SettingsBusiness);
     }
@@ -63,6 +66,14 @@ public abstract class DatabaseTestBase : IDisposable
 
     protected async Task<int> CreateUserAsync(string userName = "test-cashier") =>
         await UserBusiness.CreateAsync(userName, "password123", permissions: 0);
+
+    private static int _studentEmailCounter;
+
+    // Emails must be unique, and tests run inside a shared (rolled-back) transaction
+    // rather than a fresh database each time, so a counter avoids collisions between
+    // tests that don't specify their own email.
+    protected async Task<int> CreateStudentAsync(string? email = null) =>
+        await StudentBusiness.SignUpAsync(email ?? $"test-student-{Interlocked.Increment(ref _studentEmailCounter)}@example.com", "password123");
 
     // CreateOrderAsync always stamps Date as DateTime.UtcNow (correctly - see project
     // notes on why), which makes "an order placed right after local midnight" only

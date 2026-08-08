@@ -16,12 +16,12 @@ public class PriceBreakdownTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         // Two sales at the original price...
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         // ...then the price changes, and one more sale happens at the new price.
         await ItemBusiness.UpdateAsync(itemId, "Item", categoryId, price: 150m, taxRate: 14m);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         var rows = (await ReportingBusiness.GetItemSalesAsync(groupByPrice: true)).ToList();
 

@@ -6,7 +6,7 @@ namespace POS_MB.DataAccess;
 
 public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
 {
-    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
+    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
     {
         if (items.Count == 0)
             throw new ArgumentException("An order must have at least one item.", nameof(items));
@@ -43,15 +43,16 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             var total = items.Sum(i => itemInfo[i.ItemId].Price * i.Quantity);
 
             const string insertOrderQuery = @"
-                INSERT INTO Orders (Date, Total, SerialNumber, UserId, OrderSource, Status, IsComplimentary)
+                INSERT INTO Orders (Date, Total, SerialNumber, UserId, StudentId, OrderSource, Status, IsComplimentary)
                 OUTPUT INSERTED.OrderId
-                VALUES (@Date, @Total, @SerialNumber, @UserId, @OrderSource, @Status, @IsComplimentary);";
+                VALUES (@Date, @Total, @SerialNumber, @UserId, @StudentId, @OrderSource, @Status, @IsComplimentary);";
             var orderId = await connection.ExecuteScalarAsync<int>(insertOrderQuery, new
             {
                 Date = date,
                 Total = total,
                 SerialNumber = serialNumber,
                 UserId = userId,
+                StudentId = studentId,
                 OrderSource = orderSource,
                 Status = OrderStatus.Placed,
                 IsComplimentary = isComplimentary
@@ -131,6 +132,48 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             WHERE OrderId = @Id";
 
         var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, Status = status });
+
+        return rowsAffected > 0;
+    }
+
+    // The StudentId = @StudentId clause is what actually enforces ownership -
+    // baked into the query itself rather than checked afterward in C#, so it
+    // can't be forgotten by a future caller the way an after-the-fact check
+    // could be. Same pattern as clsLogsDataAccess.EndSessionAsync.
+    public async Task<IEnumerable<Order>> GetAllForStudentAsync(int studentId, DateTime? utcStart = null, DateTime? utcEndExclusive = null)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        var query = "SELECT * FROM Orders WHERE StudentId = @StudentId";
+        if (utcStart is not null) query += " AND Date >= @UtcStart";
+        if (utcEndExclusive is not null) query += " AND Date < @UtcEndExclusive";
+        query += " ORDER BY OrderId DESC";
+
+        return await connection.QueryAsync<Order>(
+            query, new { StudentId = studentId, UtcStart = utcStart, UtcEndExclusive = utcEndExclusive });
+    }
+
+    public async Task<Order?> GetByIdForStudentAsync(int id, int studentId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = "SELECT * FROM Orders WHERE OrderId = @Id AND StudentId = @StudentId";
+
+        return await connection.QuerySingleOrDefaultAsync<Order>(query, new { Id = id, StudentId = studentId });
+    }
+
+    public async Task<bool> CancelForStudentAsync(int id, int studentId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET Status = @Status,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE OrderId = @Id AND StudentId = @StudentId";
+
+        var rowsAffected = await connection.ExecuteAsync(
+            query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled });
 
         return rowsAffected > 0;
     }

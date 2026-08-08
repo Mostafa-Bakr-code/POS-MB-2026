@@ -60,7 +60,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
             ? User.GetUserId()
             : (int?)null;
 
-        var id = await orderBusiness.CreateOrderAsync(request.OrderSource, userId, request.IsComplimentary, items);
+        var id = await orderBusiness.CreateOrderAsync(request.OrderSource, userId, studentId: null, request.IsComplimentary, items);
         return await BuildOrderResponseAsync(id);
     }
 
@@ -88,7 +88,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
         if (order is null) return NotFound();
 
         var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
+        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
     }
 }
 

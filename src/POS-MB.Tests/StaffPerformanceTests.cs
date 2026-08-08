@@ -12,9 +12,9 @@ public class StaffPerformanceTests : DatabaseTestBase
         var cashierA = await CreateUserAsync("cashier-a");
         var cashierB = await CreateUserAsync("cashier-b");
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierA, false, [new NewOrderItem(itemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierA, false, [new NewOrderItem(itemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierB, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierA, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierA, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierB, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         var rows = (await ReportingBusiness.GetStaffPerformanceAsync()).ToList();
 
@@ -34,9 +34,10 @@ public class StaffPerformanceTests : DatabaseTestBase
         var categoryId = await CreateCategoryAsync();
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
         var cashierId = await CreateUserAsync();
+        var studentId = await CreateStudentAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierId, false, [new NewOrderItem(itemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, cashierId, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
 
         var rows = (await ReportingBusiness.GetStaffPerformanceAsync()).ToList();
 

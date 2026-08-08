@@ -26,7 +26,7 @@ public class TimeZoneBoundaryTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
         var userId = await CreateUserAsync();
 
-        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
         await SetOrderDateAsync(orderId, OrderUtcInstant);
     }
 

@@ -13,8 +13,8 @@ public class TopSellersTests : DatabaseTestBase
         var highQtyLowPriceId = await CreateItemAsync(categoryId, "High Qty Low Price", price: 10m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(lowQtyHighPriceId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(highQtyLowPriceId, 5, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(lowQtyHighPriceId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(highQtyLowPriceId, 5, null)]);
 
         var rows = (await ReportingBusiness.GetTopSellersAsync(sortBy: TopSellersSortBy.Quantity)).ToList();
 
@@ -31,8 +31,8 @@ public class TopSellersTests : DatabaseTestBase
         var highQtyLowPriceId = await CreateItemAsync(categoryId, "High Qty Low Price", price: 10m);  // revenue 50
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(lowQtyHighPriceId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(highQtyLowPriceId, 5, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(lowQtyHighPriceId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(highQtyLowPriceId, 5, null)]);
 
         var rows = (await ReportingBusiness.GetTopSellersAsync(sortBy: TopSellersSortBy.Revenue)).ToList();
 
@@ -49,7 +49,7 @@ public class TopSellersTests : DatabaseTestBase
         for (var i = 0; i < 3; i++)
         {
             var itemId = await CreateItemAsync(categoryId, $"Item {i}", price: 10m);
-            await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+            await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
         }
 
         var rows = (await ReportingBusiness.GetTopSellersAsync(take: 2)).ToList();

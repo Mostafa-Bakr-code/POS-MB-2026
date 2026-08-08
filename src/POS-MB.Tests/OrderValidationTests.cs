@@ -13,7 +13,7 @@ public class OrderValidationTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, []));
+            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, []));
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class OrderValidationTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 0, null)]));
+            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 0, null)]));
     }
 
     [Fact]
@@ -34,19 +34,31 @@ public class OrderValidationTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
-            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, null, false, [new NewOrderItem(itemId, 1, null)]));
+            OrderBusiness.CreateOrderAsync(OrderSource.Cashier, null, null, false, [new NewOrderItem(itemId, 1, null)]));
     }
 
     [Fact]
-    public async Task CreateOrder_Allows_MobileOrderWithNoUser()
+    public async Task CreateOrder_Throws_WhenMobileOrderHasNoStudent()
     {
         var categoryId = await CreateCategoryAsync();
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
 
-        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, null, false, [new NewOrderItem(itemId, 1, null)]));
+    }
+
+    [Fact]
+    public async Task CreateOrder_Allows_MobileOrderWithNoUser_ButAttributesItToTheStudent()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.NotNull(order);
         Assert.Null(order.UserId);
+        Assert.Equal(studentId, order.StudentId);
     }
 }

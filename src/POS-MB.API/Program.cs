@@ -64,6 +64,7 @@ builder.Services.AddScoped<clsReportingBusiness>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddSingleton<IAuthorizationHandler, StudentAccountAuthorizationHandler>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is not configured.");

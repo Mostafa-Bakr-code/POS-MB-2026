@@ -20,8 +20,8 @@ public class AverageCalculationTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]); // paid 100
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, true, [new NewOrderItem(itemId, 1, null)]);  // complimentary 100
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]); // paid 100
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, true, [new NewOrderItem(itemId, 1, null)]);  // complimentary 100
 
         var summary = await ReportingBusiness.GetSalesSummaryAsync();
 

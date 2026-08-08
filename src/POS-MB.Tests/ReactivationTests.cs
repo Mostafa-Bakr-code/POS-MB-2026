@@ -15,7 +15,7 @@ public class ReactivationTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 114m, taxRate: 14m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         var before = await ReportingBusiness.GetSalesSummaryAsync();
 

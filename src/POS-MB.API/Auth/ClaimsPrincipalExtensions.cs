@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using POS_MB.DataAccess.Models;
 
 namespace POS_MB.API.Auth;
 
@@ -21,4 +22,11 @@ public static class ClaimsPrincipalExtensions
 
     public static string GetUserName(this ClaimsPrincipal user) =>
         user.Identity?.Name ?? "unknown";
+
+    // Both staff and student tokens always carry an explicit "accountType"
+    // claim (see JwtTokenService) - missing/malformed defaults to false
+    // (not a student) rather than guessing, the safe direction for an
+    // authorization check.
+    public static bool IsStudent(this ClaimsPrincipal user) =>
+        user.FindFirst("accountType")?.Value == nameof(AccountType.Student);
 }

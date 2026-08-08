@@ -15,7 +15,7 @@ public class OrderTotalTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         var orderId = await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [
                 new NewOrderItem(itemAId, 2, null), // 50 x 2 = 100
                 new NewOrderItem(itemBId, 1, null)  // 114 x 1 = 114
@@ -35,7 +35,7 @@ public class OrderTotalTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         var orderId = await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [new NewOrderItem(itemId, 1, null)]);
 
         // Price doubles after the sale - the historical order must not change.

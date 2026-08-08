@@ -13,8 +13,8 @@ public class ItemSalesReportTests : DatabaseTestBase
 
         // Two separate orders for the same item - the report has to add them
         // together, not just report whichever order it saw last.
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         var rows = (await ReportingBusiness.GetItemSalesAsync()).ToList();
         var row = Assert.Single(rows);
@@ -38,8 +38,8 @@ public class ItemSalesReportTests : DatabaseTestBase
         var expensiveItemId = await CreateItemAsync(categoryId, "shawerma", price: 80m, taxRate: 14m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(cheapItemId, 1, null)]);
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(expensiveItemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(cheapItemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(expensiveItemId, 1, null)]);
 
         var rows = (await ReportingBusiness.GetItemSalesAsync())
             .Where(r => r.ItemName.Equals("shawerma", StringComparison.OrdinalIgnoreCase))

@@ -17,7 +17,7 @@ public class TaxCalculationTests : DatabaseTestBase
         var itemB = await CreateItemAsync(categoryId, "Item B", price: 110m, taxRate: 10m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false,
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false,
             [new NewOrderItem(itemA, 1, null), new NewOrderItem(itemB, 1, null)]);
 
         var summary = await ReportingBusiness.GetSalesSummaryAsync();
@@ -33,7 +33,7 @@ public class TaxCalculationTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 114m, taxRate: 14m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, isComplimentary: true,
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, isComplimentary: true,
             [new NewOrderItem(itemId, 2, null)]);
 
         var row = Assert.Single(await ReportingBusiness.GetItemSalesAsync());
@@ -51,7 +51,7 @@ public class TaxCalculationTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 114m, taxRate: 14m);
         var userId = await CreateUserAsync();
 
-        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
 
         // Tax rate changes after the sale - the historical order's tax must not change.
         await ItemBusiness.UpdateAsync(itemId, "Item", categoryId, price: 114m, taxRate: 20m);

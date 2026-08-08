@@ -16,7 +16,7 @@ public class SalesSummaryTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [new NewOrderItem(itemId, 1, null)]);
 
         var summary = await ReportingBusiness.GetSalesSummaryAsync();
@@ -37,10 +37,10 @@ public class SalesSummaryTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [new NewOrderItem(itemId, 1, null)]);
         await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: true,
+            OrderSource.Cashier, userId, null, isComplimentary: true,
             [new NewOrderItem(itemId, 1, null)]);
 
         var summary = await ReportingBusiness.GetSalesSummaryAsync();
@@ -59,11 +59,11 @@ public class SalesSummaryTests : DatabaseTestBase
         var userId = await CreateUserAsync();
 
         await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [new NewOrderItem(itemId, 1, null)]);
 
         var cancelledOrderId = await OrderBusiness.CreateOrderAsync(
-            OrderSource.Cashier, userId, isComplimentary: false,
+            OrderSource.Cashier, userId, null, isComplimentary: false,
             [new NewOrderItem(itemId, 10, null)]); // 1140 - would be obvious if wrongly counted
         await OrderBusiness.CancelAsync(cancelledOrderId);
 

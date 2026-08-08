@@ -1,0 +1,66 @@
+using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Mvc;
+using POS_MB.API.Auth;
+using POS_MB.Business;
+using POS_MB.DataAccess.Models;
+
+namespace POS_MB.API.Controllers;
+
+// Separate from OrdersController on purpose - staff orders and student orders
+// have different authorization (Permission bitmask vs RequireStudent),
+// different attribution (UserId vs StudentId), and no legitimate reason for a
+// student token to ever reach the staff-facing endpoints or vice versa.
+[ApiController]
+[Route("api/students/orders")]
+[RequireStudent]
+public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<StudentOrdersController> logger) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var orders = await orderBusiness.GetAllForStudentAsync(User.GetUserId());
+        return Ok(orders);
+    }
+
+    // The StudentId = @StudentId clause in GetByIdForStudentAsync is what makes
+    // this safe - a student can't view another student's order just by guessing
+    // an OrderId, the query itself never returns a row that isn't theirs.
+    [HttpGet("{id:int}")]
+    public Task<IActionResult> GetById(int id) => BuildOrderResponseAsync(id);
+
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] CreateStudentOrderRequest request)
+    {
+        var studentId = User.GetUserId();
+
+        var items = request.Items
+            .Select(i => new NewOrderItem(i.ItemId, i.Quantity, i.Comment))
+            .ToList();
+
+        var id = await orderBusiness.CreateStudentOrderAsync(studentId, items);
+
+        logger.LogInformation("Student {Email} placed order OrderId={OrderId}", User.GetUserName(), id);
+
+        return await BuildOrderResponseAsync(id);
+    }
+
+    [HttpPost("{id:int}/cancel")]
+    public async Task<IActionResult> Cancel(int id)
+    {
+        var cancelled = await orderBusiness.CancelForStudentAsync(id, User.GetUserId());
+        if (cancelled)
+            logger.LogInformation("Student {Email} cancelled order OrderId={OrderId}", User.GetUserName(), id);
+        return cancelled ? NoContent() : NotFound();
+    }
+
+    private async Task<IActionResult> BuildOrderResponseAsync(int id)
+    {
+        var order = await orderBusiness.GetByIdForStudentAsync(id, User.GetUserId());
+        if (order is null) return NotFound();
+
+        var items = await orderBusiness.GetItemsByOrderIdAsync(id);
+        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt, Items = items });
+    }
+}
+
+public record CreateStudentOrderRequest([Required, MinLength(1)] List<CreateOrderItemRequest> Items);
