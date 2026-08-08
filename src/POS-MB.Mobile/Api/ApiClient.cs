@@ -6,13 +6,28 @@ namespace POS_MB.Mobile.Api;
 
 public class ApiClient
 {
-    private readonly HttpClient _httpClient = new() { BaseAddress = new Uri(ApiConfig.BaseUrl) };
+    private readonly HttpClient _httpClient = new(new AuthHeaderHandler()) { BaseAddress = new Uri(ApiConfig.BaseUrl) };
 
     public Task<(StudentLoginResponse? Result, string? Error)> SignUpAsync(string email, string password) =>
         PostAuthAsync("api/students/signup", email, password);
 
     public Task<(StudentLoginResponse? Result, string? Error)> LoginAsync(string email, string password) =>
         PostAuthAsync("api/students/login", email, password);
+
+    public async Task<List<CategoryDto>> GetCategoriesAsync()
+    {
+        var result = await _httpClient.GetFromJsonAsync<List<CategoryDto>>("api/categories");
+        return result ?? [];
+    }
+
+    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null)
+    {
+        var url = "api/items?availableOnly=true";
+        if (categoryId is not null) url += $"&categoryId={categoryId}";
+
+        var result = await _httpClient.GetFromJsonAsync<List<ItemDto>>(url);
+        return result ?? [];
+    }
 
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)
     {

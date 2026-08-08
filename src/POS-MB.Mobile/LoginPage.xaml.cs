@@ -52,13 +52,7 @@ public partial class LoginPage : ContentPage
             AppSession.RefreshToken = result.RefreshToken;
             AppSession.CurrentStudent = result.Student;
 
-            // No ordering screens exist yet - this just proves the login/signup
-            // flow genuinely works end to end against the real API.
-            ModeLabel.Text = $"Logged in as {result.Student.Email}";
-            EmailEntry.IsVisible = false;
-            PasswordEntry.IsVisible = false;
-            PrimaryButton.IsVisible = false;
-            ToggleModeButton.IsVisible = false;
+            await Navigation.PushAsync(new MenuPage());
         }
         finally
         {
