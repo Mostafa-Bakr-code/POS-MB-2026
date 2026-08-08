@@ -19,17 +19,19 @@ public partial class clsStudentBusiness(clsStudentDataAccess dataAccess)
     /// </summary>
     public async Task<int> SignUpAsync(string email, string password)
     {
-        if (string.IsNullOrWhiteSpace(email) || !EmailPattern().IsMatch(email))
+        var normalizedEmail = NormalizeEmail(email);
+
+        if (string.IsNullOrWhiteSpace(normalizedEmail) || !EmailPattern().IsMatch(normalizedEmail))
             throw new ArgumentException("A valid email is required.", nameof(email));
         if (string.IsNullOrWhiteSpace(password))
             throw new ArgumentException("Password is required.", nameof(password));
 
-        if (await dataAccess.GetByEmailAsync(email) is not null)
+        if (await dataAccess.GetByEmailAsync(normalizedEmail) is not null)
             throw new ArgumentException("An account with this email already exists.", nameof(email));
 
         var passwordHash = Hasher.HashPassword(new Student(), password);
 
-        return await dataAccess.AddAsync(email, passwordHash);
+        return await dataAccess.AddAsync(normalizedEmail, passwordHash);
     }
 
     /// <summary>
@@ -39,13 +41,19 @@ public partial class clsStudentBusiness(clsStudentDataAccess dataAccess)
     /// </summary>
     public async Task<Student?> VerifyCredentialsAsync(string email, string password)
     {
-        var student = await dataAccess.GetByEmailAsync(email);
+        var student = await dataAccess.GetByEmailAsync(NormalizeEmail(email));
         if (student is null || !student.IsActive)
             return null;
 
         var result = Hasher.VerifyHashedPassword(student, student.PasswordHash, password);
         return result == PasswordVerificationResult.Failed ? null : student;
     }
+
+    // Trim + lowercase before every lookup/storage, rather than relying on the
+    // database's collation to happen to be case-insensitive (environment-
+    // dependent) and never handling whitespace at all - "Test@Example.com " and
+    // "test@example.com" must always resolve to the same account.
+    private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
     private static partial Regex EmailPattern();

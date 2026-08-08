@@ -96,7 +96,11 @@ public class StudentsController(
 // plaintext itself, only the resulting hash is stored).
 public record StudentSignUpRequest(
     [Required, EmailAddress, StringLength(256)] string Email,
-    [Required, StringLength(200)] string Password);
+    // MinimumLength matters more here than it does for staff accounts - an admin
+    // creates staff accounts in a controlled context, but signup is open to
+    // anyone on the internet with only rate limiting standing between them and
+    // picking a trivially guessable password.
+    [Required, StringLength(200, MinimumLength = 8)] string Password);
 
 public record StudentLoginRequest(
     [Required, StringLength(256)] string Email,
