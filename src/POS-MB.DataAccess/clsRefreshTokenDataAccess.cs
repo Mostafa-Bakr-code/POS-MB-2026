@@ -5,17 +5,17 @@ namespace POS_MB.DataAccess;
 
 public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
 {
-    public async Task<int> AddAsync(int userId, string tokenHash, DateTime expiresAt)
+    public async Task<int> AddAsync(int userId, AccountType accountType, string tokenHash, DateTime expiresAt)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
-            INSERT INTO RefreshTokens (UserId, TokenHash, ExpiresAt)
+            INSERT INTO RefreshTokens (UserId, AccountType, TokenHash, ExpiresAt)
             OUTPUT INSERTED.RefreshTokenId
-            VALUES (@UserId, @TokenHash, @ExpiresAt);";
+            VALUES (@UserId, @AccountType, @TokenHash, @ExpiresAt);";
 
         return await connection.ExecuteScalarAsync<int>(
-            query, new { UserId = userId, TokenHash = tokenHash, ExpiresAt = expiresAt });
+            query, new { UserId = userId, AccountType = accountType, TokenHash = tokenHash, ExpiresAt = expiresAt });
     }
 
     public async Task<RefreshToken?> GetByTokenHashAsync(string tokenHash)
@@ -23,7 +23,7 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
-            SELECT RefreshTokenId, UserId, TokenHash, ExpiresAt, RevokedAt, RevokedViaLogout, CreatedAt
+            SELECT RefreshTokenId, UserId, AccountType, TokenHash, ExpiresAt, RevokedAt, RevokedViaLogout, CreatedAt
             FROM RefreshTokens
             WHERE TokenHash = @TokenHash";
 
@@ -43,7 +43,7 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
         const string query = @"
             UPDATE RefreshTokens
             SET RevokedAt = SYSUTCDATETIME()
-            OUTPUT INSERTED.RefreshTokenId, INSERTED.UserId, INSERTED.TokenHash, INSERTED.ExpiresAt, INSERTED.RevokedAt, INSERTED.RevokedViaLogout, INSERTED.CreatedAt
+            OUTPUT INSERTED.RefreshTokenId, INSERTED.UserId, INSERTED.AccountType, INSERTED.TokenHash, INSERTED.ExpiresAt, INSERTED.RevokedAt, INSERTED.RevokedViaLogout, INSERTED.CreatedAt
             WHERE TokenHash = @TokenHash AND RevokedAt IS NULL AND ExpiresAt > SYSUTCDATETIME();";
 
         return await connection.QuerySingleOrDefaultAsync<RefreshToken>(query, new { TokenHash = tokenHash });
@@ -66,15 +66,19 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
         await connection.ExecuteAsync(query, new { Id = refreshTokenId });
     }
 
-    public async Task RevokeAllForUserAsync(int userId)
+    // Scoped by AccountType as well as UserId - a staff UserId and a student
+    // StudentId can be the same number (separate identity columns, separate
+    // tables), so UserId alone would be ambiguous and could revoke the wrong
+    // account's tokens.
+    public async Task RevokeAllForUserAsync(int userId, AccountType accountType)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             UPDATE RefreshTokens
             SET RevokedAt = SYSUTCDATETIME()
-            WHERE UserId = @UserId AND RevokedAt IS NULL";
+            WHERE UserId = @UserId AND AccountType = @AccountType AND RevokedAt IS NULL";
 
-        await connection.ExecuteAsync(query, new { UserId = userId });
+        await connection.ExecuteAsync(query, new { UserId = userId, AccountType = accountType });
     }
 }

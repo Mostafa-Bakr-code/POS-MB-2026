@@ -91,7 +91,7 @@ public class UsersController(
         logger.LogInformation("User {UserName} logged in from {RemoteIp}", user.UserName, HttpContext.Connection.RemoteIpAddress);
 
         var token = tokenService.GenerateToken(user);
-        var refreshToken = await refreshTokenBusiness.IssueAsync(user.UserId);
+        var refreshToken = await refreshTokenBusiness.IssueAsync(user.UserId, AccountType.Staff);
         return Ok(new LoginResponse(token, refreshToken, ToResponse(user)));
     }
 
@@ -106,7 +106,11 @@ public class UsersController(
     public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenRequest request)
     {
         var result = await refreshTokenBusiness.ValidateAndRotateAsync(request.RefreshToken);
-        if (result is null) return Unauthorized();
+        // A student's refresh token rotating successfully here (this endpoint only
+        // ever issues staff tokens) would otherwise look up their numeric id in the
+        // Users table - a coincidental id collision could authenticate as a
+        // completely different staff account.
+        if (result is null || result.Value.AccountType != AccountType.Staff) return Unauthorized();
 
         var user = await userBusiness.GetByIdAsync(result.Value.UserId);
         if (user is null || !user.IsActive) return Unauthorized();
@@ -119,7 +123,7 @@ public class UsersController(
     public async Task<IActionResult> Logout([FromBody] RefreshTokenRequest request)
     {
         var userId = User.GetUserId();
-        var revoked = await refreshTokenBusiness.RevokeAsync(request.RefreshToken, userId);
+        var revoked = await refreshTokenBusiness.RevokeAsync(request.RefreshToken, userId, AccountType.Staff);
 
         if (!revoked)
         {

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
 using POS_MB.DataAccess;
+using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Business;
 
@@ -9,10 +10,10 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogg
 {
     private static readonly TimeSpan Lifetime = TimeSpan.FromDays(1);
 
-    public async Task<string> IssueAsync(int userId)
+    public async Task<string> IssueAsync(int userId, AccountType accountType)
     {
         var (plainText, hash) = GenerateToken();
-        await dataAccess.AddAsync(userId, hash, DateTime.UtcNow.Add(Lifetime));
+        await dataAccess.AddAsync(userId, accountType, hash, DateTime.UtcNow.Add(Lifetime));
         return plainText;
     }
 
@@ -28,7 +29,7 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogg
     /// theft: every refresh token for that user is revoked as a precaution,
     /// forcing a fresh login everywhere.
     /// </summary>
-    public async Task<(int UserId, string NewToken)?> ValidateAndRotateAsync(string presentedToken)
+    public async Task<(int UserId, AccountType AccountType, string NewToken)?> ValidateAndRotateAsync(string presentedToken)
     {
         var hash = Hash(presentedToken);
         var claimed = await dataAccess.TryClaimActiveTokenAsync(hash);
@@ -50,23 +51,23 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogg
                     // logout. Treated as routine (401), not escalated to a mass
                     // revoke + security warning.
                     logger.LogInformation(
-                        "Refresh attempted on a token revoked via logout for UserId={UserId} - likely a benign race with an in-flight refresh",
-                        existing.UserId);
+                        "Refresh attempted on a token revoked via logout for {AccountType} UserId={UserId} - likely a benign race with an in-flight refresh",
+                        existing.AccountType, existing.UserId);
                 }
                 else
                 {
-                    logger.LogWarning("Refresh-token reuse detected for UserId={UserId} - all refresh tokens revoked",
-                        existing.UserId);
-                    await dataAccess.RevokeAllForUserAsync(existing.UserId);
+                    logger.LogWarning("Refresh-token reuse detected for {AccountType} UserId={UserId} - all refresh tokens revoked",
+                        existing.AccountType, existing.UserId);
+                    await dataAccess.RevokeAllForUserAsync(existing.UserId, existing.AccountType);
                 }
             }
             return null;
         }
 
         var (plainText, newHash) = GenerateToken();
-        await dataAccess.AddAsync(claimed.UserId, newHash, DateTime.UtcNow.Add(Lifetime));
+        await dataAccess.AddAsync(claimed.UserId, claimed.AccountType, newHash, DateTime.UtcNow.Add(Lifetime));
 
-        return (claimed.UserId, plainText);
+        return (claimed.UserId, claimed.AccountType, plainText);
     }
 
     /// <summary>
@@ -74,23 +75,25 @@ public class clsRefreshTokenBusiness(clsRefreshTokenDataAccess dataAccess, ILogg
     /// changes or an account is deactivated, so a session token issued before
     /// either of those (stolen or otherwise) doesn't keep working afterward.
     /// </summary>
-    public Task RevokeAllForUserAsync(int userId) =>
-        dataAccess.RevokeAllForUserAsync(userId);
+    public Task RevokeAllForUserAsync(int userId, AccountType accountType) =>
+        dataAccess.RevokeAllForUserAsync(userId, accountType);
 
     /// <summary>
     /// Revokes a refresh token on logout - but only if it actually belongs to
     /// the caller. Without this check, any authenticated user could submit any
     /// refresh token value and log someone else out (an ownership violation:
     /// logout should only ever be able to end your own session). Returns false
-    /// if the token doesn't exist or belongs to a different user - the caller
+    /// if the token doesn't exist or belongs to a different account - the caller
     /// treats both the same as "nothing to revoke" either way, without
     /// distinguishing which, so a mismatch doesn't confirm whether a given
-    /// token value belongs to someone else.
+    /// token value belongs to someone else. Checks AccountType as well as
+    /// UserId - a staff UserId and a student StudentId can be the same number.
     /// </summary>
-    public async Task<bool> RevokeAsync(string presentedToken, int expectedUserId)
+    public async Task<bool> RevokeAsync(string presentedToken, int expectedUserId, AccountType expectedAccountType)
     {
         var existing = await dataAccess.GetByTokenHashAsync(Hash(presentedToken));
-        if (existing is null || existing.UserId != expectedUserId) return false;
+        if (existing is null || existing.UserId != expectedUserId || existing.AccountType != expectedAccountType)
+            return false;
 
         if (existing.RevokedAt is null)
             await dataAccess.RevokeAsync(existing.RefreshTokenId);

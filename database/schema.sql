@@ -37,6 +37,24 @@ CREATE TABLE dbo.Users
 );
 GO
 
+-- Separate from Users on purpose: students self-register with an email/password,
+-- have no Permissions bitmask (they can only ever place/view their own orders),
+-- and are never staff. Email verification was deliberately skipped for v1 (can be
+-- added later as a purely additive change - see project memory) - IsActive still
+-- exists for an admin to disable an account if needed.
+CREATE TABLE dbo.Students
+(
+    StudentId    INT IDENTITY(1,1) NOT NULL,
+    Email        NVARCHAR(256)     NOT NULL,
+    Password     NVARCHAR(200)     NOT NULL,
+    IsActive     BIT               NOT NULL CONSTRAINT DF_Students_IsActive DEFAULT (1),
+    CreatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_CreatedAt DEFAULT (SYSUTCDATETIME()),
+    UpdatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_UpdatedAt DEFAULT (SYSUTCDATETIME()),
+    CONSTRAINT PK_Students PRIMARY KEY CLUSTERED (StudentId),
+    CONSTRAINT UQ_Students_Email UNIQUE (Email)
+);
+GO
+
 CREATE TABLE dbo.Items
 (
     ItemId    INT IDENTITY(1,1) NOT NULL,
@@ -132,17 +150,22 @@ CREATE UNIQUE INDEX UQ_Orders_Date_SerialNumber
     WHERE SerialNumber IS NOT NULL;
 GO
 
+-- UserId has no FK constraint (deliberately) - it refers to either Users.UserId
+-- or Students.StudentId depending on AccountType, since refresh token rotation
+-- and theft-detection are identical mechanics regardless of account type and
+-- don't need two parallel copies of this table/logic. AccountType is what tells
+-- the API which table to actually look the principal up in.
 CREATE TABLE dbo.RefreshTokens
 (
     RefreshTokenId INT IDENTITY(1,1) NOT NULL,
     UserId         INT               NOT NULL,
+    AccountType    TINYINT           NOT NULL CONSTRAINT DF_RefreshTokens_AccountType DEFAULT (0), -- 0=Staff (Users), 1=Student (Students)
     TokenHash      NVARCHAR(200)     NOT NULL, -- SHA-256 of the token; the plaintext itself is never stored, same reasoning as passwords
     ExpiresAt      DATETIME2(3)      NOT NULL,
     RevokedAt      DATETIME2(3)      NULL, -- set on logout, on rotation (a new token replaces it), or on reuse-detected theft response
     RevokedViaLogout BIT             NOT NULL CONSTRAINT DF_RefreshTokens_RevokedViaLogout DEFAULT (0), -- distinguishes an explicit logout from a rotation, so a benign logout-vs-in-flight-refresh race isn't misread as token theft
     CreatedAt      DATETIME2(3)      NOT NULL CONSTRAINT DF_RefreshTokens_CreatedAt DEFAULT (SYSUTCDATETIME()),
-    CONSTRAINT PK_RefreshTokens PRIMARY KEY CLUSTERED (RefreshTokenId),
-    CONSTRAINT FK_RefreshTokens_Users FOREIGN KEY (UserId) REFERENCES dbo.Users (UserId)
+    CONSTRAINT PK_RefreshTokens PRIMARY KEY CLUSTERED (RefreshTokenId)
 );
 GO
 

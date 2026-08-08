@@ -58,7 +58,7 @@ public class clsUserBusiness(clsUserDataAccess dataAccess, clsRefreshTokenBusine
         // that only works if it also kills any refresh token already issued
         // (stolen or otherwise), not just future login attempts.
         if (updated && passwordChanged)
-            await refreshTokenBusiness.RevokeAllForUserAsync(id);
+            await refreshTokenBusiness.RevokeAllForUserAsync(id, AccountType.Staff);
 
         return updated;
     }
@@ -67,7 +67,7 @@ public class clsUserBusiness(clsUserDataAccess dataAccess, clsRefreshTokenBusine
     {
         var deactivated = await dataAccess.DeactivateAsync(id);
         if (deactivated)
-            await refreshTokenBusiness.RevokeAllForUserAsync(id);
+            await refreshTokenBusiness.RevokeAllForUserAsync(id, AccountType.Staff);
         return deactivated;
     }
 
