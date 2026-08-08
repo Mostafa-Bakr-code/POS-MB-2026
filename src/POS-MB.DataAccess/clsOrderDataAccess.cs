@@ -28,16 +28,25 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             var serialNumber = await connection.ExecuteScalarAsync<int>(
                 serialQuery, new { Date = date }, transaction);
 
+            // IsActive/IsAvailable are checked here, not just relied on client-side -
+            // the menu only ever shows available items, but there's a real gap
+            // between "browsed and added to cart" and "actually placed the order"
+            // (staff can mark something out of stock in between), and the same
+            // path serves both Cashier and Mobile orders, so this applies to both.
             var itemIds = items.Select(i => i.ItemId).Distinct().ToArray();
-            const string pricesQuery = "SELECT ItemId, Price, TaxRate FROM Items WHERE ItemId IN @ItemIds";
-            var itemInfo = (await connection.QueryAsync<(int ItemId, decimal Price, decimal TaxRate)>(
+            const string pricesQuery = "SELECT ItemId, ItemName, Price, TaxRate, IsActive, IsAvailable FROM Items WHERE ItemId IN @ItemIds";
+            var itemInfo = (await connection.QueryAsync<(int ItemId, string ItemName, decimal Price, decimal TaxRate, bool IsActive, bool IsAvailable)>(
                 pricesQuery, new { ItemIds = itemIds }, transaction))
-                .ToDictionary(p => p.ItemId, p => (p.Price, p.TaxRate));
+                .ToDictionary(p => p.ItemId, p => p);
 
             foreach (var item in items)
             {
-                if (!itemInfo.ContainsKey(item.ItemId))
+                if (!itemInfo.TryGetValue(item.ItemId, out var info))
                     throw new InvalidOperationException($"Item {item.ItemId} does not exist.");
+                if (!info.IsActive)
+                    throw new ArgumentException($"{info.ItemName} is no longer available.", nameof(items));
+                if (!info.IsAvailable)
+                    throw new ArgumentException($"{info.ItemName} is currently out of stock.", nameof(items));
             }
 
             var total = items.Sum(i => itemInfo[i.ItemId].Price * i.Quantity);
@@ -63,15 +72,15 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
                 VALUES (@OrderId, @ItemId, @Quantity, @Price, @TotalItemsPrice, @TaxRate, @Comment);";
             foreach (var item in items)
             {
-                var (price, taxRate) = itemInfo[item.ItemId];
+                var info = itemInfo[item.ItemId];
                 await connection.ExecuteAsync(insertItemQuery, new
                 {
                     OrderId = orderId,
                     item.ItemId,
                     item.Quantity,
-                    Price = price,
-                    TotalItemsPrice = price * item.Quantity,
-                    TaxRate = taxRate,
+                    Price = info.Price,
+                    TotalItemsPrice = info.Price * item.Quantity,
+                    TaxRate = info.TaxRate,
                     item.Comment
                 }, transaction);
             }
