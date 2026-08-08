@@ -88,7 +88,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
         if (order is null) return NotFound();
 
         var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
+        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.CashierName, order.StudentEmail, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
     }
 }
 

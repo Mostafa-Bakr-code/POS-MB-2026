@@ -5,8 +5,12 @@ namespace POS_MB.WinformsApp.Dialogs;
 
 public class FormOrderDetailDialog : Form
 {
-    public FormOrderDetailDialog(OrderDto order, Dictionary<int, string> itemNamesById, string? cashierName)
+    public FormOrderDetailDialog(OrderDto order, Dictionary<int, string> itemNamesById)
     {
+        var placedBy = order.CashierName is not null ? $"  (Cashier: {order.CashierName})"
+            : order.StudentEmail is not null ? $"  (Student: {order.StudentEmail})"
+            : "";
+
         Text = $"Order #{order.SerialNumber ?? order.OrderId}";
         ClientSize = new Size(600, 560);
         StartPosition = FormStartPosition.CenterParent;
@@ -22,7 +26,7 @@ public class FormOrderDetailDialog : Form
             Padding = new Padding(20, 15, 20, 0),
             Text =
                 $"Date: {AppSession.ToLocalDisplay(order.Date):yyyy-MM-dd HH:mm}\n" +
-                $"Source: {order.OrderSource}{(cashierName is null ? "" : $"  (Cashier: {cashierName})")}\n" +
+                $"Source: {order.OrderSource}{placedBy}\n" +
                 $"Status: {order.Status}{(order.IsComplimentary ? "  (Complimentary)" : "")}\n" +
                 $"Total: {order.Total:0.00}"
         };

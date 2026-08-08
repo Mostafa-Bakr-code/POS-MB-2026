@@ -90,7 +90,12 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        const string query = "SELECT * FROM Orders WHERE OrderId = @Id";
+        const string query = @"
+            SELECT o.*, u.UserName AS CashierName, s.Email AS StudentEmail
+            FROM Orders o
+            LEFT JOIN Users u ON u.UserId = o.UserId
+            LEFT JOIN Students s ON s.StudentId = o.StudentId
+            WHERE o.OrderId = @Id";
 
         return await connection.QuerySingleOrDefaultAsync<Order>(query, new { Id = id });
     }
@@ -111,11 +116,16 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        var query = "SELECT * FROM Orders WHERE 1 = 1";
-        if (utcStart is not null) query += " AND Date >= @UtcStart";
-        if (utcEndExclusive is not null) query += " AND Date < @UtcEndExclusive";
-        if (orderSource is not null) query += " AND OrderSource = @OrderSource";
-        query += " ORDER BY OrderId DESC";
+        var query = @"
+            SELECT o.*, u.UserName AS CashierName, s.Email AS StudentEmail
+            FROM Orders o
+            LEFT JOIN Users u ON u.UserId = o.UserId
+            LEFT JOIN Students s ON s.StudentId = o.StudentId
+            WHERE 1 = 1";
+        if (utcStart is not null) query += " AND o.Date >= @UtcStart";
+        if (utcEndExclusive is not null) query += " AND o.Date < @UtcEndExclusive";
+        if (orderSource is not null) query += " AND o.OrderSource = @OrderSource";
+        query += " ORDER BY o.OrderId DESC";
 
         return await connection.QueryAsync<Order>(
             query, new { UtcStart = utcStart, UtcEndExclusive = utcEndExclusive, OrderSource = orderSource });

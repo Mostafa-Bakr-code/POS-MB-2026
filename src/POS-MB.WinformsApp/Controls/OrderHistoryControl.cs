@@ -16,7 +16,6 @@ public class OrderHistoryControl : UserControl
     private readonly DataGridView _grid;
 
     private List<OrderDto> _orders = [];
-    private List<UserDto> _users = [];
     private string? _sortColumn;
     private bool _sortAscending = true;
 
@@ -116,7 +115,6 @@ public class OrderHistoryControl : UserControl
         }
 
         _orders = await _apiClient.GetOrdersAsync(start, end, source);
-        _users = await _apiClient.GetUsersAsync(includeInactive: true);
 
         ApplySortAndBind();
     }
@@ -173,11 +171,7 @@ public class OrderHistoryControl : UserControl
         var allItems = await _apiClient.GetItemsAsync(includeInactive: true);
         var itemNamesById = allItems.ToDictionary(i => i.ItemId, i => i.ItemName);
 
-        var cashierName = full.UserId is int userId
-            ? _users.FirstOrDefault(u => u.UserId == userId)?.UserName
-            : null;
-
-        using var dialog = new FormOrderDetailDialog(full, itemNamesById, cashierName);
+        using var dialog = new FormOrderDetailDialog(full, itemNamesById);
         dialog.ShowDialog(this);
     }
 }

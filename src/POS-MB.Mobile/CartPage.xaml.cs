@@ -71,7 +71,11 @@ public partial class CartPage : ContentPage
         }
 
         Cart.Clear();
-        await DisplayAlert("Order placed", $"Order #{result.OrderId} placed successfully.", "OK");
+        // SerialNumber is the customer-facing daily order number (resets each day,
+        // wraps at 100 per the setting in WinForms) - OrderId is the permanent
+        // database primary key and keeps climbing forever across every order ever
+        // placed, which is meaningless to show a student here.
+        await DisplayAlert("Order placed", $"Order #{result.SerialNumber ?? result.OrderId} placed successfully.", "OK");
         await Navigation.PopAsync(); // back to MenuPage, not all the way to LoginPage
     }
 }
