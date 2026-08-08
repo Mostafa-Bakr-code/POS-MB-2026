@@ -25,6 +25,8 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
                 ISNULL(SUM(CASE WHEN OrderSource = 1 THEN 1 ELSE 0 END), 0) AS MobileOrders,
                 ISNULL(SUM(CASE WHEN IsComplimentary = 1 THEN 1 ELSE 0 END), 0) AS ComplimentaryOrders,
                 ISNULL(SUM(CASE WHEN IsComplimentary = 0 THEN Total ELSE 0 END), 0) AS TotalRevenue,
+                ISNULL(SUM(CASE WHEN IsComplimentary = 0 AND OrderSource = 0 THEN Total ELSE 0 END), 0) AS CashierRevenue,
+                ISNULL(SUM(CASE WHEN IsComplimentary = 0 AND OrderSource = 1 THEN Total ELSE 0 END), 0) AS MobileRevenue,
                 ISNULL(SUM(CASE WHEN IsComplimentary = 1 THEN Total ELSE 0 END), 0) AS ComplimentaryValue
             FROM Orders
             WHERE Status <> 4";

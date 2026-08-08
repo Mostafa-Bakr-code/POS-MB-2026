@@ -29,6 +29,8 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
             new object[] { "Mobile Orders", summary.MobileOrders },
             new object[] { "Complimentary Orders", summary.ComplimentaryOrders },
             new object[] { "Total Revenue (incl. tax)", summary.TotalRevenue },
+            new object[] { "Cashier Revenue (incl. tax)", summary.CashierRevenue },
+            new object[] { "Mobile Revenue (incl. tax)", summary.MobileRevenue },
             new object[] { "Total Revenue (excl. tax)", summary.RevenueExcludingTax },
             new object[] { "Total Tax", summary.TotalTax },
             new object[] { "Complimentary Value", summary.ComplimentaryValue },

@@ -21,6 +21,8 @@ public class SalesSummaryDto
     public int MobileOrders { get; set; }
     public int ComplimentaryOrders { get; set; }
     public decimal TotalRevenue { get; set; }
+    public decimal CashierRevenue { get; set; }
+    public decimal MobileRevenue { get; set; }
     public decimal ComplimentaryValue { get; set; }
     public decimal TotalTax { get; set; }
     public decimal RevenueExcludingTax { get; set; }

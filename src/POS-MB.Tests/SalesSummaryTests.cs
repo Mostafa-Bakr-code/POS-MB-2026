@@ -52,6 +52,30 @@ public class SalesSummaryTests : DatabaseTestBase
     }
 
     [Fact]
+    public async Task GetSalesSummary_SplitsRevenueByCashierAndMobile()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 114m, taxRate: 14m);
+        var userId = await CreateUserAsync();
+        var studentId = await CreateStudentAsync();
+
+        await OrderBusiness.CreateOrderAsync(
+            OrderSource.Cashier, userId, null, isComplimentary: false,
+            [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.CreateOrderAsync(
+            OrderSource.Mobile, null, studentId, isComplimentary: false,
+            [new NewOrderItem(itemId, 1, null)]);
+
+        var summary = await ReportingBusiness.GetSalesSummaryAsync();
+
+        Assert.Equal(114m, summary.CashierRevenue);
+        Assert.Equal(114m, summary.MobileRevenue);
+        // Cashier + Mobile must add back up to the combined total - the split
+        // must never lose or double-count a sale.
+        Assert.Equal(summary.TotalRevenue, summary.CashierRevenue + summary.MobileRevenue);
+    }
+
+    [Fact]
     public async Task GetSalesSummary_ExcludesCancelledOrdersEntirely()
     {
         var categoryId = await CreateCategoryAsync();

@@ -153,6 +153,8 @@ public class ReportsControl : UserControl
         ["Mobile Orders", s.MobileOrders.ToString()],
         ["Complimentary Orders", s.ComplimentaryOrders.ToString()],
         ["Total Revenue (incl. tax)", s.TotalRevenue.ToString("0.00")],
+        ["Cashier Revenue (incl. tax)", s.CashierRevenue.ToString("0.00")],
+        ["Mobile Revenue (incl. tax)", s.MobileRevenue.ToString("0.00")],
         ["Total Revenue (excl. tax)", s.RevenueExcludingTax.ToString("0.00")],
         ["Total Tax", s.TotalTax.ToString("0.00")],
         ["Complimentary Value", s.ComplimentaryValue.ToString("0.00")],
