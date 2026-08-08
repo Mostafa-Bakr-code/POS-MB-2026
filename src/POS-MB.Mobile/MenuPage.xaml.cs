@@ -18,6 +18,28 @@ public partial class MenuPage : ContentPage
     {
         base.OnAppearing();
         await LoadAsync();
+        RefreshCartButton();
+    }
+
+    private void OnAddToCartClicked(object? sender, EventArgs e)
+    {
+        if ((sender as Button)?.BindingContext is not ItemDto item) return;
+
+        Cart.Add(item);
+        RefreshCartButton();
+    }
+
+    private void RefreshCartButton()
+    {
+        CartButton.Text = Cart.TotalItemCount == 0
+            ? "Cart is empty"
+            : $"View Cart ({Cart.TotalItemCount}) - {Cart.Total:0.00}";
+        CartButton.IsEnabled = Cart.TotalItemCount > 0;
+    }
+
+    private async void OnCartClicked(object? sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new CartPage());
     }
 
     private async Task LoadAsync()

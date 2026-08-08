@@ -29,6 +29,24 @@ public class ApiClient
         return result ?? [];
     }
 
+    public async Task<(OrderResponse? Result, string? Error)> PlaceOrderAsync(List<OrderItemLineDto> items)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("api/students/orders", new PlaceOrderRequest(items));
+        }
+        catch (Exception)
+        {
+            return (null, "Could not reach the server. Check your connection and try again.");
+        }
+
+        if (response.IsSuccessStatusCode)
+            return (await response.Content.ReadFromJsonAsync<OrderResponse>(), null);
+
+        return (null, await ExtractErrorAsync(response));
+    }
+
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)
     {
         HttpResponseMessage response;
