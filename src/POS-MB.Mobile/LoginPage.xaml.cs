@@ -8,10 +8,45 @@ public partial class LoginPage : ContentPage
 {
     private readonly ApiClient _apiClient = new();
     private bool _isSignUpMode;
+    private bool _autoLoginAttempted;
 
     public LoginPage()
     {
         InitializeComponent();
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+
+        // Only attempted once per app launch - after a logout (which clears the
+        // persisted token before popping back here) this will simply find
+        // nothing saved and fall through to the normal login form.
+        if (_autoLoginAttempted) return;
+        _autoLoginAttempted = true;
+
+        var savedRefreshToken = await AppSession.GetPersistedRefreshTokenAsync();
+        if (savedRefreshToken is null) return;
+
+        SetBusy(true, "Signing you in...");
+        try
+        {
+            var result = await _apiClient.RefreshTokenAsync(savedRefreshToken);
+            if (result is null)
+            {
+                // Saved token is gone/expired/revoked server-side - clear it so
+                // this doesn't keep failing silently on every future launch.
+                AppSession.ClearPersisted();
+                return;
+            }
+
+            await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
+            await Navigation.PushAsync(new MenuPage());
+        }
+        finally
+        {
+            SetBusy(false, "");
+        }
     }
 
     private void OnToggleModeClicked(object? sender, EventArgs e)
@@ -36,7 +71,7 @@ public partial class LoginPage : ContentPage
             return;
         }
 
-        SetBusy(true);
+        SetBusy(true, "");
         try
         {
             var (result, error) = _isSignUpMode
@@ -49,32 +84,44 @@ public partial class LoginPage : ContentPage
                 return;
             }
 
-            AppSession.Token = result.Token;
-            AppSession.RefreshToken = result.RefreshToken;
-            AppSession.CurrentStudent = result.Student;
-
-            // Same source of truth WinForms reads at login - without this, order
-            // times would show the server's raw UTC clock instead of local time.
-            var offsetValue = await _apiClient.GetSettingValueAsync("TimeZoneOffsetHours");
-            AppSession.TimeZoneOffsetHours = offsetValue is not null
-                && decimal.TryParse(offsetValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var offset)
-                    ? offset
-                    : 0m;
-
+            await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
             await Navigation.PushAsync(new MenuPage());
         }
         finally
         {
-            SetBusy(false);
+            SetBusy(false, "");
         }
     }
 
-    private void SetBusy(bool busy)
+    private async Task ApplySessionAsync(string token, string refreshToken, Models.StudentDto student)
+    {
+        AppSession.Token = token;
+        AppSession.RefreshToken = refreshToken;
+        AppSession.CurrentStudent = student;
+        await AppSession.PersistRefreshTokenAsync();
+
+        // Same source of truth WinForms reads at login - without this, order
+        // times would show the server's raw UTC clock instead of local time.
+        var offsetValue = await _apiClient.GetSettingValueAsync("TimeZoneOffsetHours");
+        AppSession.TimeZoneOffsetHours = offsetValue is not null
+            && decimal.TryParse(offsetValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var offset)
+                ? offset
+                : 0m;
+    }
+
+    private void SetBusy(bool busy, string statusText)
     {
         LoadingIndicator.IsRunning = busy;
         LoadingIndicator.IsVisible = busy;
         PrimaryButton.IsEnabled = !busy;
         ToggleModeButton.IsEnabled = !busy;
+
+        // Auto-login runs before the form is even relevant - hide it entirely
+        // while that's in flight so the student isn't shown an empty login
+        // form for a split second before being whisked away to the menu.
+        FormLayout.IsVisible = !busy || string.IsNullOrEmpty(statusText);
+        StatusLabel.Text = statusText;
+        StatusLabel.IsVisible = busy && !string.IsNullOrEmpty(statusText);
     }
 
     private void ShowError(string message)

@@ -47,6 +47,24 @@ public partial class MenuPage : ContentPage
         await Navigation.PushAsync(new OrdersPage());
     }
 
+    private async void OnLogoutClicked(object? sender, EventArgs e)
+    {
+        var confirmed = await DisplayAlert("Log Out", "Are you sure you want to log out?", "Yes", "No");
+        if (!confirmed) return;
+
+        // Revoke server-side first, while AppSession.Token is still set (the
+        // logout endpoint requires it) - then clear locally regardless of
+        // whether the revoke call actually succeeded.
+        if (AppSession.RefreshToken is not null)
+            await _apiClient.LogoutAsync(AppSession.RefreshToken);
+
+        AppSession.Clear();
+        AppSession.ClearPersisted();
+        Cart.Clear();
+
+        await Navigation.PopToRootAsync();
+    }
+
     private async Task LoadAsync()
     {
         var categories = await _apiClient.GetCategoriesAsync();

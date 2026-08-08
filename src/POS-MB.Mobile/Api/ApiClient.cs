@@ -14,6 +14,41 @@ public class ApiClient
     public Task<(StudentLoginResponse? Result, string? Error)> LoginAsync(string email, string password) =>
         PostAuthAsync("api/students/login", email, password);
 
+    // Used both by the visible "log in again" flow (access token expired mid-session)
+    // and, more importantly, by the silent auto-login attempted at app startup from
+    // a refresh token alone - AppSession.Token is empty at that point, so this must
+    // not depend on AuthHeaderHandler attaching a bearer token (the endpoint doesn't
+    // need one - the refresh token itself is the credential).
+    public async Task<StudentLoginResponse?> RefreshTokenAsync(string refreshToken)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/students/refresh-token", new { RefreshToken = refreshToken });
+            return response.IsSuccessStatusCode
+                ? await response.Content.ReadFromJsonAsync<StudentLoginResponse>()
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    // Best-effort - if this fails (no connection, token already expired) the
+    // client-side logout must still proceed, since the whole point is to get
+    // the student signed out of the device regardless of server reachability.
+    public async Task LogoutAsync(string refreshToken)
+    {
+        try
+        {
+            await _httpClient.PostAsJsonAsync("api/students/logout", new { RefreshToken = refreshToken });
+        }
+        catch (Exception)
+        {
+            // ignored - see comment above
+        }
+    }
+
     public async Task<List<CategoryDto>> GetCategoriesAsync()
     {
         var result = await _httpClient.GetFromJsonAsync<List<CategoryDto>>("api/categories");
