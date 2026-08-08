@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using POS_MB.DataAccess.Models;
 
 namespace POS_MB.API;
 
@@ -17,6 +18,20 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
+        // Carries structured per-item detail alongside the message, so a
+        // client (the mobile cart) can auto-remove exactly the offending
+        // items instead of requiring the user to find them manually.
+        if (exception is ItemsUnavailableException itemsUnavailable)
+        {
+            httpContext.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await httpContext.Response.WriteAsJsonAsync(new
+            {
+                error = itemsUnavailable.Message,
+                unavailableItems = itemsUnavailable.Items
+            }, cancellationToken);
+            return true;
+        }
+
         var (statusCode, message) = exception switch
         {
             ArgumentException => (StatusCodes.Status400BadRequest, exception.Message),

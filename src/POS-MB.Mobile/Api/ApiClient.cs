@@ -33,7 +33,7 @@ public class ApiClient
         return result ?? [];
     }
 
-    public async Task<(OrderDetailDto? Result, string? Error)> PlaceOrderAsync(List<OrderItemLineDto> items)
+    public async Task<(OrderDetailDto? Result, string? Error, List<UnavailableItemDto> UnavailableItems)> PlaceOrderAsync(List<OrderItemLineDto> items)
     {
         HttpResponseMessage response;
         try
@@ -42,13 +42,14 @@ public class ApiClient
         }
         catch (Exception)
         {
-            return (null, "Could not reach the server. Check your connection and try again.");
+            return (null, "Could not reach the server. Check your connection and try again.", []);
         }
 
         if (response.IsSuccessStatusCode)
-            return (await response.Content.ReadFromJsonAsync<OrderDetailDto>(), null);
+            return (await response.Content.ReadFromJsonAsync<OrderDetailDto>(), null, []);
 
-        return (null, await ExtractErrorAsync(response));
+        var (error, unavailableItems) = await ExtractOrderErrorAsync(response);
+        return (null, error, unavailableItems);
     }
 
     public async Task<List<OrderSummaryDto>> GetMyOrdersAsync()
@@ -138,5 +139,42 @@ public class ApiClient
         }
 
         return "Something went wrong. Please try again.";
+    }
+
+    // Order placement can fail with the extra "unavailableItems" field (see
+    // ItemsUnavailableException/GlobalExceptionHandler) so the cart can
+    // auto-remove exactly the offending lines instead of the plain string
+    // ExtractErrorAsync returns for every other error shape.
+    private static async Task<(string Error, List<UnavailableItemDto> UnavailableItems)> ExtractOrderErrorAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var json = JsonSerializer.Deserialize<JsonElement>(await response.Content.ReadAsStringAsync());
+
+            var message = json.TryGetProperty("error", out var errorProp)
+                ? errorProp.GetString() ?? "Something went wrong."
+                : "Something went wrong.";
+
+            if (json.TryGetProperty("unavailableItems", out var itemsProp))
+            {
+                var items = JsonSerializer.Deserialize<List<UnavailableItemDto>>(
+                    itemsProp.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+                return (message, items);
+            }
+
+            if (json.TryGetProperty("errors", out var errorsProp))
+            {
+                var firstField = errorsProp.EnumerateObject().FirstOrDefault();
+                var firstMessage = firstField.Value.EnumerateArray().FirstOrDefault().GetString();
+                return (firstMessage ?? "Please check your input.", []);
+            }
+
+            return (message, []);
+        }
+        catch (Exception)
+        {
+            return ("Something went wrong. Please try again.", []);
+        }
     }
 }

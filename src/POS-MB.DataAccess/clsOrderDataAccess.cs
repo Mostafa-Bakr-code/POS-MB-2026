@@ -39,15 +39,21 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
                 pricesQuery, new { ItemIds = itemIds }, transaction))
                 .ToDictionary(p => p.ItemId, p => p);
 
+            // Collects every bad item before failing, not just the first one -
+            // so the caller (mobile cart in particular) can clean up its whole
+            // cart in one round trip instead of one rejection at a time.
+            var unavailable = new List<UnavailableItem>();
             foreach (var item in items)
             {
                 if (!itemInfo.TryGetValue(item.ItemId, out var info))
                     throw new InvalidOperationException($"Item {item.ItemId} does not exist.");
                 if (!info.IsActive)
-                    throw new ArgumentException($"{info.ItemName} is no longer available.", nameof(items));
-                if (!info.IsAvailable)
-                    throw new ArgumentException($"{info.ItemName} is currently out of stock.", nameof(items));
+                    unavailable.Add(new UnavailableItem(info.ItemId, info.ItemName, "no longer available"));
+                else if (!info.IsAvailable)
+                    unavailable.Add(new UnavailableItem(info.ItemId, info.ItemName, "out of stock"));
             }
+            if (unavailable.Count > 0)
+                throw new ItemsUnavailableException(unavailable);
 
             var total = items.Sum(i => itemInfo[i.ItemId].Price * i.Quantity);
 

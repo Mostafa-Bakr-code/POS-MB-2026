@@ -210,9 +210,31 @@ public class OrderTakingControl : UserControl
     // with one shared comment, not 100 unreadable lines.
     private void AddToCart(ItemDto item, int quantity = 1)
     {
-        _cart.Add(new CartLine(item, quantity));
+        // Groups with any existing line(s) for the same item instead of
+        // always appending at the bottom - so re-tapping a tile lands right
+        // next to the item's other line(s), same reasoning as the cart's own
+        // "+1" button (see AddAnother).
+        var lastIndex = _cart.FindLastIndex(c => c.Item.ItemId == item.ItemId);
+        var newLine = new CartLine(item, quantity);
+
+        if (lastIndex >= 0)
+            _cart.Insert(lastIndex + 1, newLine);
+        else
+            _cart.Add(newLine);
 
         if (_numQuantity.Value != 1) _numQuantity.Value = 1;
+
+        RenderCart();
+    }
+
+    // The cart's own "+1" button inserts right after the line it was pressed
+    // on, not at the bottom - so the kitchen sees same-item lines grouped
+    // together and can prepare them as a batch instead of hunting for the
+    // matching item scattered across the ticket.
+    private void AddAnother(CartLine existing)
+    {
+        var index = _cart.IndexOf(existing);
+        _cart.Insert(index + 1, new CartLine(existing.Item));
 
         RenderCart();
     }
@@ -235,7 +257,7 @@ public class OrderTakingControl : UserControl
             };
 
             var btnAddOne = new Button { Text = "+", Location = new Point(245, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
-            btnAddOne.Click += (_, _) => AddToCart(line.Item);
+            btnAddOne.Click += (_, _) => AddAnother(line);
 
             var btnRemove = new Button { Text = "X", Location = new Point(290, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat, ForeColor = Color.Red };
             btnRemove.Click += (_, _) => { _cart.Remove(line); RenderCart(); };

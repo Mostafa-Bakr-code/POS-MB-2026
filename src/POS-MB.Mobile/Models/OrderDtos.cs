@@ -10,6 +10,8 @@ public enum OrderStatus { Placed = 0, Preparing = 1, Ready = 2, Completed = 3, C
 public record OrderItemLineDto(int ItemId, int Quantity, string? Comment);
 public record PlaceOrderRequest(List<OrderItemLineDto> Items);
 
+public record UnavailableItemDto(int ItemId, string ItemName, string Reason);
+
 public record OrderSummaryDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status);
 
 public record OrderItemDetailDto(int ItemId, int Quantity, decimal Price, decimal TotalItemsPrice, string? Comment);

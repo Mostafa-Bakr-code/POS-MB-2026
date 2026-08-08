@@ -30,23 +30,23 @@ public partial class CartPage : ContentPage
     private void OnRemoveClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.BindingContext is not CartLine line) return;
-
-        Cart.Remove(line.ItemId);
+        Cart.Remove(line);
         Refresh();
     }
 
-    // Comment length matches OrderItems.Comment NVARCHAR(50) - the same limit
-    // WinForms' comment dialog enforces.
+    private void OnAddAnotherClicked(object? sender, EventArgs e)
+    {
+        if ((sender as Button)?.BindingContext is not CartLine line) return;
+        Cart.AddAnother(line);
+        Refresh();
+    }
+
     private async void OnCommentClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.BindingContext is not CartLine line) return;
-
-        var result = await DisplayPromptAsync(
-            $"Comment for {line.ItemName}", "e.g. no onions",
+        var result = await DisplayPromptAsync($"Comment for {line.ItemName}", "e.g. no onions",
             initialValue: line.Comment ?? "", maxLength: 50);
-
-        if (result is null) return; // cancelled
-
+        if (result is null) return;
         line.Comment = string.IsNullOrWhiteSpace(result) ? null : result;
         Refresh();
     }
@@ -56,14 +56,26 @@ public partial class CartPage : ContentPage
         ErrorLabel.IsVisible = false;
         PlaceOrderButton.IsEnabled = false;
 
-        var items = Cart.Lines
-            .Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment))
-            .ToList();
-
-        var (result, error) = await _apiClient.PlaceOrderAsync(items);
+        var items = Cart.Lines.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
+        var (result, error, unavailableItems) = await _apiClient.PlaceOrderAsync(items);
 
         if (result is null)
         {
+            if (unavailableItems.Count > 0)
+            {
+                // Removes exactly the flagged lines rather than making the
+                // student hunt through the cart for what was rejected - the
+                // server told us precisely which items and why.
+                var unavailableIds = unavailableItems.Select(i => i.ItemId).ToHashSet();
+                Cart.Lines.RemoveAll(l => unavailableIds.Contains(l.ItemId));
+
+                var names = string.Join(", ", unavailableItems.Select(i => $"{i.ItemName} ({i.Reason})"));
+                ErrorLabel.Text = $"Removed from your cart - {names}. Review your cart and try again.";
+                ErrorLabel.IsVisible = true;
+                Refresh();
+                return;
+            }
+
             ErrorLabel.Text = error ?? "Something went wrong.";
             ErrorLabel.IsVisible = true;
             PlaceOrderButton.IsEnabled = true;
@@ -71,11 +83,7 @@ public partial class CartPage : ContentPage
         }
 
         Cart.Clear();
-        // SerialNumber is the customer-facing daily order number (resets each day,
-        // wraps at 100 per the setting in WinForms) - OrderId is the permanent
-        // database primary key and keeps climbing forever across every order ever
-        // placed, which is meaningless to show a student here.
         await DisplayAlert("Order placed", $"Order #{result.SerialNumber ?? result.OrderId} placed successfully.", "OK");
-        await Navigation.PopAsync(); // back to MenuPage, not all the way to LoginPage
+        await Navigation.PopAsync();
     }
 }
