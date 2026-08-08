@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:POS_MB.Mobile.Models"
+             x:Class="POS_MB.Mobile.OrdersPage"
+             Title="My Orders">
+
+    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="12">
+
+        <Label
+            Grid.Row="0"
+            x:Name="PlaceholderLabel"
+            Text="No orders yet"
+            TextColor="Gray"
+            HorizontalOptions="Center"
+            IsVisible="False" />
+
+        <RefreshView Grid.Row="1" x:Name="OrdersRefreshView" Refreshing="OnRefreshing">
+            <CollectionView x:Name="OrdersView" SelectionMode="Single" SelectionChanged="OnOrderSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:OrderSummaryDto">
+                        <Grid Padding="0,12" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
+                            <Label Grid.Column="0" Text="{Binding SerialNumber, StringFormat='#{0}'}" FontAttributes="Bold" VerticalOptions="Center" />
+                            <Label Grid.Column="1" Text="{Binding Date, StringFormat='{0:yyyy-MM-dd HH:mm}'}" VerticalOptions="Center" />
+                            <Label Grid.Column="2" Text="{Binding Status}" VerticalOptions="Center" />
+                            <Label Grid.Column="3" Text="{Binding Total, StringFormat='{0:0.00}'}" VerticalOptions="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+    </Grid>
+
+</ContentPage>

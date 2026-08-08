@@ -20,16 +20,20 @@ public class ApiClient
         return result ?? [];
     }
 
-    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null)
+    // availableOnly/includeInactive default to the menu's own needs (only show
+    // what a student could actually order right now); order-history item-name
+    // resolution needs the opposite (includeInactive: true) since a past order
+    // can reference an item that's since gone unavailable or been retired.
+    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool availableOnly = true, bool includeInactive = false)
     {
-        var url = "api/items?availableOnly=true";
+        var url = $"api/items?availableOnly={availableOnly}&includeInactive={includeInactive}";
         if (categoryId is not null) url += $"&categoryId={categoryId}";
 
         var result = await _httpClient.GetFromJsonAsync<List<ItemDto>>(url);
         return result ?? [];
     }
 
-    public async Task<(OrderResponse? Result, string? Error)> PlaceOrderAsync(List<OrderItemLineDto> items)
+    public async Task<(OrderDetailDto? Result, string? Error)> PlaceOrderAsync(List<OrderItemLineDto> items)
     {
         HttpResponseMessage response;
         try
@@ -42,9 +46,36 @@ public class ApiClient
         }
 
         if (response.IsSuccessStatusCode)
-            return (await response.Content.ReadFromJsonAsync<OrderResponse>(), null);
+            return (await response.Content.ReadFromJsonAsync<OrderDetailDto>(), null);
 
         return (null, await ExtractErrorAsync(response));
+    }
+
+    public async Task<List<OrderSummaryDto>> GetMyOrdersAsync()
+    {
+        var result = await _httpClient.GetFromJsonAsync<List<OrderSummaryDto>>("api/students/orders");
+        return result ?? [];
+    }
+
+    public async Task<OrderDetailDto?> GetMyOrderAsync(int orderId)
+    {
+        var response = await _httpClient.GetAsync($"api/students/orders/{orderId}");
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<OrderDetailDto>()
+            : null;
+    }
+
+    public async Task<bool> CancelOrderAsync(int orderId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/students/orders/{orderId}/cancel", null);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)

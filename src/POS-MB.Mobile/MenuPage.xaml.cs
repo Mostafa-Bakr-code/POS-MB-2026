@@ -42,6 +42,11 @@ public partial class MenuPage : ContentPage
         await Navigation.PushAsync(new CartPage());
     }
 
+    private async void OnMyOrdersClicked(object? sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new OrdersPage());
+    }
+
     private async Task LoadAsync()
     {
         var categories = await _apiClient.GetCategoriesAsync();

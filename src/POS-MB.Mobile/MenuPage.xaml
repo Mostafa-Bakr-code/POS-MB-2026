@@ -7,11 +7,20 @@
 
     <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="12">
 
-        <Label
-            Grid.Row="0"
-            x:Name="WelcomeLabel"
-            FontSize="18"
-            FontAttributes="Bold" />
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <Label
+                Grid.Column="0"
+                x:Name="WelcomeLabel"
+                FontSize="18"
+                FontAttributes="Bold"
+                VerticalOptions="Center" />
+            <Button
+                Grid.Column="1"
+                Text="My Orders"
+                Clicked="OnMyOrdersClicked"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource Primary}" />
+        </Grid>
 
         <CollectionView
             Grid.Row="1"
