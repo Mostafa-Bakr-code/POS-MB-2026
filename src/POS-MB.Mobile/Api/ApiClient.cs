@@ -78,6 +78,17 @@ public class ApiClient
         }
     }
 
+    public async Task<string?> GetSettingValueAsync(string key)
+    {
+        var response = await _httpClient.GetAsync($"api/settings/{key}");
+        if (!response.IsSuccessStatusCode) return null;
+
+        var setting = await response.Content.ReadFromJsonAsync<SettingDto>();
+        return setting?.Value;
+    }
+
+    private record SettingDto(int Id, string Key, string? Value);
+
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)
     {
         HttpResponseMessage response;

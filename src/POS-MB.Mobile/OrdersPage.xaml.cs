@@ -1,5 +1,6 @@
 using POS_MB.Mobile.Api;
 using POS_MB.Mobile.Models;
+using POS_MB.Mobile.Session;
 
 namespace POS_MB.Mobile;
 
@@ -21,8 +22,13 @@ public partial class OrdersPage : ContentPage
     private async Task LoadAsync()
     {
         var orders = await _apiClient.GetMyOrdersAsync();
-        OrdersView.ItemsSource = orders;
-        PlaceholderLabel.IsVisible = orders.Count == 0;
+
+        // Date comes back from the API in UTC - convert to local for display only,
+        // same as WinForms does; OrderId (used for navigation) is untouched.
+        var displayOrders = orders.Select(o => o with { Date = AppSession.ToLocalDisplay(o.Date) }).ToList();
+
+        OrdersView.ItemsSource = displayOrders;
+        PlaceholderLabel.IsVisible = displayOrders.Count == 0;
     }
 
     private async void OnOrderSelected(object? sender, SelectionChangedEventArgs e)

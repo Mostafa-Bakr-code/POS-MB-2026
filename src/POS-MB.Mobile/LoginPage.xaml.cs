@@ -1,3 +1,4 @@
+using System.Globalization;
 using POS_MB.Mobile.Api;
 using POS_MB.Mobile.Session;
 
@@ -51,6 +52,14 @@ public partial class LoginPage : ContentPage
             AppSession.Token = result.Token;
             AppSession.RefreshToken = result.RefreshToken;
             AppSession.CurrentStudent = result.Student;
+
+            // Same source of truth WinForms reads at login - without this, order
+            // times would show the server's raw UTC clock instead of local time.
+            var offsetValue = await _apiClient.GetSettingValueAsync("TimeZoneOffsetHours");
+            AppSession.TimeZoneOffsetHours = offsetValue is not null
+                && decimal.TryParse(offsetValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var offset)
+                    ? offset
+                    : 0m;
 
             await Navigation.PushAsync(new MenuPage());
         }

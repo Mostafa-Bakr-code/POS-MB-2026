@@ -1,5 +1,6 @@
 using POS_MB.Mobile.Api;
 using POS_MB.Mobile.Models;
+using POS_MB.Mobile.Session;
 
 namespace POS_MB.Mobile;
 
@@ -33,14 +34,16 @@ public partial class OrderDetailPage : ContentPage
 
         HeaderLabel.Text =
             $"Order #{_order.SerialNumber ?? _order.OrderId}\n" +
-            $"Date: {_order.Date:yyyy-MM-dd HH:mm}\n" +
+            $"Date: {AppSession.ToLocalDisplay(_order.Date):yyyy-MM-dd HH:mm}\n" +
             $"Status: {_order.Status}\n" +
             $"Total: {_order.Total:0.00}";
 
-        // includeInactive: true - a past order can reference an item that's since
-        // been made unavailable or retired, and it still needs to show its real
-        // name here, not just an id.
-        var allItems = await _apiClient.GetItemsAsync(includeInactive: true);
+        // availableOnly: false AND includeInactive: true - a past order can
+        // reference an item that's since been marked unavailable (out of stock,
+        // availableOnly excludes it) or fully retired (includeInactive excludes
+        // it) - both are independent filters, and either one alone still hides
+        // some historical items from name resolution.
+        var allItems = await _apiClient.GetItemsAsync(availableOnly: false, includeInactive: true);
         var namesById = allItems.ToDictionary(i => i.ItemId, i => i.ItemName);
 
         ItemsView.ItemsSource = _order.Items.Select(i => new OrderItemDisplayDto

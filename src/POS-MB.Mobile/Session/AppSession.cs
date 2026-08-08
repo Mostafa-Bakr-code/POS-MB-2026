@@ -13,10 +13,20 @@ public static class AppSession
     public static string? RefreshToken { get; set; }
     public static StudentDto? CurrentStudent { get; set; }
 
+    // Orders/timestamps come from the API in UTC. Loaded at login from the
+    // TimeZoneOffsetHours setting, same reasoning and same source of truth as
+    // WinForms' AppSession - without this, order times would show the server's
+    // UTC clock instead of the local time a student actually expects to see.
+    public static decimal TimeZoneOffsetHours { get; set; } = 0m;
+
+    public static DateTime ToLocalDisplay(DateTime utc) =>
+        utc.AddHours((double)TimeZoneOffsetHours);
+
     public static void Clear()
     {
         Token = null;
         RefreshToken = null;
         CurrentStudent = null;
+        TimeZoneOffsetHours = 0m;
     }
 }
