@@ -47,19 +47,27 @@ public partial class MenuPage : ContentPage
         var categories = await _apiClient.GetCategoriesAsync();
         CategoriesView.ItemsSource = categories;
 
-        await LoadItemsAsync(categoryId: null);
-    }
-
-    private async Task LoadItemsAsync(int? categoryId)
-    {
-        var items = await _apiClient.GetItemsAsync(categoryId);
-        ItemsView.ItemsSource = items;
+        // Items only load once a category is picked (see OnCategorySelected) -
+        // reloading (e.g. pull-to-refresh) drops back to the same empty,
+        // no-category-selected state rather than guessing which one to keep.
+        CategoriesView.SelectedItem = null;
+        ItemsView.ItemsSource = null;
+        PlaceholderLabel.IsVisible = true;
     }
 
     private async void OnCategorySelected(object? sender, SelectionChangedEventArgs e)
     {
         var selected = e.CurrentSelection.FirstOrDefault() as CategoryDto;
-        await LoadItemsAsync(selected?.CategoryId);
+        if (selected is null)
+        {
+            ItemsView.ItemsSource = null;
+            PlaceholderLabel.IsVisible = true;
+            return;
+        }
+
+        PlaceholderLabel.IsVisible = false;
+        var items = await _apiClient.GetItemsAsync(selected.CategoryId);
+        ItemsView.ItemsSource = items;
     }
 
     private async void OnRefreshing(object? sender, EventArgs e)

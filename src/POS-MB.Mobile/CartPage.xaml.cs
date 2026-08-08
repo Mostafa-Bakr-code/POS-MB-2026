@@ -35,13 +35,29 @@ public partial class CartPage : ContentPage
         Refresh();
     }
 
+    // Comment length matches OrderItems.Comment NVARCHAR(50) - the same limit
+    // WinForms' comment dialog enforces.
+    private async void OnCommentClicked(object? sender, EventArgs e)
+    {
+        if ((sender as Button)?.BindingContext is not CartLine line) return;
+
+        var result = await DisplayPromptAsync(
+            $"Comment for {line.ItemName}", "e.g. no onions",
+            initialValue: line.Comment ?? "", maxLength: 50);
+
+        if (result is null) return; // cancelled
+
+        line.Comment = string.IsNullOrWhiteSpace(result) ? null : result;
+        Refresh();
+    }
+
     private async void OnPlaceOrderClicked(object? sender, EventArgs e)
     {
         ErrorLabel.IsVisible = false;
         PlaceOrderButton.IsEnabled = false;
 
         var items = Cart.Lines
-            .Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, null))
+            .Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment))
             .ToList();
 
         var (result, error) = await _apiClient.PlaceOrderAsync(items);

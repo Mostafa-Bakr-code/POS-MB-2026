@@ -1,3 +1,4 @@
+using Microsoft.Maui.Graphics;
 using POS_MB.Mobile.Models;
 
 namespace POS_MB.Mobile.Session;
@@ -8,7 +9,15 @@ public class CartLine
     public string ItemName { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public int Quantity { get; set; }
+    public string? Comment { get; set; }
     public decimal Subtotal => Price * Quantity;
+
+    // Display-only helpers so CartPage's DataTemplate can bind directly,
+    // matching the cashier side's "gray placeholder vs real comment" look
+    // without needing a value converter for a single simple case.
+    public string DisplayComment => string.IsNullOrWhiteSpace(Comment) ? "No comment" : Comment;
+    public Color CommentTextColor => string.IsNullOrWhiteSpace(Comment) ? Colors.Gray : Colors.Black;
+    public string CommentButtonText => string.IsNullOrWhiteSpace(Comment) ? "Add Comment" : "Edit Comment";
 }
 
 // In-memory only, same as AppSession - lost if the app closes, which is fine
