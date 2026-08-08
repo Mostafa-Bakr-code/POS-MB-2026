@@ -209,9 +209,9 @@ public class ApiClient
         return (await _httpClient.GetFromJsonAsync<SalesSummaryDto>(url))!;
     }
 
-    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay, bool groupByPrice = false)
+    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay, bool groupByPrice = false, bool groupBySource = false)
     {
-        var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}&groupByPrice={groupByPrice}";
+        var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}&groupByPrice={groupByPrice}&groupBySource={groupBySource}";
         var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
         return result ?? [];
     }

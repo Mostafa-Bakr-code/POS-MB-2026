@@ -41,15 +41,17 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
     [RequirePermission(Permission.Reports)]
     public async Task<IActionResult> GetItemSales(
         [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null,
-        [FromQuery] bool groupByDay = false, [FromQuery] bool groupByPrice = false, [FromQuery] string format = "json")
+        [FromQuery] bool groupByDay = false, [FromQuery] bool groupByPrice = false, [FromQuery] bool groupBySource = false,
+        [FromQuery] string format = "json")
     {
-        var items = (await reportingBusiness.GetItemSalesAsync(startDate, endDate, groupByDay, groupByPrice)).ToList();
+        var items = (await reportingBusiness.GetItemSalesAsync(startDate, endDate, groupByDay, groupByPrice, groupBySource)).ToList();
 
         if (!IsExcel(format)) return Ok(items);
 
         var headers = new List<string> { "Category", "Item" };
         if (groupByDay) headers.Add("Date");
         if (groupByPrice) headers.Add("Sold At Price");
+        if (groupBySource) headers.Add("Source");
         headers.AddRange(["Quantity", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax", "Complimentary Value", "Average Price"]);
 
         var rows = items.Select(i =>
@@ -57,6 +59,7 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
             var row = new List<object> { i.CategoryName, i.ItemName };
             if (groupByDay) row.Add(i.OrderDate?.ToString("yyyy-MM-dd") ?? "");
             if (groupByPrice) row.Add(i.SoldAtPrice?.ToString("0.00") ?? "");
+            if (groupBySource) row.Add(i.Source?.ToString() ?? "");
             row.AddRange([i.Quantity, i.Revenue, i.RevenueExcludingTax, i.Tax, i.ComplimentaryValue, i.AveragePrice]);
             return row.ToArray();
         });

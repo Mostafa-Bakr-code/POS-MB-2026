@@ -31,6 +31,7 @@ public class ItemSalesRowDto
 {
     public DateTime? OrderDate { get; set; }
     public decimal? SoldAtPrice { get; set; }
+    public OrderSource? Source { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public int Quantity { get; set; }

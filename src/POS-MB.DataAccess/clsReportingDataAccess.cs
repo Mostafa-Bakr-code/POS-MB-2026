@@ -51,7 +51,7 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         return summary;
     }
 
-    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? utcStart = null, DateTime? utcEndExclusive = null, bool groupByDay = false, bool groupByPrice = false, decimal timeZoneOffsetHours = 0)
+    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? utcStart = null, DateTime? utcEndExclusive = null, bool groupByDay = false, bool groupByPrice = false, bool groupBySource = false, decimal timeZoneOffsetHours = 0)
     {
         using var connection = connectionFactory.CreateConnection();
 
@@ -66,15 +66,20 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         var priceColumn = groupByPrice ? "oi.Price," : string.Empty;
         var priceSelect = groupByPrice ? "oi.Price AS SoldAtPrice," : string.Empty;
 
+        var sourceColumn = groupBySource ? "o.OrderSource," : string.Empty;
+        var sourceSelect = groupBySource ? "o.OrderSource AS Source," : string.Empty;
+
         var orderParts = new List<string> { "c.CategoryName", "i.ItemName" };
         if (groupByDay) orderParts.Add("OrderDate");
         if (groupByPrice) orderParts.Add("SoldAtPrice");
+        if (groupBySource) orderParts.Add("Source");
         var orderBy = string.Join(", ", orderParts);
 
         var query = $@"
             SELECT
                 {dateSelect}
                 {priceSelect}
+                {sourceSelect}
                 c.CategoryName,
                 i.ItemName,
                 SUM(oi.Quantity) AS Quantity,
@@ -89,7 +94,7 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         if (utcStart is not null) query += " AND o.Date >= @UtcStart";
         if (utcEndExclusive is not null) query += " AND o.Date < @UtcEndExclusive";
         query += $@"
-            GROUP BY {dateColumn} {priceColumn} i.ItemId, c.CategoryName, i.ItemName
+            GROUP BY {dateColumn} {priceColumn} {sourceColumn} i.ItemId, c.CategoryName, i.ItemName
             ORDER BY {orderBy}";
 
         return await connection.QueryAsync<ItemSalesRow>(

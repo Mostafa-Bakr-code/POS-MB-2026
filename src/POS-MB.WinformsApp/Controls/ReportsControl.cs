@@ -13,6 +13,7 @@ public class ReportsControl : UserControl
     private readonly DateTimePicker _dtpEnd;
     private readonly CheckBox _chkGroupByDay;
     private readonly CheckBox _chkGroupByPrice;
+    private readonly CheckBox _chkGroupBySource;
     private readonly ComboBox _cboSortBy;
     private readonly NumericUpDown _numTake;
     private readonly Button _btnRun;
@@ -38,7 +39,8 @@ public class ReportsControl : UserControl
         _chkUseDateRange.CheckedChanged += (_, _) => { _dtpStart.Enabled = _chkUseDateRange.Checked; _dtpEnd.Enabled = _chkUseDateRange.Checked; };
 
         _chkGroupByDay = new CheckBox { Text = "Group by Day", AutoSize = true, Margin = new Padding(0, 14, 10, 0) };
-        _chkGroupByPrice = new CheckBox { Text = "Break Down by Price", AutoSize = true, Margin = new Padding(0, 14, 20, 0) };
+        _chkGroupByPrice = new CheckBox { Text = "Break Down by Price", AutoSize = true, Margin = new Padding(0, 14, 10, 0) };
+        _chkGroupBySource = new CheckBox { Text = "Break Down by Source", AutoSize = true, Margin = new Padding(0, 14, 20, 0) };
 
         _cboSortBy = new ComboBox { Width = 140, Height = 36, Font = new Font("Segoe UI", 11F), DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 6, 10, 6) };
         _cboSortBy.Items.AddRange(["Quantity", "Revenue"]);
@@ -58,6 +60,7 @@ public class ReportsControl : UserControl
         toolbar.Controls.Add(_dtpEnd);
         toolbar.Controls.Add(_chkGroupByDay);
         toolbar.Controls.Add(_chkGroupByPrice);
+        toolbar.Controls.Add(_chkGroupBySource);
         toolbar.Controls.Add(_cboSortBy);
         toolbar.Controls.Add(_numTake);
         toolbar.Controls.Add(_btnRun);
@@ -89,6 +92,7 @@ public class ReportsControl : UserControl
     {
         _chkGroupByDay.Visible = SelectedReportType == ReportType.ItemSales;
         _chkGroupByPrice.Visible = SelectedReportType == ReportType.ItemSales;
+        _chkGroupBySource.Visible = SelectedReportType == ReportType.ItemSales;
         _cboSortBy.Visible = SelectedReportType == ReportType.TopSellers;
         _numTake.Visible = SelectedReportType == ReportType.TopSellers;
     }
@@ -116,14 +120,14 @@ public class ReportsControl : UserControl
                     break;
 
                 case ReportType.ItemSales:
-                    var itemSales = await _apiClient.GetItemSalesAsync(start, end, _chkGroupByDay.Checked, _chkGroupByPrice.Checked);
-                    BindItemRows(itemSales, _chkGroupByDay.Checked, _chkGroupByPrice.Checked);
+                    var itemSales = await _apiClient.GetItemSalesAsync(start, end, _chkGroupByDay.Checked, _chkGroupByPrice.Checked, _chkGroupBySource.Checked);
+                    BindItemRows(itemSales, _chkGroupByDay.Checked, _chkGroupByPrice.Checked, _chkGroupBySource.Checked);
                     break;
 
                 case ReportType.TopSellers:
                     var sortBy = (TopSellersSortBy)_cboSortBy.SelectedIndex;
                     var topSellers = await _apiClient.GetTopSellersAsync(start, end, sortBy, (int)_numTake.Value);
-                    BindItemRows(topSellers, groupedByDay: false, groupedByPrice: false);
+                    BindItemRows(topSellers, groupedByDay: false, groupedByPrice: false, groupedBySource: false);
                     break;
 
                 case ReportType.StaffPerformance:
@@ -168,11 +172,12 @@ public class ReportsControl : UserControl
             _grid.Rows.Add(row);
     }
 
-    private void BindItemRows(List<ItemSalesRowDto> rows, bool groupedByDay, bool groupedByPrice)
+    private void BindItemRows(List<ItemSalesRowDto> rows, bool groupedByDay, bool groupedByPrice, bool groupedBySource)
     {
         var headers = new List<string> { "Category", "Item" };
         if (groupedByDay) headers.Add("Date");
         if (groupedByPrice) headers.Add("Sold At Price");
+        if (groupedBySource) headers.Add("Source");
         headers.AddRange(["Quantity", "Revenue (incl. tax)", "Revenue (excl. tax)", "Tax", "Complimentary", "Avg Price"]);
 
         var data = rows.Select(r =>
@@ -180,6 +185,7 @@ public class ReportsControl : UserControl
             var row = new List<string> { r.CategoryName, r.ItemName };
             if (groupedByDay) row.Add(r.OrderDate?.ToString("yyyy-MM-dd") ?? "");
             if (groupedByPrice) row.Add(r.SoldAtPrice?.ToString("0.00") ?? "");
+            if (groupedBySource) row.Add(r.Source?.ToString() ?? "");
             row.AddRange([r.Quantity.ToString(), r.Revenue.ToString("0.00"), r.RevenueExcludingTax.ToString("0.00"), r.Tax.ToString("0.00"), r.ComplimentaryValue.ToString("0.00"), r.AveragePrice.ToString("0.00")]);
             return row.ToArray();
         }).ToList();
@@ -201,7 +207,7 @@ public class ReportsControl : UserControl
         var (reportPath, extraParams, defaultFileName) = SelectedReportType switch
         {
             ReportType.SalesSummary => ("sales-summary", "", "sales-summary.xlsx"),
-            ReportType.ItemSales => ("item-sales", $"&groupByDay={_chkGroupByDay.Checked}&groupByPrice={_chkGroupByPrice.Checked}", "item-sales.xlsx"),
+            ReportType.ItemSales => ("item-sales", $"&groupByDay={_chkGroupByDay.Checked}&groupByPrice={_chkGroupByPrice.Checked}&groupBySource={_chkGroupBySource.Checked}", "item-sales.xlsx"),
             ReportType.TopSellers => ("top-sellers", $"&sortBy={(TopSellersSortBy)_cboSortBy.SelectedIndex}&take={(int)_numTake.Value}", "top-sellers.xlsx"),
             ReportType.StaffPerformance => ("staff-performance", "", "staff-performance.xlsx"),
             _ => throw new InvalidOperationException()

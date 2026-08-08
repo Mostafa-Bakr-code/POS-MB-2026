@@ -6,6 +6,9 @@ public class ItemSalesRow
     // Only populated when the report is grouped by price (see groupByPrice) - the exact
     // historical price this row's units were sold at, not today's catalog price.
     public decimal? SoldAtPrice { get; set; }
+    // Only populated when the report is grouped by source (see groupBySource) -
+    // whether this row's units were ordered at the register or via the mobile app.
+    public OrderSource? Source { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public string ItemName { get; set; } = string.Empty;
     public int Quantity { get; set; }

@@ -11,11 +11,11 @@ public class clsReportingBusiness(clsReportingDataAccess dataAccess, clsSettings
         return await dataAccess.GetSalesSummaryAsync(utcStart, utcEndExclusive);
     }
 
-    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? startDate = null, DateTime? endDate = null, bool groupByDay = false, bool groupByPrice = false)
+    public async Task<IEnumerable<ItemSalesRow>> GetItemSalesAsync(DateTime? startDate = null, DateTime? endDate = null, bool groupByDay = false, bool groupByPrice = false, bool groupBySource = false)
     {
         var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
         var offsetHours = groupByDay ? await TimeZoneHelper.GetOffsetHoursAsync(settingsBusiness) : 0m;
-        return await dataAccess.GetItemSalesAsync(utcStart, utcEndExclusive, groupByDay, groupByPrice, offsetHours);
+        return await dataAccess.GetItemSalesAsync(utcStart, utcEndExclusive, groupByDay, groupByPrice, groupBySource, offsetHours);
     }
 
     public async Task<IEnumerable<ItemSalesRow>> GetTopSellersAsync(DateTime? startDate = null, DateTime? endDate = null, TopSellersSortBy sortBy = TopSellersSortBy.Quantity, int take = 10)
