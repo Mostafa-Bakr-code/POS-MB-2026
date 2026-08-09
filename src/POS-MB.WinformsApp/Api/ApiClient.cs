@@ -265,6 +265,15 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    // Its own endpoint (gated by Orders, not Settings) so whoever's running the
+    // Order Status screen can flip this without needing the separate admin-only
+    // Settings permission - see SettingsController.SetAcceptingOnlineOrders.
+    public async Task SetAcceptingOnlineOrdersAsync(bool isAccepting)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/settings/accepting-online-orders", isAccepting);
+        response.EnsureSuccessStatusCode();
+    }
+
     private static string DateQuery(DateTime? startDate, DateTime? endDate)
     {
         var query = "?x=1";

@@ -6,7 +6,15 @@ namespace POS_MB.Mobile;
 
 public partial class MenuPage : ContentPage
 {
+    // Matches clsOrderBusiness.AcceptingOnlineOrdersSettingKey - duplicated
+    // deliberately, not shared via a project reference, same reasoning as the
+    // WinForms Order Status screen's own copy of this key.
+    private const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
+    private static readonly TimeSpan AcceptingOrdersPollInterval = TimeSpan.FromSeconds(15);
+
     private readonly ApiClient _apiClient = new();
+    private CancellationTokenSource? _pollCts;
+    private bool? _lastKnownAccepting;
 
     public MenuPage()
     {
@@ -18,7 +26,69 @@ public partial class MenuPage : ContentPage
     {
         base.OnAppearing();
         await LoadAsync();
+        await RefreshAcceptingOrdersBannerAsync();
         RefreshCartButton();
+        StartAcceptingOrdersPolling();
+    }
+
+    protected override void OnDisappearing()
+    {
+        base.OnDisappearing();
+        _pollCts?.Cancel();
+        _pollCts = null;
+    }
+
+    // A staff member can flip the toggle from an entirely different device
+    // (the WinForms Order Status screen) while a student is just sitting on
+    // this menu - same reasoning as OrderDetailPage's status poll, just for
+    // this one flag instead of an order's status.
+    private void StartAcceptingOrdersPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts = new CancellationTokenSource();
+        _ = AcceptingOrdersPollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task AcceptingOrdersPollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(AcceptingOrdersPollInterval, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            try
+            {
+                await RefreshAcceptingOrdersBannerAsync();
+            }
+            catch (Exception)
+            {
+                // Transient failure - keep showing the last known state and
+                // try again next tick.
+            }
+        }
+    }
+
+    // Warns before a student builds a whole cart, not just at the final
+    // checkout step - the actual enforcement is server-side regardless
+    // (clsOrderBusiness.CreateOrderAsync), this is purely a heads-up so
+    // rejection isn't a surprise after they've already picked everything.
+    private async Task RefreshAcceptingOrdersBannerAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(AcceptingOnlineOrdersSettingKey);
+        var isAccepting = value != "false";
+
+        if (_lastKnownAccepting == isAccepting) return; // nothing changed - don't touch the UI
+        _lastKnownAccepting = isAccepting;
+
+        MainThread.BeginInvokeOnMainThread(() => NotAcceptingOrdersBanner.IsVisible = !isAccepting);
     }
 
     private void OnAddToCartClicked(object? sender, EventArgs e)

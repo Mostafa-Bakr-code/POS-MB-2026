@@ -25,6 +25,20 @@ public class SettingsController(clsSettingsBusiness settingsBusiness) : Controll
         return setting is null ? NotFound() : Ok(setting);
     }
 
+    // Its own endpoint, gated by Permission.Orders rather than the generic PUT
+    // below (Permission.Settings) - this needs to be flippable by whoever's
+    // actually running the Order Status screen (too busy, closing soon, a
+    // connectivity worry), not locked behind the separate admin-only Settings
+    // screen. Same reasoning as Items getting its own dedicated availability
+    // toggle instead of going through the full edit permission.
+    [HttpPost("accepting-online-orders")]
+    [RequirePermission(Permission.Orders)]
+    public async Task<IActionResult> SetAcceptingOnlineOrders([FromBody] bool isAccepting)
+    {
+        await settingsBusiness.SetAsync(clsOrderBusiness.AcceptingOnlineOrdersSettingKey, isAccepting ? "true" : "false");
+        return NoContent();
+    }
+
     [HttpPut("{key}")]
     [RequirePermission(Permission.Settings)]
     public async Task<IActionResult> Set([StringLength(100)] string key, [FromBody] SetSettingRequest request)

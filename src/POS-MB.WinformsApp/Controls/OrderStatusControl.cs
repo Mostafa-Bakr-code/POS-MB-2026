@@ -22,14 +22,22 @@ namespace POS_MB.WinformsApp.Controls;
 // pipeline a cashier order gets the instant it's placed - see PrintKitchenTicketAsync.
 public class OrderStatusControl : UserControl
 {
+    // Matches clsOrderBusiness.AcceptingOnlineOrdersSettingKey - duplicated
+    // deliberately, not shared via a project reference, same reasoning as the
+    // Permission enum: WinForms talks to the API over HTTP like any other
+    // client, so the two sides share the contract (the key name), not the code.
+    private const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
+
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(15);
 
     private readonly ApiClient _apiClient = new();
     private readonly System.Windows.Forms.Timer _autoRefreshTimer;
 
     private readonly CheckBox _chkShowAll;
+    private readonly CheckBox _chkAcceptingOrders;
     private readonly DataGridView _grid;
     private readonly Label _lblPrintStatus;
+    private bool _suppressAcceptingOrdersEvent;
 
     // _allOrders is the raw last fetch (unfiltered/unsorted) - always the true
     // source for re-deriving the filtered view, so toggling "Show All" works
@@ -54,10 +62,26 @@ public class OrderStatusControl : UserControl
         var btnRefresh = new Button { Text = "Refresh", Width = 130, Height = 40, Font = new Font("Segoe UI", 11F, FontStyle.Bold) };
         btnRefresh.Click += async (_, _) => await LoadAsync();
 
+        // A quick pause switch for new mobile orders - too busy, closing soon,
+        // worried about a connectivity blip, whatever the reason. Lives here
+        // (not the separate admin Settings screen) since it needs to be
+        // flippable by whoever's actually running this screen, instantly, not
+        // buried behind a permission a cashier/chef might not even have.
+        _chkAcceptingOrders = new CheckBox
+        {
+            Text = "Accepting Online Orders",
+            AutoSize = true,
+            Checked = true,
+            Margin = new Padding(20, 14, 20, 0),
+            Font = new Font("Segoe UI", 11F, FontStyle.Bold)
+        };
+        _chkAcceptingOrders.CheckedChanged += async (_, _) => await OnAcceptingOrdersToggledAsync();
+
         _lblPrintStatus = new Label { AutoSize = true, Margin = new Padding(20, 14, 0, 0), Font = new Font("Segoe UI", 10F) };
 
         toolbar.Controls.Add(_chkShowAll);
         toolbar.Controls.Add(btnRefresh);
+        toolbar.Controls.Add(_chkAcceptingOrders);
         toolbar.Controls.Add(_lblPrintStatus);
 
         _grid = new DataGridView
@@ -95,9 +119,43 @@ public class OrderStatusControl : UserControl
         _autoRefreshTimer = new System.Windows.Forms.Timer { Interval = (int)AutoRefreshInterval.TotalMilliseconds };
         _autoRefreshTimer.Tick += async (_, _) => await LoadAsync();
 
-        Load += async (_, _) => await LoadAsync();
+        Load += async (_, _) =>
+        {
+            await LoadAcceptingOrdersToggleAsync();
+            await LoadAsync();
+        };
         HandleCreated += (_, _) => _autoRefreshTimer.Start();
         HandleDestroyed += (_, _) => _autoRefreshTimer.Stop();
+    }
+
+    private async Task LoadAcceptingOrdersToggleAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(AcceptingOnlineOrdersSettingKey);
+
+        _suppressAcceptingOrdersEvent = true;
+        _chkAcceptingOrders.Checked = value != "false"; // missing/anything else defaults to accepting
+        _suppressAcceptingOrdersEvent = false;
+    }
+
+    private async Task OnAcceptingOrdersToggledAsync()
+    {
+        if (_suppressAcceptingOrdersEvent) return;
+
+        var isAccepting = _chkAcceptingOrders.Checked;
+        _chkAcceptingOrders.Enabled = false;
+        try
+        {
+            await _apiClient.SetAcceptingOnlineOrdersAsync(isAccepting);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Could not update this setting: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            await LoadAcceptingOrdersToggleAsync(); // revert the checkbox to whatever the server actually has
+        }
+        finally
+        {
+            _chkAcceptingOrders.Enabled = true;
+        }
     }
 
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)

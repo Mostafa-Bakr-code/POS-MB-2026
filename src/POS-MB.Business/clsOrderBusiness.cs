@@ -5,6 +5,10 @@ namespace POS_MB.Business;
 
 public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness)
 {
+    // Key is missing entirely until staff first touches the toggle - treated as
+    // "accepting" (the safe/normal default) so nothing needs seeding/migrating.
+    public const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
+
     public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
     {
         if (items.Count == 0)
@@ -20,6 +24,18 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             throw new ArgumentException("A cashier order must specify which staff user placed it.", nameof(userId));
         if (orderSource == OrderSource.Mobile && studentId is null)
             throw new ArgumentException("A mobile order must specify which student placed it.", nameof(studentId));
+
+        // Staff can pause new mobile orders any time (too busy, closing soon, a
+        // connectivity worry) via the Order Status screen - checked here, not
+        // just hidden on the menu, since a student's app could already have a
+        // cart built from before the toggle flipped. Cashier orders are never
+        // affected - a cashier taking an order in person isn't "online".
+        if (orderSource == OrderSource.Mobile)
+        {
+            var setting = await settingsBusiness.GetByKeyAsync(AcceptingOnlineOrdersSettingKey);
+            if (setting?.Value == "false")
+                throw new ArgumentException("We're not accepting online orders right now - please try again later.", nameof(orderSource));
+        }
 
         return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items);
     }
