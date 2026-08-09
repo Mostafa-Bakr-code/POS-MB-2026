@@ -1,3 +1,4 @@
+using POS_MB.Printing;
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
@@ -16,6 +17,9 @@ namespace POS_MB.WinformsApp.Controls;
 // Mobile orders only - a cashier order is paid and handed over in the same
 // moment it's created (starts at Completed, see clsOrderDataAccess.CreateOrderAsync),
 // so there's nothing for a working queue to ever do with one.
+//
+// Advancing Placed -> Preparing ("Accept") fires a kitchen-ticket print, same
+// pipeline a cashier order gets the instant it's placed - see PrintKitchenTicketAsync.
 public class OrderStatusControl : UserControl
 {
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(15);
@@ -25,8 +29,15 @@ public class OrderStatusControl : UserControl
 
     private readonly CheckBox _chkShowAll;
     private readonly DataGridView _grid;
+    private readonly Label _lblPrintStatus;
 
-    private List<OrderDto> _orders = [];
+    // _allOrders is the raw last fetch (unfiltered/unsorted) - always the true
+    // source for re-deriving the filtered view, so toggling "Show All" works
+    // even between fetches. _displayedOrders is exactly what's bound to the
+    // grid right now, row-for-row - used both as the "previous" baseline for
+    // change detection and for mapping a clicked row back to its order.
+    private List<OrderDto> _allOrders = [];
+    private List<OrderDto> _displayedOrders = [];
 
     public OrderStatusControl()
     {
@@ -43,8 +54,11 @@ public class OrderStatusControl : UserControl
         var btnRefresh = new Button { Text = "Refresh", Width = 130, Height = 40, Font = new Font("Segoe UI", 11F, FontStyle.Bold) };
         btnRefresh.Click += async (_, _) => await LoadAsync();
 
+        _lblPrintStatus = new Label { AutoSize = true, Margin = new Padding(20, 14, 0, 0), Font = new Font("Segoe UI", 10F) };
+
         toolbar.Controls.Add(_chkShowAll);
         toolbar.Controls.Add(btnRefresh);
+        toolbar.Controls.Add(_lblPrintStatus);
 
         _grid = new DataGridView
         {
@@ -89,8 +103,8 @@ public class OrderStatusControl : UserControl
     private void Grid_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
         var columnName = _grid.Columns[e.ColumnIndex].Name;
-        if (e.RowIndex < 0 || e.RowIndex >= _orders.Count) return;
-        var order = _orders[e.RowIndex];
+        if (e.RowIndex < 0 || e.RowIndex >= _displayedOrders.Count) return;
+        var order = _displayedOrders[e.RowIndex];
 
         if (columnName == "Date" && e.Value is DateTime date)
         {
@@ -128,15 +142,15 @@ public class OrderStatusControl : UserControl
         // matters for cashier orders that existed before this change (still
         // sitting at Placed from back then).
         var today = DateTime.Today;
-        _orders = await _apiClient.GetOrdersAsync(today, today, orderSource: OrderSource.Mobile);
+        _allOrders = await _apiClient.GetOrdersAsync(today, today, orderSource: OrderSource.Mobile);
         ApplyFilterAndBind();
     }
 
     private void ApplyFilterAndBind()
     {
         var visible = _chkShowAll.Checked
-            ? _orders
-            : _orders.Where(o => o.Status is OrderStatus.Placed or OrderStatus.Preparing or OrderStatus.Ready).ToList();
+            ? _allOrders
+            : _allOrders.Where(o => o.Status is OrderStatus.Placed or OrderStatus.Preparing or OrderStatus.Ready).ToList();
 
         // Oldest-first, matching a real kitchen queue - the order that's been
         // waiting longest belongs at the top, not buried under newer arrivals.
@@ -145,29 +159,28 @@ public class OrderStatusControl : UserControl
         // Rebinding DataGridView.DataSource unconditionally resets scroll
         // position to the top every time - disruptive on a screen that
         // auto-refreshes every 15 seconds, since a tap on Advance/Cancel could
-        // land on the wrong row if the view jumps mid-reach. Most ticks find
-        // nothing actually changed, so skip the rebind entirely in that case;
-        // when something genuinely did change, still preserve where the
-        // cashier was looking instead of snapping back to row 0.
-        if (!HasOrdersChanged(_orders, newOrders))
-        {
-            _orders = newOrders;
+        // land on the wrong row if the view jumps mid-reach. Compares against
+        // _displayedOrders (what's actually bound right now), never _allOrders
+        // (the raw fetch) - comparing against the raw fetch was the bug that
+        // made the grid appear permanently empty, since filtering it and then
+        // comparing it to itself looks like "nothing changed" even on the
+        // very first load.
+        if (!HasOrdersChanged(_displayedOrders, newOrders))
             return;
-        }
 
         var scrollRowIndex = _grid.FirstDisplayedScrollingRowIndex;
         var selectedOrderId = _grid.CurrentRow?.DataBoundItem is OrderDto current ? current.OrderId : (int?)null;
 
-        _orders = newOrders;
+        _displayedOrders = newOrders;
         _grid.DataSource = null;
-        _grid.DataSource = _orders;
+        _grid.DataSource = _displayedOrders;
 
-        if (_orders.Count == 0) return;
+        if (_displayedOrders.Count == 0) return;
 
         if (scrollRowIndex >= 0 && scrollRowIndex < _grid.RowCount)
             _grid.FirstDisplayedScrollingRowIndex = scrollRowIndex;
 
-        var restoredIndex = selectedOrderId is int id ? _orders.FindIndex(o => o.OrderId == id) : -1;
+        var restoredIndex = selectedOrderId is int id ? _displayedOrders.FindIndex(o => o.OrderId == id) : -1;
         if (restoredIndex >= 0)
             _grid.CurrentCell = _grid.Rows[restoredIndex].Cells[0];
     }
@@ -193,10 +206,10 @@ public class OrderStatusControl : UserControl
 
     private async void Grid_CellClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || e.RowIndex >= _orders.Count) return;
+        if (e.RowIndex < 0 || e.RowIndex >= _displayedOrders.Count) return;
 
         var columnName = _grid.Columns[e.ColumnIndex].Name;
-        var order = _orders[e.RowIndex];
+        var order = _displayedOrders[e.RowIndex];
 
         if (columnName == "View")
         {
@@ -231,6 +244,13 @@ public class OrderStatusControl : UserControl
                 return;
             }
 
+            // Placed -> Preparing is "Accept" - the moment the kitchen needs a
+            // physical ticket for a mobile order, same as a cashier order gets
+            // one the instant it's placed. Fired in the background, not
+            // awaited, so advancing the next order isn't blocked on a printer.
+            if (order.Status == OrderStatus.Placed && next.Value == OrderStatus.Preparing)
+                _ = PrintKitchenTicketAsync(order.OrderId);
+
             await LoadAsync();
         }
         else if (columnName == "Cancel")
@@ -250,5 +270,92 @@ public class OrderStatusControl : UserControl
 
             await LoadAsync();
         }
+    }
+
+    // Kitchen ticket only, no customer receipt - unlike a cashier order there's
+    // no customer physically at the register to hand one to. Same printer
+    // pipeline as OrderTakingControl (PrinterSettings/ReceiptBuilder/
+    // NetworkReceiptPrinter, including the kitchen-unreachable fallback to the
+    // client printer), just triggered by "Accept" here instead of by placing
+    // the order - see the printing design notes on why print has to be
+    // triggered from this machine rather than pushed from the API.
+    private async Task PrintKitchenTicketAsync(int orderId)
+    {
+        var full = await _apiClient.GetOrderByIdAsync(orderId);
+        if (full is null)
+        {
+            ShowPrintStatus("Could not print - order not found.", success: false);
+            return;
+        }
+
+        var allItems = await _apiClient.GetItemsAsync(includeInactive: true);
+        var itemNamesById = allItems.ToDictionary(i => i.ItemId, i => i.ItemName);
+
+        var receiptOrder = new ReceiptOrder(
+            full.SerialNumber ?? full.OrderId,
+            AppSession.ToLocalDisplay(full.Date),
+            full.Items.Select(oi => new ReceiptItem(
+                itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
+                oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
+            full.Total,
+            full.IsComplimentary);
+
+        var settings = PrinterSettings.Load();
+
+        var printSerial = settings.ReceiptOrderNumberWrapAt > 0
+            ? ((receiptOrder.SerialNumber - 1) % settings.ReceiptOrderNumberWrapAt) + 1
+            : receiptOrder.SerialNumber;
+        var printOrder = receiptOrder with { SerialNumber = printSerial };
+
+        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize);
+
+        if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
+        {
+            using var preview = new FormReceiptPreviewDialog("Kitchen Ticket (no printer configured - preview only)",
+                ReceiptBuilder.PreviewKitchenTicket(printOrder, settings.KitchenTicketFontSize));
+            preview.ShowDialog(this);
+            return;
+        }
+
+        var kitchenFailure = await PrintSafelyAsync(settings.KitchenPrinterIp, settings.KitchenPrinterPort, kitchenTicket, "Kitchen ticket");
+        if (kitchenFailure is null)
+        {
+            ShowPrintStatus($"Order #{printOrder.SerialNumber}: kitchen ticket printed.", success: true);
+            return;
+        }
+
+        var fallbackFailure = await PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort, kitchenTicket, "Kitchen ticket (fallback)");
+        if (fallbackFailure is null)
+            ShowPrintStatus($"Order #{printOrder.SerialNumber}: kitchen printer unreachable - printed on client printer instead.", success: false);
+        else
+            ShowPrintStatus($"Order #{printOrder.SerialNumber}: print failed - both printers unreachable.", success: false);
+    }
+
+    private static async Task<string?> PrintSafelyAsync(string ip, int port, byte[] data, string label)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+            return $"{label} (not configured)";
+
+        try
+        {
+            await new NetworkReceiptPrinter(ip, port).PrintAsync(data);
+            return null;
+        }
+        catch
+        {
+            return label;
+        }
+    }
+
+    private void ShowPrintStatus(string text, bool success)
+    {
+        void Apply()
+        {
+            _lblPrintStatus.Text = text;
+            _lblPrintStatus.ForeColor = success ? Color.FromArgb(25, 135, 84) : Color.FromArgb(220, 53, 69);
+        }
+
+        if (InvokeRequired) BeginInvoke(Apply);
+        else Apply();
     }
 }
