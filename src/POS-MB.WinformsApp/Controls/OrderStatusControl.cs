@@ -28,16 +28,26 @@ public class OrderStatusControl : UserControl
     // client, so the two sides share the contract (the key name), not the code.
     private const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
 
+    // Matches clsOrderBusiness.MobileOrderAutoCancelMinutesSettingKey/
+    // DefaultAutoCancelMinutes - read-only here (the actual editing UI lives on
+    // the Settings screen), just so the countdown column can compute the same
+    // deadline the server itself uses.
+    private const string AutoCancelMinutesSettingKey = "MobileOrderAutoCancelMinutes";
+    private const int DefaultAutoCancelMinutes = 10;
+
     private static readonly TimeSpan AutoRefreshInterval = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan CountdownTickInterval = TimeSpan.FromSeconds(1);
 
     private readonly ApiClient _apiClient = new();
     private readonly System.Windows.Forms.Timer _autoRefreshTimer;
+    private readonly System.Windows.Forms.Timer _countdownTimer;
 
     private readonly CheckBox _chkShowAll;
     private readonly CheckBox _chkAcceptingOrders;
     private readonly DataGridView _grid;
     private readonly Label _lblPrintStatus;
     private bool _suppressAcceptingOrdersEvent;
+    private int _autoCancelMinutes = DefaultAutoCancelMinutes;
 
     // _allOrders is the raw last fetch (unfiltered/unsorted) - always the true
     // source for re-deriving the filtered view, so toggling "Show All" works
@@ -102,6 +112,9 @@ public class OrderStatusControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PlacedBy", HeaderText = "Placed By", FillWeight = 110, MinimumWidth = 140 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", FillWeight = 80, MinimumWidth = 100 });
+        // Only meaningful for Placed orders (see Grid_CellFormatting) - once
+        // accepted, an order is no longer subject to auto-cancel at all.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "TimeLeft", HeaderText = "Auto-Cancel In", FillWeight = 80, MinimumWidth = 110 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Total", HeaderText = "Total", DataPropertyName = "Total", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "View", HeaderText = "", Text = "View", UseColumnTextForButtonValue = true, FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "Advance", HeaderText = "", Text = "Advance", UseColumnTextForButtonValue = true, FillWeight = 90, MinimumWidth = 110 });
@@ -127,13 +140,45 @@ public class OrderStatusControl : UserControl
         _autoRefreshTimer = new System.Windows.Forms.Timer { Interval = (int)AutoRefreshInterval.TotalMilliseconds };
         _autoRefreshTimer.Tick += async (_, _) => await LoadAsync();
 
+        // A lightweight repaint, not a rebind - InvalidateColumn just makes the
+        // grid re-run Grid_CellFormatting for that one column so the countdown
+        // text updates every second, without touching DataSource/scroll
+        // position/selection the way ApplyFilterAndBind's rebind does.
+        _countdownTimer = new System.Windows.Forms.Timer { Interval = (int)CountdownTickInterval.TotalMilliseconds };
+        _countdownTimer.Tick += (_, _) =>
+        {
+            if (_grid.Columns["TimeLeft"] is { } column)
+                _grid.InvalidateColumn(column.Index);
+        };
+
         Load += async (_, _) =>
         {
             await LoadAcceptingOrdersToggleAsync();
+            await LoadAutoCancelMinutesAsync();
             await LoadAsync();
         };
-        HandleCreated += (_, _) => _autoRefreshTimer.Start();
-        HandleDestroyed += (_, _) => _autoRefreshTimer.Stop();
+        HandleCreated += (_, _) =>
+        {
+            _autoRefreshTimer.Start();
+            _countdownTimer.Start();
+        };
+        HandleDestroyed += (_, _) =>
+        {
+            _autoRefreshTimer.Stop();
+            _countdownTimer.Stop();
+        };
+    }
+
+    // Read-only here (the editing UI lives on the Settings screen) - fetched
+    // once at Load, same treatment as the Accepting Online Orders toggle. If
+    // staff changes it on the Settings screen while this one's open, it'll
+    // pick up the new value next time this screen is reopened.
+    private async Task LoadAutoCancelMinutesAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(AutoCancelMinutesSettingKey);
+        _autoCancelMinutes = value is not null && int.TryParse(value, out var minutes) && minutes > 0
+            ? minutes
+            : DefaultAutoCancelMinutes;
     }
 
     private async Task LoadAcceptingOrdersToggleAsync()
@@ -196,6 +241,31 @@ public class OrderStatusControl : UserControl
                 OrderStatus.Ready => "Complete",
                 _ => "" // terminal state - only reachable with "Show Completed/Cancelled" checked
             };
+        }
+        else if (columnName == "TimeLeft")
+        {
+            // Only Placed orders are ever subject to auto-cancel
+            // (clsOrderBusiness.CancelStaleMobileOrdersAsync) - once accepted,
+            // there's nothing counting down anymore.
+            if (order.Status != OrderStatus.Placed)
+            {
+                e.Value = "—";
+                e.FormattingApplied = true;
+                return;
+            }
+
+            var deadlineUtc = order.Date.AddMinutes(_autoCancelMinutes);
+            var remaining = deadlineUtc - DateTime.UtcNow;
+
+            // The actual cancellation is a once-a-minute background sweep
+            // server-side (MobileOrderAutoCancelService), not instant - so
+            // this can sit at 0:00 for up to ~a minute before the order
+            // actually flips to Cancelled. "Cancelling..." is honest about
+            // that instead of implying it happens the exact instant it hits zero.
+            e.Value = remaining > TimeSpan.Zero
+                ? $"{(int)remaining.TotalMinutes}:{remaining.Seconds:D2}"
+                : "Cancelling...";
+            e.FormattingApplied = true;
         }
     }
 
