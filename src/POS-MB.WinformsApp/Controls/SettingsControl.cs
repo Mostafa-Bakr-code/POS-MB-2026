@@ -11,10 +11,16 @@ public class SettingsControl : UserControl
     private const decimal FallbackTaxRate = 14.00m;
     private const string TimeZoneOffsetKey = "TimeZoneOffsetHours";
     private const decimal FallbackTimeZoneOffset = 0m;
+    // Matches clsOrderBusiness.MobileOrderAutoCancelMinutesSettingKey - duplicated
+    // deliberately, not shared via a project reference, same reasoning as every
+    // other setting key WinForms keeps its own copy of.
+    private const string AutoCancelMinutesKey = "MobileOrderAutoCancelMinutes";
+    private const decimal FallbackAutoCancelMinutes = 10m;
 
     private readonly ApiClient _apiClient = new();
     private readonly NumericUpDown _numTaxRate;
     private readonly NumericUpDown _numTimeZoneOffset;
+    private readonly NumericUpDown _numAutoCancelMinutes;
     private readonly Button _btnSaveShared;
     private readonly Label _lblSharedStatus;
 
@@ -92,21 +98,38 @@ public class SettingsControl : UserControl
             Increment = 1m
         };
 
-        // On its own row below both fields (not beside either one) so it's
+        var lblAutoCancelMinutes = new Label
+        {
+            Text = "Auto-cancel a mobile order if still unaccepted after this many minutes (safety net - see Order Status)",
+            Location = new Point(20, 272),
+            Size = new Size(500, 28)
+        };
+
+        _numAutoCancelMinutes = new NumericUpDown
+        {
+            Location = new Point(20, 304),
+            Size = new Size(150, 40),
+            Font = new Font("Segoe UI", 14F),
+            Minimum = 1,
+            Maximum = 240,
+            Increment = 1m
+        };
+
+        // On its own row below every field (not beside any one of them) so it's
         // visually obvious this single button saves the whole section, not just
         // whichever field happens to be next to it.
         _btnSaveShared = new Button
         {
-            Text = "Save Tax Rate && Time Zone",
-            Location = new Point(20, 264),
-            Size = new Size(280, 40),
+            Text = "Save Tax Rate && Time Zone && Auto-Cancel",
+            Location = new Point(20, 354),
+            Size = new Size(340, 40),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
         _btnSaveShared.Click += async (_, _) => await SaveSharedAsync();
 
         _lblSharedStatus = new Label
         {
-            Location = new Point(20, 312),
+            Location = new Point(20, 402),
             Size = new Size(500, 28),
             ForeColor = Color.Green
         };
@@ -114,33 +137,33 @@ public class SettingsControl : UserControl
         var lblPrinterSection = new Label
         {
             Text = "Printer Settings (this PC only)",
-            Location = new Point(20, 360),
+            Location = new Point(20, 450),
             Size = new Size(500, 26),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
 
-        var lblClient = new Label { Text = "Client Receipt Printer IP", Location = new Point(20, 392), Size = new Size(220, 28) };
-        _txtClientIp = new TextBox { Location = new Point(20, 424), Size = new Size(220, 36), Font = new Font("Segoe UI", 14F) };
-        var lblClientPort = new Label { Text = "Port", Location = new Point(250, 392), Size = new Size(100, 28) };
-        _numClientPort = new NumericUpDown { Location = new Point(250, 424), Size = new Size(100, 36), Minimum = 1, Maximum = 65535, Value = 9100, Font = new Font("Segoe UI", 14F) };
-        var btnPreviewClient = new Button { Text = "Preview", Location = new Point(360, 424), Size = new Size(110, 36), Font = new Font("Segoe UI", 11F) };
+        var lblClient = new Label { Text = "Client Receipt Printer IP", Location = new Point(20, 482), Size = new Size(220, 28) };
+        _txtClientIp = new TextBox { Location = new Point(20, 514), Size = new Size(220, 36), Font = new Font("Segoe UI", 14F) };
+        var lblClientPort = new Label { Text = "Port", Location = new Point(250, 482), Size = new Size(100, 28) };
+        _numClientPort = new NumericUpDown { Location = new Point(250, 514), Size = new Size(100, 36), Minimum = 1, Maximum = 65535, Value = 9100, Font = new Font("Segoe UI", 14F) };
+        var btnPreviewClient = new Button { Text = "Preview", Location = new Point(360, 514), Size = new Size(110, 36), Font = new Font("Segoe UI", 11F) };
         btnPreviewClient.Click += (_, _) => ShowPreview(isClient: true);
-        var btnTestClient = new Button { Text = "Test Print", Location = new Point(480, 424), Size = new Size(130, 36), Font = new Font("Segoe UI", 11F) };
+        var btnTestClient = new Button { Text = "Test Print", Location = new Point(480, 514), Size = new Size(130, 36), Font = new Font("Segoe UI", 11F) };
         btnTestClient.Click += async (_, _) => await TestPrintAsync(_txtClientIp.Text, (int)_numClientPort.Value, isClient: true);
 
-        var lblKitchen = new Label { Text = "Kitchen Printer IP", Location = new Point(20, 472), Size = new Size(220, 28) };
-        _txtKitchenIp = new TextBox { Location = new Point(20, 504), Size = new Size(220, 36), Font = new Font("Segoe UI", 14F) };
-        var lblKitchenPort = new Label { Text = "Port", Location = new Point(250, 472), Size = new Size(100, 28) };
-        _numKitchenPort = new NumericUpDown { Location = new Point(250, 504), Size = new Size(100, 36), Minimum = 1, Maximum = 65535, Value = 9100, Font = new Font("Segoe UI", 14F) };
-        var btnPreviewKitchen = new Button { Text = "Preview", Location = new Point(360, 504), Size = new Size(110, 36), Font = new Font("Segoe UI", 11F) };
+        var lblKitchen = new Label { Text = "Kitchen Printer IP", Location = new Point(20, 562), Size = new Size(220, 28) };
+        _txtKitchenIp = new TextBox { Location = new Point(20, 594), Size = new Size(220, 36), Font = new Font("Segoe UI", 14F) };
+        var lblKitchenPort = new Label { Text = "Port", Location = new Point(250, 562), Size = new Size(100, 28) };
+        _numKitchenPort = new NumericUpDown { Location = new Point(250, 594), Size = new Size(100, 36), Minimum = 1, Maximum = 65535, Value = 9100, Font = new Font("Segoe UI", 14F) };
+        var btnPreviewKitchen = new Button { Text = "Preview", Location = new Point(360, 594), Size = new Size(110, 36), Font = new Font("Segoe UI", 11F) };
         btnPreviewKitchen.Click += (_, _) => ShowPreview(isClient: false);
-        var btnTestKitchen = new Button { Text = "Test Print", Location = new Point(480, 504), Size = new Size(130, 36), Font = new Font("Segoe UI", 11F) };
+        var btnTestKitchen = new Button { Text = "Test Print", Location = new Point(480, 594), Size = new Size(130, 36), Font = new Font("Segoe UI", 11F) };
         btnTestKitchen.Click += async (_, _) => await TestPrintAsync(_txtKitchenIp.Text, (int)_numKitchenPort.Value, isClient: false);
 
         var lblBothReceiptsSection = new Label
         {
             Text = "Both Receipts",
-            Location = new Point(20, 552),
+            Location = new Point(20, 642),
             Size = new Size(400, 26),
             Font = new Font("Segoe UI", 11F, FontStyle.Bold)
         };
@@ -149,10 +172,10 @@ public class SettingsControl : UserControl
         // reports, the cashier's own screen) - only what gets printed. 0 = print
         // the real number as-is; cancelling this later is just setting it back to
         // 0, no code change needed.
-        var lblWrapAt = new Label { Text = "Wrap order number on receipts after (0 = don't wrap)", Location = new Point(20, 584), Size = new Size(400, 28) };
+        var lblWrapAt = new Label { Text = "Wrap order number on receipts after (0 = don't wrap)", Location = new Point(20, 674), Size = new Size(400, 28) };
         _numOrderNumberWrapAt = new NumericUpDown
         {
-            Location = new Point(20, 616),
+            Location = new Point(20, 706),
             Size = new Size(120, 36),
             Font = new Font("Segoe UI", 14F),
             Minimum = 0,
@@ -162,7 +185,7 @@ public class SettingsControl : UserControl
         var lblReceiptOptions = new Label
         {
             Text = "Customer Receipt Options",
-            Location = new Point(20, 664),
+            Location = new Point(20, 754),
             Size = new Size(400, 26),
             Font = new Font("Segoe UI", 11F, FontStyle.Bold)
         };
@@ -174,14 +197,14 @@ public class SettingsControl : UserControl
         _chkShowOrderTime = new CheckBox
         {
             Text = "Show order time on customer receipt",
-            Location = new Point(20, 696),
+            Location = new Point(20, 786),
             Size = new Size(400, 28)
         };
 
-        var lblTaxDisplayMode = new Label { Text = "VAT display on customer receipt", Location = new Point(20, 728), Size = new Size(300, 28) };
+        var lblTaxDisplayMode = new Label { Text = "VAT display on customer receipt", Location = new Point(20, 818), Size = new Size(300, 28) };
         _cboTaxDisplayMode = new ComboBox
         {
-            Location = new Point(20, 760),
+            Location = new Point(20, 850),
             Size = new Size(260, 36),
             Font = new Font("Segoe UI", 12F),
             DropDownStyle = ComboBoxStyle.DropDownList
@@ -191,10 +214,10 @@ public class SettingsControl : UserControl
         _cboTaxDisplayMode.Items.AddRange(["Don't show VAT", "VAT on total only", "VAT on every item"]);
         _cboTaxDisplayMode.SelectedIndex = (int)TaxDisplayMode.PerItem;
 
-        var lblClientFontSize = new Label { Text = "Client receipt font size (1 = normal, up to 8)", Location = new Point(20, 808), Size = new Size(400, 28) };
+        var lblClientFontSize = new Label { Text = "Client receipt font size (1 = normal, up to 8)", Location = new Point(20, 898), Size = new Size(400, 28) };
         _numClientFontSize = new NumericUpDown
         {
-            Location = new Point(20, 840),
+            Location = new Point(20, 930),
             Size = new Size(100, 36),
             Font = new Font("Segoe UI", 14F),
             Minimum = 1,
@@ -202,10 +225,10 @@ public class SettingsControl : UserControl
             Value = 1
         };
 
-        var lblKitchenFontSize = new Label { Text = "Kitchen ticket font size (1 = normal, up to 8)", Location = new Point(20, 888), Size = new Size(400, 28) };
+        var lblKitchenFontSize = new Label { Text = "Kitchen ticket font size (1 = normal, up to 8)", Location = new Point(20, 978), Size = new Size(400, 28) };
         _numKitchenFontSize = new NumericUpDown
         {
-            Location = new Point(20, 920),
+            Location = new Point(20, 1010),
             Size = new Size(100, 36),
             Font = new Font("Segoe UI", 14F),
             Minimum = 1,
@@ -218,7 +241,7 @@ public class SettingsControl : UserControl
         _btnSavePrinters = new Button
         {
             Text = "Save Printer Settings",
-            Location = new Point(20, 968),
+            Location = new Point(20, 1058),
             Size = new Size(220, 40),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
@@ -226,7 +249,7 @@ public class SettingsControl : UserControl
 
         _lblPrinterStatus = new Label
         {
-            Location = new Point(20, 1016),
+            Location = new Point(20, 1106),
             Size = new Size(500, 28),
             ForeColor = Color.Green
         };
@@ -237,6 +260,8 @@ public class SettingsControl : UserControl
         Controls.Add(_numTaxRate);
         Controls.Add(lblTimeZoneOffset);
         Controls.Add(_numTimeZoneOffset);
+        Controls.Add(lblAutoCancelMinutes);
+        Controls.Add(_numAutoCancelMinutes);
         Controls.Add(_btnSaveShared);
         Controls.Add(_lblSharedStatus);
         Controls.Add(lblPrinterSection);
@@ -283,6 +308,12 @@ public class SettingsControl : UserControl
             ? offset
             : FallbackTimeZoneOffset;
 
+        var autoCancelValue = await _apiClient.GetSettingValueAsync(AutoCancelMinutesKey);
+
+        _numAutoCancelMinutes.Value = autoCancelValue is not null && decimal.TryParse(autoCancelValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var autoCancelMinutes)
+            ? autoCancelMinutes
+            : FallbackAutoCancelMinutes;
+
         var printerSettings = PrinterSettings.Load();
         _txtClientIp.Text = printerSettings.ClientPrinterIp;
         _numClientPort.Value = printerSettings.ClientPrinterPort;
@@ -303,6 +334,7 @@ public class SettingsControl : UserControl
         {
             await _apiClient.SetSettingValueAsync(DefaultTaxRateKey, _numTaxRate.Value.ToString(CultureInfo.InvariantCulture));
             await _apiClient.SetSettingValueAsync(TimeZoneOffsetKey, _numTimeZoneOffset.Value.ToString(CultureInfo.InvariantCulture));
+            await _apiClient.SetSettingValueAsync(AutoCancelMinutesKey, ((int)_numAutoCancelMinutes.Value).ToString(CultureInfo.InvariantCulture));
             _lblSharedStatus.ForeColor = Color.Green;
             _lblSharedStatus.Text = "Saved.";
         }

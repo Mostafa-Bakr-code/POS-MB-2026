@@ -155,6 +155,21 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             query, new { UtcStart = utcStart, UtcEndExclusive = utcEndExclusive, OrderSource = orderSource });
     }
 
+    // Feeds the auto-cancel safety net (clsOrderBusiness.CancelStaleMobileOrdersAsync) -
+    // a mobile order that's sat at Placed too long, for whatever reason
+    // (connectivity blip, a swamped chef, a crashed app), regardless of why.
+    public async Task<IEnumerable<Order>> GetStaleMobileOrdersAsync(DateTime olderThanUtc)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            SELECT * FROM Orders
+            WHERE OrderSource = @OrderSource AND Status = @Status AND [Date] < @OlderThanUtc";
+
+        return await connection.QueryAsync<Order>(
+            query, new { OrderSource = OrderSource.Mobile, Status = OrderStatus.Placed, OlderThanUtc = olderThanUtc });
+    }
+
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)
     {
         using var connection = connectionFactory.CreateConnection();

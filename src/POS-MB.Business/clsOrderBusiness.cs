@@ -1,3 +1,4 @@
+using System.Globalization;
 using POS_MB.DataAccess;
 using POS_MB.DataAccess.Models;
 
@@ -8,6 +9,19 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // Key is missing entirely until staff first touches the toggle - treated as
     // "accepting" (the safe/normal default) so nothing needs seeding/migrating.
     public const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
+
+    // Updated every ~15s by the WinForms Order Status screen while it's open
+    // (see RecordHeartbeatAsync) - this is deliberately tied to that specific
+    // screen, not just "the API is reachable from the shop", since an order
+    // sitting Placed with nobody watching the queue is exactly the "black
+    // hole" scenario this is meant to catch (the chef's Accept step can't
+    // protect against it - accepting requires seeing the order first).
+    public const string ShopHeartbeatSettingKey = "ShopHeartbeatUtc";
+
+    // A few missed 15s ticks (a slow request, a brief blip) shouldn't trip
+    // this - only a real gap should. Comfortably above 15s*a few, comfortably
+    // under the "try again in a few minutes" the mobile message promises.
+    private static readonly TimeSpan HeartbeatStaleThreshold = TimeSpan.FromSeconds(90);
 
     public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
     {
@@ -25,20 +39,45 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         if (orderSource == OrderSource.Mobile && studentId is null)
             throw new ArgumentException("A mobile order must specify which student placed it.", nameof(studentId));
 
-        // Staff can pause new mobile orders any time (too busy, closing soon, a
-        // connectivity worry) via the Order Status screen - checked here, not
-        // just hidden on the menu, since a student's app could already have a
-        // cart built from before the toggle flipped. Cashier orders are never
+        // Checked here, not just reflected in the mobile menu banner, since a
+        // student's app could already have a cart built from before the
+        // toggle flipped or the shop went quiet. Cashier orders are never
         // affected - a cashier taking an order in person isn't "online".
         if (orderSource == OrderSource.Mobile)
         {
-            var setting = await settingsBusiness.GetByKeyAsync(AcceptingOnlineOrdersSettingKey);
-            if (setting?.Value == "false")
-                throw new ArgumentException("We're not accepting online orders right now - please try again later.", nameof(orderSource));
+            var (isAccepting, reason) = await GetAcceptingOnlineOrdersStatusAsync();
+            if (!isAccepting)
+                throw new ArgumentException(reason, nameof(orderSource));
         }
 
         return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items);
     }
+
+    // Single source of truth for "can a mobile order be placed right now" -
+    // used both to enforce CreateOrderAsync above and to drive the mobile
+    // menu's banner, so the two can never disagree about why. Two independent
+    // reasons a mobile order can be blocked: staff manually paused it, or
+    // nobody's been watching the Order Status queue recently enough to trust
+    // that a new order would actually be seen.
+    public async Task<(bool IsAccepting, string? Reason)> GetAcceptingOnlineOrdersStatusAsync()
+    {
+        var toggle = await settingsBusiness.GetByKeyAsync(AcceptingOnlineOrdersSettingKey);
+        if (toggle?.Value == "false")
+            return (false, "We're not accepting online orders right now - please try again later.");
+
+        var heartbeat = await settingsBusiness.GetByKeyAsync(ShopHeartbeatSettingKey);
+        var isStale = heartbeat?.Value is null
+            || !DateTime.TryParse(heartbeat.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var lastSeenUtc)
+            || DateTime.UtcNow - lastSeenUtc > HeartbeatStaleThreshold;
+
+        if (isStale)
+            return (false, "We're temporarily unable to accept online orders - please try again in a few minutes.");
+
+        return (true, null);
+    }
+
+    public Task RecordHeartbeatAsync() =>
+        settingsBusiness.SetAsync(ShopHeartbeatSettingKey, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture));
 
     // Complimentary (free) orders are a staff-only concept - a student ordering
     // for themselves is never "complimentary", that would mean giving away food
@@ -95,4 +134,37 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
 
     public Task<bool> CancelAsync(int id) =>
         dataAccess.UpdateStatusAsync(id, OrderStatus.Cancelled);
+
+    // Key missing entirely (never touched) falls back to DefaultAutoCancelMinutes -
+    // same "no seeding needed" reasoning as the other resilience settings.
+    public const string MobileOrderAutoCancelMinutesSettingKey = "MobileOrderAutoCancelMinutes";
+    private const int DefaultAutoCancelMinutes = 10;
+
+    // The safety net that catches whatever slips past the manual toggle and
+    // heartbeat check above: a mobile order that's sat at Placed too long,
+    // for any reason (a connectivity blip too brief to trip the heartbeat
+    // check, a genuinely busy kitchen, a crashed app, anything). Reuses
+    // CancelAsync - the exact same cancellation staff/students already
+    // trigger by hand - so if a refund step is ever added there (once
+    // Paymob exists), this inherits it automatically with no changes here.
+    // Called periodically by MobileOrderAutoCancelService in the API project.
+    public async Task<int> CancelStaleMobileOrdersAsync()
+    {
+        var setting = await settingsBusiness.GetByKeyAsync(MobileOrderAutoCancelMinutesSettingKey);
+        var minutes = setting?.Value is not null && int.TryParse(setting.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : DefaultAutoCancelMinutes;
+
+        var cutoffUtc = DateTime.UtcNow.AddMinutes(-minutes);
+        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(cutoffUtc);
+
+        var cancelledCount = 0;
+        foreach (var order in staleOrders)
+        {
+            if (await CancelAsync(order.OrderId))
+                cancelledCount++;
+        }
+
+        return cancelledCount;
+    }
 }

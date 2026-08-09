@@ -7,7 +7,7 @@ namespace POS_MB.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SettingsController(clsSettingsBusiness settingsBusiness) : ControllerBase
+public class SettingsController(clsSettingsBusiness settingsBusiness, clsOrderBusiness orderBusiness) : ControllerBase
 {
     // Open to any authenticated user - FormLogIn reads TimeZoneOffsetHours right
     // after login regardless of the logging-in user's permissions.
@@ -37,6 +37,28 @@ public class SettingsController(clsSettingsBusiness settingsBusiness) : Controll
     {
         await settingsBusiness.SetAsync(clsOrderBusiness.AcceptingOnlineOrdersSettingKey, isAccepting ? "true" : "false");
         return NoContent();
+    }
+
+    // Called every ~15s by the WinForms Order Status screen while it's open -
+    // proof that someone is actually watching the queue right now, not just
+    // that the API happens to be reachable. See clsOrderBusiness.RecordHeartbeatAsync.
+    [HttpPost("heartbeat")]
+    [RequirePermission(Permission.Orders)]
+    public async Task<IActionResult> Heartbeat()
+    {
+        await orderBusiness.RecordHeartbeatAsync();
+        return NoContent();
+    }
+
+    // Combines the manual toggle and the heartbeat-derived offline check into
+    // one answer (clsOrderBusiness.GetAcceptingOnlineOrdersStatusAsync) - the
+    // mobile menu's banner and CreateOrderAsync's own enforcement both read
+    // from this exact same logic, so they can never disagree about why.
+    [HttpGet("accepting-online-orders-status")]
+    public async Task<IActionResult> GetAcceptingOnlineOrdersStatus()
+    {
+        var (isAccepting, reason) = await orderBusiness.GetAcceptingOnlineOrdersStatusAsync();
+        return Ok(new { isAccepting, reason });
     }
 
     [HttpPut("{key}")]

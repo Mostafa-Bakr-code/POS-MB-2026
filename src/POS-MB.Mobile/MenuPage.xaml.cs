@@ -6,15 +6,11 @@ namespace POS_MB.Mobile;
 
 public partial class MenuPage : ContentPage
 {
-    // Matches clsOrderBusiness.AcceptingOnlineOrdersSettingKey - duplicated
-    // deliberately, not shared via a project reference, same reasoning as the
-    // WinForms Order Status screen's own copy of this key.
-    private const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
     private static readonly TimeSpan AcceptingOrdersPollInterval = TimeSpan.FromSeconds(15);
 
     private readonly ApiClient _apiClient = new();
     private CancellationTokenSource? _pollCts;
-    private bool? _lastKnownAccepting;
+    private string? _lastKnownReason = "not yet loaded"; // forces the very first check to always apply
 
     public MenuPage()
     {
@@ -80,15 +76,21 @@ public partial class MenuPage : ContentPage
     // checkout step - the actual enforcement is server-side regardless
     // (clsOrderBusiness.CreateOrderAsync), this is purely a heads-up so
     // rejection isn't a surprise after they've already picked everything.
+    // Reads the same combined toggle+heartbeat status CreateOrderAsync itself
+    // enforces, so the banner text can never claim a different reason than
+    // what actually happens at checkout.
     private async Task RefreshAcceptingOrdersBannerAsync()
     {
-        var value = await _apiClient.GetSettingValueAsync(AcceptingOnlineOrdersSettingKey);
-        var isAccepting = value != "false";
+        var (isAccepting, reason) = await _apiClient.GetAcceptingOnlineOrdersStatusAsync();
 
-        if (_lastKnownAccepting == isAccepting) return; // nothing changed - don't touch the UI
-        _lastKnownAccepting = isAccepting;
+        if (_lastKnownReason == reason) return; // nothing changed - don't touch the UI
+        _lastKnownReason = reason;
 
-        MainThread.BeginInvokeOnMainThread(() => NotAcceptingOrdersBanner.IsVisible = !isAccepting);
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            NotAcceptingOrdersBanner.Text = reason ?? "";
+            NotAcceptingOrdersBanner.IsVisible = !isAccepting;
+        });
     }
 
     private void OnAddToCartClicked(object? sender, EventArgs e)

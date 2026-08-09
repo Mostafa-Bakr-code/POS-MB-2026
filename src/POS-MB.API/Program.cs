@@ -62,6 +62,8 @@ builder.Services.AddScoped<clsLogsBusiness>();
 builder.Services.AddScoped<clsReportingDataAccess>();
 builder.Services.AddScoped<clsReportingBusiness>();
 
+builder.Services.AddHostedService<MobileOrderAutoCancelService>();
+
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddSingleton<IAuthorizationHandler, StudentAccountAuthorizationHandler>();

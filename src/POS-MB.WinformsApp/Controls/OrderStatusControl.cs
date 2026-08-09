@@ -116,6 +116,14 @@ public class OrderStatusControl : UserControl
         // someone remembering to tap Refresh every time an order comes in -
         // same reasoning as the planned chef-tablet poller, just implemented
         // here first since the tablet client doesn't exist yet.
+        //
+        // The "is the shop watching" heartbeat (clsOrderBusiness.
+        // GetAcceptingOnlineOrdersStatusAsync) is sent from FormMain instead
+        // of here - it needs to reflect "a staff member is logged in
+        // somewhere", not "this specific screen happens to be the active
+        // one", since a cashier switching to New Order to actually take a
+        // walk-in order is completely normal and shouldn't make mobile
+        // ordering look offline.
         _autoRefreshTimer = new System.Windows.Forms.Timer { Interval = (int)AutoRefreshInterval.TotalMilliseconds };
         _autoRefreshTimer.Tick += async (_, _) => await LoadAsync();
 

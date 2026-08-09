@@ -7,8 +7,16 @@ namespace POS_MB.WinformsApp;
 
 public class FormMain : Form
 {
+    // Independent of the 20-minute token-refresh timer below, and of whichever
+    // screen happens to be showing - a mobile order's "is the shop watching"
+    // check (clsOrderBusiness.GetAcceptingOnlineOrdersStatusAsync) needs a
+    // signal that survives normal navigation between screens, not one tied to
+    // a specific control like Order Status being the active view.
+    private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+
     private readonly ApiClient _apiClient = new();
     private TokenRefreshTimer? _refreshTimer;
+    private System.Windows.Forms.Timer? _heartbeatTimer;
     private readonly Panel _navBar;
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
@@ -172,6 +180,19 @@ public class FormMain : Form
 
         _refreshTimer = new TokenRefreshTimer(RefreshTokenAsync, TimeSpan.FromMinutes(20));
 
+        // Only staff who can actually act on orders represent "the shop is
+        // watching" - a logged-in account without Orders permission (e.g.
+        // office-only reporting access) wouldn't be able to advance/print a
+        // mobile order anyway, so its presence shouldn't count toward keeping
+        // mobile ordering open.
+        if (AppSession.HasPermission(Permission.Orders))
+        {
+            _heartbeatTimer = new System.Windows.Forms.Timer { Interval = (int)HeartbeatInterval.TotalMilliseconds };
+            _heartbeatTimer.Tick += async (_, _) => await _apiClient.SendHeartbeatAsync();
+            _heartbeatTimer.Start();
+            _ = _apiClient.SendHeartbeatAsync(); // immediately at login, not just on the first tick
+        }
+
         ShowOrderTaking();
     }
 
@@ -220,6 +241,8 @@ public class FormMain : Form
         _loggedOut = true;
 
         _refreshTimer?.Dispose();
+        _heartbeatTimer?.Stop();
+        _heartbeatTimer?.Dispose();
 
         if (AppSession.LogId is int logId)
         {

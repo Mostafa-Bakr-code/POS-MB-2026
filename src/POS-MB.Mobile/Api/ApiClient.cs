@@ -135,7 +135,30 @@ public class ApiClient
         return setting?.Value;
     }
 
+    // Combines the manual "Accepting Online Orders" toggle and the
+    // heartbeat-derived offline check into one answer - same logic
+    // CreateOrderAsync itself enforces, so the banner can never claim
+    // something different from what actually happens at checkout. Defaults
+    // to accepting on a network failure - a transient error reading this
+    // status shouldn't itself put up a false "closed" banner.
+    public async Task<(bool IsAccepting, string? Reason)> GetAcceptingOnlineOrdersStatusAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("api/settings/accepting-online-orders-status");
+            if (!response.IsSuccessStatusCode) return (true, null);
+
+            var status = await response.Content.ReadFromJsonAsync<AcceptingOnlineOrdersStatusDto>();
+            return status is null ? (true, null) : (status.IsAccepting, status.Reason);
+        }
+        catch (Exception)
+        {
+            return (true, null);
+        }
+    }
+
     private record SettingDto(int Id, string Key, string? Value);
+    private record AcceptingOnlineOrdersStatusDto(bool IsAccepting, string? Reason);
 
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)
     {

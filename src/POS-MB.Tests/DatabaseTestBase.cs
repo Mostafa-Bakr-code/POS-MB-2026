@@ -53,6 +53,15 @@ public abstract class DatabaseTestBase : IDisposable
         StudentBusiness = new clsStudentBusiness(new clsStudentDataAccess(ConnectionFactory));
         OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness);
         ReportingBusiness = new clsReportingBusiness(new clsReportingDataAccess(ConnectionFactory), SettingsBusiness);
+
+        // Mobile order creation requires a recent "shop heartbeat" (see
+        // clsOrderBusiness.GetAcceptingOnlineOrdersStatusAsync) - defaulting
+        // every test to "the shop is watching" here keeps that resilience
+        // feature from silently blocking every unrelated test that happens to
+        // place a mobile order. Tests that specifically exercise the
+        // heartbeat/offline behavior (AcceptingOnlineOrdersTests) override
+        // this deliberately.
+        OrderBusiness.RecordHeartbeatAsync().GetAwaiter().GetResult();
     }
 
     // Round test data, matching the hand-verifiable "Test - Verify" style already

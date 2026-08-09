@@ -274,6 +274,22 @@ public class ApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    // Best-effort - a failed heartbeat just means this tick doesn't count as
+    // "the shop is watching"; it should never surface an error to the cashier
+    // or disrupt anything else the screen is doing.
+    public async Task<bool> SendHeartbeatAsync()
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync("api/settings/heartbeat", null);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     private static string DateQuery(DateTime? startDate, DateTime? endDate)
     {
         var query = "?x=1";
