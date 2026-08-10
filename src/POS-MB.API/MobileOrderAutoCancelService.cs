@@ -2,11 +2,11 @@ using POS_MB.Business;
 
 namespace POS_MB.API;
 
-// Runs for the lifetime of the API process, checking every minute for mobile
-// orders that have sat at Placed too long (see
-// clsOrderBusiness.CancelStaleMobileOrdersAsync) - the safety net that
-// catches whatever slips past the manual "Accepting Online Orders" toggle
-// and the heartbeat/offline check, regardless of the reason.
+// Runs for the lifetime of the API process, checking every minute for two
+// different kinds of stuck mobile orders: ones stuck at Placed too long (the
+// resilience safety net - clsOrderBusiness.CancelStaleMobileOrdersAsync) and
+// ones stuck at AwaitingPayment too long, i.e. an abandoned/never-finished
+// Paymob checkout (clsOrderBusiness.CancelAbandonedPaymentsAsync).
 public class MobileOrderAutoCancelService(IServiceScopeFactory scopeFactory, ILogger<MobileOrderAutoCancelService> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(1);
@@ -24,9 +24,13 @@ public class MobileOrderAutoCancelService(IServiceScopeFactory scopeFactory, ILo
                 using var scope = scopeFactory.CreateScope();
                 var orderBusiness = scope.ServiceProvider.GetRequiredService<clsOrderBusiness>();
 
-                var cancelledCount = await orderBusiness.CancelStaleMobileOrdersAsync();
-                if (cancelledCount > 0)
-                    logger.LogInformation("Auto-cancelled {Count} stale mobile order(s)", cancelledCount);
+                var stalePlacedCount = await orderBusiness.CancelStaleMobileOrdersAsync();
+                if (stalePlacedCount > 0)
+                    logger.LogInformation("Auto-cancelled {Count} stale mobile order(s)", stalePlacedCount);
+
+                var abandonedPaymentCount = await orderBusiness.CancelAbandonedPaymentsAsync();
+                if (abandonedPaymentCount > 0)
+                    logger.LogInformation("Auto-cancelled {Count} abandoned/unpaid mobile order(s)", abandonedPaymentCount);
             }
             catch (Exception ex)
             {

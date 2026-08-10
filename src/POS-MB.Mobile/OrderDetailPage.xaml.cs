@@ -135,7 +135,7 @@ public partial class OrderDetailPage : ContentPage
         HeaderLabel.Text =
             $"Order #{_order.SerialNumber ?? _order.OrderId}\n" +
             $"Date: {AppSession.ToLocalDisplay(_order.Date):yyyy-MM-dd HH:mm}\n" +
-            $"Status: {_order.Status}\n" +
+            $"Status: {DisplayStatus(_order.Status)}\n" +
             $"Total: {_order.Total:0.00}";
 
         // Self-cancel only while the kitchen hasn't started yet - once it's
@@ -145,6 +145,14 @@ public partial class OrderDetailPage : ContentPage
         // clsOrderBusiness.CancelForStudentAsync, not just hidden here.
         CancelButton.IsVisible = _order.Status is OrderStatus.Placed;
     }
+
+    // Every other status here is a real workflow step worth showing as-is;
+    // AwaitingPayment is purely an internal "checkout isn't finished yet"
+    // state that shouldn't normally even be visible for long (the student
+    // gets redirected straight here right after paying), but showing the
+    // raw enum name if they do land on it mid-payment would be confusing.
+    private static string DisplayStatus(OrderStatus status) =>
+        status == OrderStatus.AwaitingPayment ? "Waiting for payment" : status.ToString();
 
     private async void OnCancelClicked(object? sender, EventArgs e)
     {

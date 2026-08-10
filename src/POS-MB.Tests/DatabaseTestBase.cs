@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using POS_MB.Business;
+using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 
 namespace POS_MB.Tests;
@@ -51,7 +52,13 @@ public abstract class DatabaseTestBase : IDisposable
         ItemBusiness = new clsItemBusiness(new clsItemDataAccess(ConnectionFactory), SettingsBusiness);
         UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory), refreshTokenBusiness);
         StudentBusiness = new clsStudentBusiness(new clsStudentDataAccess(ConnectionFactory));
-        OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness);
+
+        // No test here actually calls the Paymob-integrated CreateStudentOrderAsync
+        // overload (that's covered separately, without hitting Paymob's real API -
+        // see PaymobHmacTests/PaymobPaymentResultTests) - this just satisfies the
+        // constructor. The HttpClient is never actually used.
+        var paymobClient = new PaymobClient(new HttpClient { BaseAddress = new Uri("https://accept.paymob.com/") }, new PaymobOptions());
+        OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness, paymobClient);
         ReportingBusiness = new clsReportingBusiness(new clsReportingDataAccess(ConnectionFactory), SettingsBusiness);
 
         // Mobile order creation requires a recent "shop heartbeat" (see

@@ -156,9 +156,13 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     }
 
     // Feeds the auto-cancel safety net (clsOrderBusiness.CancelStaleMobileOrdersAsync) -
-    // a mobile order that's sat at Placed too long, for whatever reason
-    // (connectivity blip, a swamped chef, a crashed app), regardless of why.
-    public async Task<IEnumerable<Order>> GetStaleMobileOrdersAsync(DateTime olderThanUtc)
+    // a mobile order that's sat too long in a given status, for whatever
+    // reason (connectivity blip, a swamped chef, a crashed app, an abandoned
+    // Paymob checkout), regardless of why. Shared by both the Layer 3
+    // safety net (stale Placed orders nobody accepted) and the abandoned-
+    // payment cleanup (stale AwaitingPayment orders nobody ever paid for) -
+    // same query shape, different status/threshold.
+    public async Task<IEnumerable<Order>> GetStaleMobileOrdersAsync(OrderStatus status, DateTime olderThanUtc)
     {
         using var connection = connectionFactory.CreateConnection();
 
@@ -167,7 +171,7 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             WHERE OrderSource = @OrderSource AND Status = @Status AND [Date] < @OlderThanUtc";
 
         return await connection.QueryAsync<Order>(
-            query, new { OrderSource = OrderSource.Mobile, Status = OrderStatus.Placed, OlderThanUtc = olderThanUtc });
+            query, new { OrderSource = OrderSource.Mobile, Status = status, OlderThanUtc = olderThanUtc });
     }
 
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)

@@ -1,11 +1,18 @@
 using System.Globalization;
+using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Business;
 
-public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness)
+public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness, PaymobClient paymobClient)
 {
+    // Paymob's own intention has an "expiration" too - matches this app's
+    // own auto-cancel default (see MobileOrderAutoCancelMinutesSettingKey)
+    // so neither one meaningfully outlives the other.
+    private const int PaymentExpirationSeconds = 600;
+
+
     // Key is missing entirely until staff first touches the toggle - treated as
     // "accepting" (the safe/normal default) so nothing needs seeding/migrating.
     public const string AcceptingOnlineOrdersSettingKey = "AcceptingOnlineOrders";
@@ -82,8 +89,29 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // Complimentary (free) orders are a staff-only concept - a student ordering
     // for themselves is never "complimentary", that would mean giving away food
     // for free with no staff decision behind it.
-    public Task<int> CreateStudentOrderAsync(int studentId, IReadOnlyList<NewOrderItem> items) =>
-        CreateOrderAsync(OrderSource.Mobile, userId: null, studentId, isComplimentary: false, items);
+    //
+    // Price/items are locked in by CreateOrderAsync exactly like any other
+    // order, but a mobile order isn't real yet until Paymob confirms payment -
+    // moved to AwaitingPayment immediately after creation, invisible to the
+    // kitchen/Order Status screen, until the webhook (PaymentsController)
+    // confirms it and moves it to Placed. Deliberately doesn't change
+    // CreateOrderAsync/the DataAccess layer's own default status for a Mobile
+    // order - that stays Placed, since plenty of other call sites (tests,
+    // any future direct-creation path) rely on that and have nothing to do
+    // with payment.
+    public async Task<(int OrderId, string CheckoutUrl)> CreateStudentOrderAsync(int studentId, string studentEmail, IReadOnlyList<NewOrderItem> items)
+    {
+        var orderId = await CreateOrderAsync(OrderSource.Mobile, userId: null, studentId, isComplimentary: false, items);
+        await dataAccess.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+
+        var order = await dataAccess.GetByIdAsync(orderId)
+            ?? throw new InvalidOperationException($"Order {orderId} was just created but could not be found.");
+
+        var intention = await paymobClient.CreateIntentionAsync(
+            order.Total, orderId.ToString(CultureInfo.InvariantCulture), studentEmail, PaymentExpirationSeconds);
+
+        return (orderId, paymobClient.BuildCheckoutUrl(intention.ClientSecret));
+    }
 
     // Defaults to today only (see StudentOrdersController) so a student isn't
     // shown their entire order history every time they open the app - same
@@ -132,6 +160,36 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     public Task<bool> UpdateStatusAsync(int id, OrderStatus status) =>
         dataAccess.UpdateStatusAsync(id, status);
 
+    // Called by the webhook controller after it has already verified the
+    // Paymob callback's HMAC signature - this method trusts its inputs, HMAC
+    // verification is the caller's job (see PaymentsController), not
+    // duplicated here.
+    //
+    // Idempotent on purpose: Paymob (like most webhook systems) can retry
+    // delivery, and only acting while still AwaitingPayment means a second
+    // delivery of the same "succeeded" callback is a harmless no-op instead
+    // of double-processing an order that already moved on.
+    public async Task MarkOrderPaymentResultAsync(int orderId, bool paymentSucceeded, decimal amountEgpPaid)
+    {
+        var order = await dataAccess.GetByIdAsync(orderId);
+        if (order is null || order.Status != OrderStatus.AwaitingPayment) return;
+
+        if (!paymentSucceeded)
+        {
+            await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Cancelled);
+            return;
+        }
+
+        // The HMAC proves the callback is genuinely from Paymob, but not that
+        // it's reporting the amount we actually asked for - this is a cheap
+        // extra check that the two agree before treating the order as real,
+        // rather than trusting "success: true" alone.
+        if (Math.Abs(amountEgpPaid - order.Total) > 0.01m)
+            throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match order total {order.Total} for OrderId={orderId}.");
+
+        await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Placed);
+    }
+
     public Task<bool> CancelAsync(int id) =>
         dataAccess.UpdateStatusAsync(id, OrderStatus.Cancelled);
 
@@ -156,7 +214,29 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             : DefaultAutoCancelMinutes;
 
         var cutoffUtc = DateTime.UtcNow.AddMinutes(-minutes);
-        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(cutoffUtc);
+        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.Placed, cutoffUtc);
+
+        var cancelledCount = 0;
+        foreach (var order in staleOrders)
+        {
+            if (await CancelAsync(order.OrderId))
+                cancelledCount++;
+        }
+
+        return cancelledCount;
+    }
+
+    // A different, narrower safety net from CancelStaleMobileOrdersAsync above -
+    // this one is specifically for a checkout that never finished at all (the
+    // student closed the app mid-payment, the WebView crashed, they just gave
+    // up). Uses the same window as Paymob's own intention expiration
+    // (PaymentExpirationSeconds) rather than a separate setting - there's no
+    // reason to keep an order around waiting for a payment session that
+    // Paymob itself has already expired on its end.
+    public async Task<int> CancelAbandonedPaymentsAsync()
+    {
+        var cutoffUtc = DateTime.UtcNow.AddSeconds(-PaymentExpirationSeconds);
+        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.AwaitingPayment, cutoffUtc);
 
         var cancelledCount = 0;
         foreach (var order in staleOrders)

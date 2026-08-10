@@ -82,8 +82,22 @@ public partial class CartPage : ContentPage
             return;
         }
 
+        // The order exists now (price/items locked in), but isn't real until
+        // payment succeeds - the cart is cleared regardless, since resuming a
+        // half-paid cart isn't supported yet, but the order itself lives on
+        // as AwaitingPayment until either payment completes or the auto-cancel
+        // safety net eventually cleans it up.
         Cart.Clear();
-        await DisplayAlert("Order placed", $"Order #{result.SerialNumber ?? result.OrderId} placed successfully.", "OK");
-        await Navigation.PopAsync();
+
+        if (result.CheckoutUrl is null)
+        {
+            // Shouldn't happen for a real Mobile order, but fail toward
+            // showing something sane rather than a blank/broken screen.
+            await DisplayAlert("Order placed", $"Order #{result.SerialNumber ?? result.OrderId} placed successfully.", "OK");
+            await Navigation.PopAsync();
+            return;
+        }
+
+        await Navigation.PushAsync(new PaymentCheckoutPage(result.CheckoutUrl, result.OrderId));
     }
 }

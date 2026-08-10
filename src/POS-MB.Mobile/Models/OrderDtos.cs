@@ -5,7 +5,7 @@ namespace POS_MB.Mobile.Models;
 // reasoning as every other client-side mirror of a server enum in this project
 // (WinForms' Permission enum, etc.). Naming the members this way lets a plain
 // {Binding Status} show a readable word directly, no converter needed.
-public enum OrderStatus { Placed = 0, Preparing = 1, Ready = 2, Completed = 3, Cancelled = 4 }
+public enum OrderStatus { Placed = 0, Preparing = 1, Ready = 2, Completed = 3, Cancelled = 4, AwaitingPayment = 5 }
 
 public record OrderItemLineDto(int ItemId, int Quantity, string? Comment);
 public record PlaceOrderRequest(List<OrderItemLineDto> Items);
@@ -15,7 +15,10 @@ public record UnavailableItemDto(int ItemId, string ItemName, string Reason);
 public record OrderSummaryDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status);
 
 public record OrderItemDetailDto(int ItemId, int Quantity, decimal Price, decimal TotalItemsPrice, string? Comment);
-public record OrderDetailDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status, List<OrderItemDetailDto> Items);
+// CheckoutUrl is only ever populated on the response to creating an order -
+// null everywhere else (GetById, order history, ...), since it's a one-time
+// checkout session, not a durable property of the order itself.
+public record OrderDetailDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status, List<OrderItemDetailDto> Items, string? CheckoutUrl = null);
 
 // Display-ready version of OrderItemDetailDto with the item name already
 // resolved (OrderItemDetailDto only has ItemId) - built in OrderDetailPage's

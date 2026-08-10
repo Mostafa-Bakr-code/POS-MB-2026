@@ -37,11 +37,23 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
             .Select(i => new NewOrderItem(i.ItemId, i.Quantity, i.Comment))
             .ToList();
 
-        var id = await orderBusiness.CreateStudentOrderAsync(studentId, items);
+        // User.GetUserName() is the student's email - see JwtTokenService,
+        // the "name" claim on a student token is always set to their email,
+        // so this needs no extra lookup.
+        var (id, checkoutUrl) = await orderBusiness.CreateStudentOrderAsync(studentId, User.GetUserName(), items);
 
-        logger.LogInformation("Student {Email} placed order OrderId={OrderId}", User.GetUserName(), id);
+        logger.LogInformation("Student {Email} started checkout for OrderId={OrderId}", User.GetUserName(), id);
 
-        return await BuildOrderResponseAsync(id);
+        var order = await orderBusiness.GetByIdForStudentAsync(id, studentId);
+        if (order is null) return NotFound();
+
+        var orderItems = await orderBusiness.GetItemsByOrderIdAsync(id);
+        return Ok(new
+        {
+            order.OrderId, order.Date, order.Total, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt,
+            Items = orderItems,
+            CheckoutUrl = checkoutUrl
+        });
     }
 
     [HttpPost("{id:int}/cancel")]

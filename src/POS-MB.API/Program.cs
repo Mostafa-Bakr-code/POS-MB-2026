@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using POS_MB.API;
 using POS_MB.API.Auth;
 using POS_MB.Business;
+using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 using Serilog;
 
@@ -63,6 +64,17 @@ builder.Services.AddScoped<clsReportingDataAccess>();
 builder.Services.AddScoped<clsReportingBusiness>();
 
 builder.Services.AddHostedService<MobileOrderAutoCancelService>();
+
+// Credentials come from configuration (user secrets locally, a real secrets
+// manager once this is deployed) - never the database-backed Settings table,
+// same reasoning as the JWT key and connection string above.
+var paymobOptions = builder.Configuration.GetSection("Paymob").Get<PaymobOptions>()
+    ?? throw new InvalidOperationException("Paymob configuration is missing.");
+builder.Services.AddSingleton(paymobOptions);
+builder.Services.AddHttpClient<PaymobClient>(client =>
+{
+    client.BaseAddress = new Uri("https://accept.paymob.com/");
+});
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
