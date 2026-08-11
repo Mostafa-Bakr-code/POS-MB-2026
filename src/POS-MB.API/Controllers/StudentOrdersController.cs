@@ -65,6 +65,16 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
         return cancelled ? NoContent() : NotFound();
     }
 
+    // For an order stuck at AwaitingPayment - backed out of the payment
+    // screen, app crashed mid-checkout, connectivity blip - rather than
+    // making the student wait out the auto-cancel timeout with no recourse.
+    [HttpPost("{id:int}/resume-checkout")]
+    public async Task<IActionResult> ResumeCheckout(int id)
+    {
+        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(id, User.GetUserId(), User.GetUserName());
+        return Ok(new { CheckoutUrl = checkoutUrl });
+    }
+
     private async Task<IActionResult> BuildOrderResponseAsync(int id)
     {
         var order = await orderBusiness.GetByIdForStudentAsync(id, User.GetUserId());

@@ -32,29 +32,36 @@ public class PaymentsController(PaymobClient paymobClient, clsOrderBusiness orde
         var success = obj.TryGetProperty("success", out var successProp) && successProp.ValueKind == JsonValueKind.True;
         var amountCents = obj.TryGetProperty("amount_cents", out var amountProp) ? amountProp.GetInt64() : 0;
 
-        // special_reference (our own OrderId, set when the intention was
-        // created) comes back here - see clsOrderBusiness.CreateOrderAsync's
-        // Paymob path once that's wired up.
+        // special_reference (see PaymobOrderReference - deliberately not the
+        // raw OrderId, since Paymob's own emails display this to the
+        // customer) comes back here.
         var merchantOrderId = obj.TryGetProperty("order", out var orderProp) && orderProp.TryGetProperty("merchant_order_id", out var moidProp)
             ? moidProp.GetString()
             : null;
 
-        if (merchantOrderId is null || !int.TryParse(merchantOrderId, out var orderId))
+        if (merchantOrderId is null || !PaymobOrderReference.TryParse(merchantOrderId, out var orderDate, out var serialNumber))
         {
-            logger.LogWarning("Paymob webhook had a valid signature but no recognizable merchant_order_id");
+            logger.LogWarning("Paymob webhook had a valid signature but no recognizable order reference: {Reference}", merchantOrderId);
             return Ok(); // valid callback, but not tied to one of our orders - nothing to retry
+        }
+
+        var order = await orderBusiness.GetByDateAndSerialNumberAsync(orderDate, serialNumber);
+        if (order is null)
+        {
+            logger.LogWarning("Paymob webhook referenced an order that could not be found: {Reference}", merchantOrderId);
+            return Ok();
         }
 
         try
         {
-            await orderBusiness.MarkOrderPaymentResultAsync(orderId, success, amountCents / 100m);
+            await orderBusiness.MarkOrderPaymentResultAsync(order.OrderId, success, amountCents / 100m);
         }
         catch (InvalidOperationException ex)
         {
             // Amount mismatch (see MarkOrderPaymentResultAsync) - logged, not
             // thrown back at Paymob, since retrying wouldn't change the
             // outcome and this needs a human to look at it.
-            logger.LogError(ex, "Paymob webhook amount mismatch for OrderId={OrderId}", orderId);
+            logger.LogError(ex, "Paymob webhook amount mismatch for OrderId={OrderId}", order.OrderId);
         }
 
         return Ok();

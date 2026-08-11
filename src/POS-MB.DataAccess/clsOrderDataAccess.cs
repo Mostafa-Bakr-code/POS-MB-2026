@@ -124,6 +124,20 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QuerySingleOrDefaultAsync<Order>(query, new { Id = id });
     }
 
+    // Resolves a Paymob webhook's order reference (see PaymobOrderReference)
+    // back to a real order - OrderDate is the same persisted computed column
+    // (CAST(Date AS DATE)) that already enforces SerialNumber's uniqueness
+    // per day, so this is exactly as reliable a lookup as OrderId itself.
+    public async Task<Order?> GetByDateAndSerialNumberAsync(DateTime orderDateUtc, int serialNumber)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = "SELECT * FROM Orders WHERE OrderDate = @OrderDate AND SerialNumber = @SerialNumber";
+
+        return await connection.QuerySingleOrDefaultAsync<Order>(
+            query, new { OrderDate = orderDateUtc.Date, SerialNumber = serialNumber });
+    }
+
     public async Task<IEnumerable<OrderItem>> GetItemsByOrderIdAsync(int orderId)
     {
         using var connection = connectionFactory.CreateConnection();
@@ -215,11 +229,11 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QuerySingleOrDefaultAsync<Order>(query, new { Id = id, StudentId = studentId });
     }
 
-    // Status = @PlacedStatus is a defense-in-depth check, not just the
+    // The Status IN (...) check is a defense-in-depth check, not just the
     // business layer's job - it closes the same race a client could otherwise
-    // exploit by firing the cancel request the instant an order moves out of
-    // Placed (see clsOrderBusiness.CancelForStudentAsync for the primary,
-    // clearer-error-message check).
+    // exploit by firing the cancel request the instant an order moves past
+    // the allowed statuses (see clsOrderBusiness.CancelForStudentAsync for
+    // the primary, clearer-error-message check).
     public async Task<bool> CancelForStudentAsync(int id, int studentId)
     {
         using var connection = connectionFactory.CreateConnection();
@@ -228,10 +242,10 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             UPDATE Orders
             SET Status = @Status,
                 UpdatedAt = SYSUTCDATETIME()
-            WHERE OrderId = @Id AND StudentId = @StudentId AND Status = @PlacedStatus";
+            WHERE OrderId = @Id AND StudentId = @StudentId AND Status IN (@AwaitingPaymentStatus, @PlacedStatus)";
 
         var rowsAffected = await connection.ExecuteAsync(
-            query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled, PlacedStatus = OrderStatus.Placed });
+            query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled, AwaitingPaymentStatus = OrderStatus.AwaitingPayment, PlacedStatus = OrderStatus.Placed });
 
         return rowsAffected > 0;
     }

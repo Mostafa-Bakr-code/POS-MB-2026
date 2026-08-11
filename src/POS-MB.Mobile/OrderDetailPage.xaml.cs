@@ -138,12 +138,16 @@ public partial class OrderDetailPage : ContentPage
             $"Status: {DisplayStatus(_order.Status)}\n" +
             $"Total: {_order.Total:0.00}";
 
-        // Self-cancel only while the kitchen hasn't started yet - once it's
-        // Preparing, real ingredients/time are already committed, so there's
-        // no turning back for a student (staff retain a broader override
-        // elsewhere). Matches the same rule enforced server-side in
-        // clsOrderBusiness.CancelForStudentAsync, not just hidden here.
-        CancelButton.IsVisible = _order.Status is OrderStatus.Placed;
+        // Self-cancel while AwaitingPayment too - a student who backed out of
+        // the payment screen shouldn't be forced to wait out the auto-cancel
+        // timeout just to walk away. Matches the same rule enforced
+        // server-side in clsOrderBusiness.CancelForStudentAsync.
+        CancelButton.IsVisible = _order.Status is OrderStatus.Placed or OrderStatus.AwaitingPayment;
+
+        // Only offer to resume when checkout genuinely didn't finish - once
+        // paid, the order moves on to Placed/Preparing/etc and this has
+        // nothing left to do.
+        ContinuePaymentButton.IsVisible = _order.Status is OrderStatus.AwaitingPayment;
     }
 
     // Every other status here is a real workflow step worth showing as-is;
@@ -171,5 +175,22 @@ public partial class OrderDetailPage : ContentPage
         }
 
         await LoadAsync();
+    }
+
+    private async void OnContinuePaymentClicked(object? sender, EventArgs e)
+    {
+        ContinuePaymentButton.IsEnabled = false;
+        var (checkoutUrl, error) = await _apiClient.ResumeCheckoutAsync(_orderId);
+        ContinuePaymentButton.IsEnabled = true;
+
+        if (checkoutUrl is null)
+        {
+            await DisplayAlert("Error", error ?? "Payment could not be resumed.", "OK");
+            await LoadAsync(); // status may have moved on server-side (e.g. auto-cancelled) - refresh to reflect it
+            return;
+        }
+
+        StopPolling(); // PaymentCheckoutPage will pop this page from the stack on completion
+        await Navigation.PushAsync(new PaymentCheckoutPage(checkoutUrl, _orderId));
     }
 }

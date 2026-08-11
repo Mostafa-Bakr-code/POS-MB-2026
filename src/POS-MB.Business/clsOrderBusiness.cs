@@ -107,10 +107,36 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var order = await dataAccess.GetByIdAsync(orderId)
             ?? throw new InvalidOperationException($"Order {orderId} was just created but could not be found.");
 
-        var intention = await paymobClient.CreateIntentionAsync(
-            order.Total, orderId.ToString(CultureInfo.InvariantCulture), studentEmail, PaymentExpirationSeconds);
+        var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: false);
+        return (orderId, checkoutUrl);
+    }
 
-        return (orderId, paymobClient.BuildCheckoutUrl(intention.ClientSecret));
+    // A student backing out of the in-app payment screen (or the app
+    // crashing, a connectivity blip mid-checkout) leaves the order sitting
+    // at AwaitingPayment with no way forward otherwise - this starts a fresh
+    // Paymob checkout session for that same order rather than making them
+    // wait out the auto-cancel timeout with no recourse.
+    public async Task<string> ResumeCheckoutAsync(int orderId, int studentId, string studentEmail)
+    {
+        var order = await dataAccess.GetByIdForStudentAsync(orderId, studentId)
+            ?? throw new ArgumentException("This order could not be found.", nameof(orderId));
+
+        if (order.Status != OrderStatus.AwaitingPayment)
+            throw new ArgumentException("This order is not waiting for payment.", nameof(orderId));
+
+        return await StartPaymobCheckoutAsync(order, studentEmail, isRetry: true);
+    }
+
+    private async Task<string> StartPaymobCheckoutAsync(Order order, string studentEmail, bool isRetry)
+    {
+        var serialNumber = order.SerialNumber
+            ?? throw new InvalidOperationException($"Order {order.OrderId} has no SerialNumber - cannot start a Paymob checkout for it.");
+        var reference = isRetry
+            ? PaymobOrderReference.BuildRetry(order.Date, serialNumber)
+            : PaymobOrderReference.Build(order.Date, serialNumber);
+
+        var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds);
+        return paymobClient.BuildCheckoutUrl(intention.ClientSecret);
     }
 
     // Defaults to today only (see StudentOrdersController) so a student isn't
@@ -127,10 +153,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     public Task<Order?> GetByIdForStudentAsync(int orderId, int studentId) =>
         dataAccess.GetByIdForStudentAsync(orderId, studentId);
 
-    // A student can only self-cancel while the kitchen hasn't started on the
-    // order yet (Status still Placed) - once it's Preparing, real resources
-    // (ingredients, the chef's time) are already committed, so cancelling at
-    // that point wastes them for nothing. Staff retain a broader override via
+    // A student can self-cancel while AwaitingPayment (nothing committed yet -
+    // not even payment) or Placed (order exists, but the kitchen hasn't
+    // started on it) - once it's Preparing, real resources (ingredients, the
+    // chef's time) are already committed, so cancelling at that point wastes
+    // them for nothing. Staff retain a broader override via
     // clsOrderBusiness.CancelAsync (used from the WinForms Order Status
     // screen) - that's a deliberate difference in privilege, not an oversight.
     public async Task<bool> CancelForStudentAsync(int orderId, int studentId)
@@ -138,11 +165,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var order = await dataAccess.GetByIdForStudentAsync(orderId, studentId);
         if (order is null) return false; // not found / not theirs - controller returns 404
 
-        if (order.Status != OrderStatus.Placed)
+        if (order.Status is not (OrderStatus.AwaitingPayment or OrderStatus.Placed))
             throw new ArgumentException("This order can no longer be cancelled - the kitchen has already started preparing it.", nameof(orderId));
 
         return await dataAccess.CancelForStudentAsync(orderId, studentId);
     }
+
+    public Task<Order?> GetByDateAndSerialNumberAsync(DateTime orderDateUtc, int serialNumber) =>
+        dataAccess.GetByDateAndSerialNumberAsync(orderDateUtc, serialNumber);
 
     public Task<Order?> GetByIdAsync(int id) =>
         dataAccess.GetByIdAsync(id);
