@@ -188,6 +188,41 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             query, new { OrderSource = OrderSource.Mobile, Status = status, OlderThanUtc = olderThanUtc });
     }
 
+    // Feeds the cashier-PC kitchen-ticket poller (see project notes on the
+    // chef tablet's print-trigger design) - a browser can't open a raw socket
+    // to the ESC/POS printer, so whichever client (tablet or WinForms) moves
+    // an order to Preparing no longer prints it inline. Instead this is what
+    // the poller checks every few seconds, decoupled from which screen did
+    // the accepting.
+    public async Task<IEnumerable<Order>> GetOrdersNeedingKitchenTicketAsync()
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            SELECT * FROM Orders
+            WHERE OrderSource = @OrderSource AND Status = @Status AND KitchenTicketPrintedAt IS NULL
+            ORDER BY Date";
+
+        return await connection.QueryAsync<Order>(
+            query, new { OrderSource = OrderSource.Mobile, Status = OrderStatus.Preparing });
+    }
+
+    // The KitchenTicketPrintedAt IS NULL guard makes this safely idempotent -
+    // if more than one cashier PC ever runs the poller, only the first to
+    // mark an order actually "claims" it.
+    public async Task<bool> MarkKitchenTicketPrintedAsync(int id)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET KitchenTicketPrintedAt = SYSUTCDATETIME()
+            WHERE OrderId = @Id AND KitchenTicketPrintedAt IS NULL";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id });
+        return rowsAffected > 0;
+    }
+
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)
     {
         using var connection = connectionFactory.CreateConnection();

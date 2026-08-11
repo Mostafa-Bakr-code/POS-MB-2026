@@ -1,4 +1,3 @@
-using POS_MB.Printing;
 using POS_MB.WinformsApp.Api;
 using POS_MB.WinformsApp.Dialogs;
 using POS_MB.WinformsApp.Models;
@@ -9,17 +8,17 @@ namespace POS_MB.WinformsApp.Controls;
 // The kitchen's working queue - "what needs to happen to orders placed today",
 // as opposed to OrderHistoryControl which is a read-only historical record.
 // Placed->Preparing->Ready->Completed is a straight line (Advance always means
-// "move to the next status"), plus Cancel for anything gone wrong. This is an
-// interim stand-in for the planned chef-tablet web client (see project notes) -
-// same underlying api/orders/{id}/status endpoint, just from a WinForms screen
-// that exists today.
+// "move to the next status"), plus Cancel for anything gone wrong. Now one of
+// two clients that can drive this queue - the chef tablet (wwwroot/chef) is
+// the other, both hitting the same api/orders/{id}/status endpoint.
 //
 // Mobile orders only - a cashier order is paid and handed over in the same
 // moment it's created (starts at Completed, see clsOrderDataAccess.CreateOrderAsync),
 // so there's nothing for a working queue to ever do with one.
 //
-// Advancing Placed -> Preparing ("Accept") fires a kitchen-ticket print, same
-// pipeline a cashier order gets the instant it's placed - see PrintKitchenTicketAsync.
+// Advancing Placed -> Preparing ("Accept") no longer prints inline from here -
+// see KitchenTicketPrintService (owned by FormMain, runs regardless of which
+// screen/client accepted the order) for why that moved out.
 public class OrderStatusControl : UserControl
 {
     // Matches clsOrderBusiness.AcceptingOnlineOrdersSettingKey - duplicated
@@ -45,7 +44,6 @@ public class OrderStatusControl : UserControl
     private readonly CheckBox _chkShowAll;
     private readonly CheckBox _chkAcceptingOrders;
     private readonly DataGridView _grid;
-    private readonly Label _lblPrintStatus;
     private bool _suppressAcceptingOrdersEvent;
     private int _autoCancelMinutes = DefaultAutoCancelMinutes;
 
@@ -87,12 +85,9 @@ public class OrderStatusControl : UserControl
         };
         _chkAcceptingOrders.CheckedChanged += async (_, _) => await OnAcceptingOrdersToggledAsync();
 
-        _lblPrintStatus = new Label { AutoSize = true, Margin = new Padding(20, 14, 0, 0), Font = new Font("Segoe UI", 10F) };
-
         toolbar.Controls.Add(_chkShowAll);
         toolbar.Controls.Add(btnRefresh);
         toolbar.Controls.Add(_chkAcceptingOrders);
-        toolbar.Controls.Add(_lblPrintStatus);
 
         _grid = new DataGridView
         {
@@ -380,13 +375,10 @@ public class OrderStatusControl : UserControl
                 return;
             }
 
-            // Placed -> Preparing is "Accept" - the moment the kitchen needs a
-            // physical ticket for a mobile order, same as a cashier order gets
-            // one the instant it's placed. Fired in the background, not
-            // awaited, so advancing the next order isn't blocked on a printer.
-            if (order.Status == OrderStatus.Placed && next.Value == OrderStatus.Preparing)
-                _ = PrintKitchenTicketAsync(order.OrderId);
-
+            // Placed -> Preparing is "Accept" - printing the kitchen ticket is
+            // no longer triggered from here, see KitchenTicketPrintService
+            // (owned by FormMain, picks this order up on its next poll
+            // regardless of which client/screen accepted it).
             await LoadAsync();
         }
         else if (columnName == "Cancel")
@@ -406,92 +398,5 @@ public class OrderStatusControl : UserControl
 
             await LoadAsync();
         }
-    }
-
-    // Kitchen ticket only, no customer receipt - unlike a cashier order there's
-    // no customer physically at the register to hand one to. Same printer
-    // pipeline as OrderTakingControl (PrinterSettings/ReceiptBuilder/
-    // NetworkReceiptPrinter, including the kitchen-unreachable fallback to the
-    // client printer), just triggered by "Accept" here instead of by placing
-    // the order - see the printing design notes on why print has to be
-    // triggered from this machine rather than pushed from the API.
-    private async Task PrintKitchenTicketAsync(int orderId)
-    {
-        var full = await _apiClient.GetOrderByIdAsync(orderId);
-        if (full is null)
-        {
-            ShowPrintStatus("Could not print - order not found.", success: false);
-            return;
-        }
-
-        var allItems = await _apiClient.GetItemsAsync(includeInactive: true);
-        var itemNamesById = allItems.ToDictionary(i => i.ItemId, i => i.ItemName);
-
-        var receiptOrder = new ReceiptOrder(
-            full.SerialNumber ?? full.OrderId,
-            AppSession.ToLocalDisplay(full.Date),
-            full.Items.Select(oi => new ReceiptItem(
-                itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
-                oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
-            full.Total,
-            full.IsComplimentary);
-
-        var settings = PrinterSettings.Load();
-
-        var printSerial = settings.ReceiptOrderNumberWrapAt > 0
-            ? ((receiptOrder.SerialNumber - 1) % settings.ReceiptOrderNumberWrapAt) + 1
-            : receiptOrder.SerialNumber;
-        var printOrder = receiptOrder with { SerialNumber = printSerial };
-
-        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize);
-
-        if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
-        {
-            using var preview = new FormReceiptPreviewDialog("Kitchen Ticket (no printer configured - preview only)",
-                ReceiptBuilder.PreviewKitchenTicket(printOrder, settings.KitchenTicketFontSize));
-            preview.ShowDialog(this);
-            return;
-        }
-
-        var kitchenFailure = await PrintSafelyAsync(settings.KitchenPrinterIp, settings.KitchenPrinterPort, kitchenTicket, "Kitchen ticket");
-        if (kitchenFailure is null)
-        {
-            ShowPrintStatus($"Order #{printOrder.SerialNumber}: kitchen ticket printed.", success: true);
-            return;
-        }
-
-        var fallbackFailure = await PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort, kitchenTicket, "Kitchen ticket (fallback)");
-        if (fallbackFailure is null)
-            ShowPrintStatus($"Order #{printOrder.SerialNumber}: kitchen printer unreachable - printed on client printer instead.", success: false);
-        else
-            ShowPrintStatus($"Order #{printOrder.SerialNumber}: print failed - both printers unreachable.", success: false);
-    }
-
-    private static async Task<string?> PrintSafelyAsync(string ip, int port, byte[] data, string label)
-    {
-        if (string.IsNullOrWhiteSpace(ip))
-            return $"{label} (not configured)";
-
-        try
-        {
-            await new NetworkReceiptPrinter(ip, port).PrintAsync(data);
-            return null;
-        }
-        catch
-        {
-            return label;
-        }
-    }
-
-    private void ShowPrintStatus(string text, bool success)
-    {
-        void Apply()
-        {
-            _lblPrintStatus.Text = text;
-            _lblPrintStatus.ForeColor = success ? Color.FromArgb(25, 135, 84) : Color.FromArgb(220, 53, 69);
-        }
-
-        if (InvokeRequired) BeginInvoke(Apply);
-        else Apply();
     }
 }

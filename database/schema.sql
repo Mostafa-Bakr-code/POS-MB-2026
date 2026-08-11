@@ -83,6 +83,7 @@ CREATE TABLE dbo.Orders
     OrderSource     TINYINT           NOT NULL CONSTRAINT DF_Orders_OrderSource DEFAULT (0), -- 0=Cashier,1=Mobile
     Status          TINYINT           NOT NULL CONSTRAINT DF_Orders_Status DEFAULT (0), -- 0=Placed,1=Preparing,2=Ready,3=Completed,4=Cancelled
     IsComplimentary BIT               NOT NULL CONSTRAINT DF_Orders_IsComplimentary DEFAULT (0),
+    KitchenTicketPrintedAt DATETIME2  NULL, -- set once the cashier PC's poller has printed this order's kitchen ticket; NULL means "still needs printing" (only meaningful for Mobile orders in Preparing)
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Orders PRIMARY KEY CLUSTERED (OrderId),

@@ -10,8 +10,13 @@ namespace POS_MB.API.Controllers;
 [Route("api/[controller]")]
 public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersController> logger) : ControllerBase
 {
+    // OrderHistory (the full, date-filterable browse screen) and Orders (a
+    // live single-day working queue - the WinForms Order Status screen and
+    // the chef tablet both need to list today's orders without also granting
+    // access to historical browsing) legitimately share this one endpoint -
+    // either permission is enough.
     [HttpGet]
-    [RequirePermission(Permission.OrderHistory)]
+    [RequirePermission(Permission.OrderHistory | Permission.Orders)]
     public async Task<IActionResult> GetAll([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null, [FromQuery] OrderSource? orderSource = null)
     {
         var orders = await orderBusiness.GetAllAsync(startDate, endDate, orderSource);
@@ -19,13 +24,16 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
     }
 
     // GetById() and Create() both need this exact response shape, but GetById()
-    // carries its own [RequirePermission(OrderHistory)] check, which would wrongly
-    // block a cashier (Orders only, no OrderHistory) from seeing the receipt for
-    // the order they just placed - so both call this shared, unchecked builder
-    // instead of Create() calling GetById() directly (previously duplicated
+    // carries its own permission check, which would wrongly block a cashier
+    // (Orders only, no OrderHistory) from seeing the receipt for the order
+    // they just placed - so both call this shared, unchecked builder instead
+    // of Create() calling GetById() directly (previously duplicated
     // byte-for-byte between the two instead of one delegating to the other).
+    // Orders is also what an Orders-only working-queue client (the WinForms
+    // Order Status screen's "View" button, the chef tablet's card detail)
+    // needs - same reasoning as GetAll above.
     [HttpGet("{id:int}")]
-    [RequirePermission(Permission.OrderHistory)]
+    [RequirePermission(Permission.OrderHistory | Permission.Orders)]
     public Task<IActionResult> GetById(int id) => BuildOrderResponseAsync(id);
 
     [HttpPost]
@@ -82,13 +90,44 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
         return cancelled ? NoContent() : NotFound();
     }
 
+    // The cashier-PC kitchen-ticket poller (WinForms) needs full order+item
+    // detail for every order still awaiting a print, regardless of which
+    // client (tablet or WinForms) moved it into Preparing - see
+    // clsOrderDataAccess.GetOrdersNeedingKitchenTicketAsync for why printing
+    // is decoupled from whichever screen did the accepting.
+    [HttpGet("needing-kitchen-ticket")]
+    [RequirePermission(Permission.Orders)]
+    public async Task<IActionResult> GetOrdersNeedingKitchenTicket()
+    {
+        var orders = await orderBusiness.GetOrdersNeedingKitchenTicketAsync();
+
+        var results = new List<object>();
+        foreach (var order in orders)
+            results.Add(await BuildOrderDtoAsync(order));
+
+        return Ok(results);
+    }
+
+    [HttpPost("{id:int}/mark-kitchen-ticket-printed")]
+    [RequirePermission(Permission.Orders)]
+    public async Task<IActionResult> MarkKitchenTicketPrinted(int id)
+    {
+        var marked = await orderBusiness.MarkKitchenTicketPrintedAsync(id);
+        return marked ? NoContent() : NotFound();
+    }
+
     private async Task<IActionResult> BuildOrderResponseAsync(int id)
     {
         var order = await orderBusiness.GetByIdAsync(id);
         if (order is null) return NotFound();
 
-        var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.CashierName, order.StudentEmail, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items });
+        return Ok(await BuildOrderDtoAsync(order));
+    }
+
+    private async Task<object> BuildOrderDtoAsync(Order order)
+    {
+        var items = await orderBusiness.GetItemsByOrderIdAsync(order.OrderId);
+        return new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.CashierName, order.StudentEmail, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items };
     }
 }
 

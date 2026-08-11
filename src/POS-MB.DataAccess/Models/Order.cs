@@ -18,6 +18,13 @@ public class Order
     public OrderSource OrderSource { get; set; }
     public OrderStatus Status { get; set; }
     public bool IsComplimentary { get; set; }
+
+    // Set once the cashier PC's poller has printed this order's kitchen
+    // ticket - see clsOrderDataAccess.GetOrdersNeedingKitchenTicketAsync.
+    // Null means "still needs printing" (only meaningful for a Mobile order
+    // sitting in Preparing).
+    public DateTime? KitchenTicketPrintedAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

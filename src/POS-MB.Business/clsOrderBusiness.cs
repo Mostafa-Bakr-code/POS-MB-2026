@@ -180,6 +180,12 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     public Task<IEnumerable<OrderItem>> GetItemsByOrderIdAsync(int orderId) =>
         dataAccess.GetItemsByOrderIdAsync(orderId);
 
+    public Task<IEnumerable<Order>> GetOrdersNeedingKitchenTicketAsync() =>
+        dataAccess.GetOrdersNeedingKitchenTicketAsync();
+
+    public Task<bool> MarkKitchenTicketPrintedAsync(int orderId) =>
+        dataAccess.MarkKitchenTicketPrintedAsync(orderId);
+
     public async Task<IEnumerable<Order>> GetAllAsync(DateTime? startDate = null, DateTime? endDate = null, OrderSource? orderSource = null)
     {
         var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);

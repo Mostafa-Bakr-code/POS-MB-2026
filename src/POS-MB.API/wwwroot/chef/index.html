@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>POS-MB — Kitchen</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card-bg: #ffffff;
+    --ink: #1c2128;
+    --muted: #6b7280;
+    --border: #e2e4e9;
+    --accent: #2563eb;
+    --placed: #b45309;
+    --placed-bg: #fef3c7;
+    --preparing: #1d4ed8;
+    --preparing-bg: #dbeafe;
+    --ready: #15803d;
+    --ready-bg: #dcfce7;
+    --danger: #dc2626;
+    --danger-bg: #fee2e2;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  button { font-family: inherit; cursor: pointer; touch-action: manipulation; }
+
+  /* ---------- Login screen ---------- */
+  #loginScreen {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; padding: 20px;
+  }
+  #loginBox {
+    background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px;
+    padding: 36px 32px; width: 100%; max-width: 380px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.06);
+  }
+  #loginBox h1 { font-size: 22px; margin: 0 0 4px; }
+  #loginBox p.sub { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  #loginBox input {
+    width: 100%; padding: 14px 16px; font-size: 17px; margin-bottom: 12px;
+    border: 1px solid var(--border); border-radius: 10px; background: #fafafa;
+  }
+  #loginBox input:focus { outline: 2px solid var(--accent); background: #fff; }
+  #loginBox button {
+    width: 100%; padding: 14px; font-size: 17px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    margin-top: 8px;
+  }
+  #loginBox button:disabled { opacity: 0.6; }
+  #loginError { color: var(--danger); font-size: 14px; margin-top: 12px; min-height: 18px; }
+
+  /* ---------- Board screen ---------- */
+  #boardScreen { display: none; height: 100%; flex-direction: column; }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 20px; background: #1c2128; color: #fff;
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  header .spacer { flex: 1; }
+  header label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  header input[type="checkbox"] { width: 20px; height: 20px; }
+  #acceptingLabel { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(255,255,255,0.1); }
+  #acceptingLabel.off { background: var(--danger); }
+  #printStatus { font-size: 13px; color: #b8c0cc; max-width: 260px; }
+  #logoutBtn {
+    background: #b02a37; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 16px; font-weight: 600;
+  }
+
+  #board {
+    flex: 1; overflow-y: auto; padding: 18px;
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    align-content: start;
+  }
+  #empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 20px; font-size: 18px; }
+
+  .card {
+    background: var(--card-bg); border-radius: 14px; border: 1px solid var(--border);
+    border-left-width: 6px; padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card.status-0 { border-left-color: var(--placed); }
+  .card.status-1 { border-left-color: var(--preparing); }
+  .card.status-2 { border-left-color: var(--ready); }
+  .card.status-3, .card.status-4 { border-left-color: var(--border); opacity: 0.7; }
+
+  .card .row1 { display: flex; align-items: baseline; justify-content: space-between; }
+  .card .orderNum { font-size: 22px; font-weight: 800; }
+  .card .time { color: var(--muted); font-size: 14px; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; width: fit-content; }
+  .badge.status-0 { background: var(--placed-bg); color: var(--placed); }
+  .badge.status-1 { background: var(--preparing-bg); color: var(--preparing); }
+  .badge.status-2 { background: var(--ready-bg); color: var(--ready); }
+  .badge.status-3 { background: #e5e7eb; color: #374151; }
+  .badge.status-4 { background: var(--danger-bg); color: var(--danger); }
+
+  .items { font-size: 15px; line-height: 1.5; color: #333; }
+  .items .line { display: flex; justify-content: space-between; gap: 8px; }
+  .items .qty { font-weight: 700; color: var(--accent); }
+  .items .comment { color: var(--muted); font-size: 13px; padding-left: 20px; }
+
+  .countdown { font-size: 13px; font-weight: 700; color: var(--placed); }
+  .countdown.urgent { color: var(--danger); }
+
+  .actions { display: flex; gap: 10px; margin-top: 4px; }
+  .actions button {
+    flex: 1; padding: 14px; border-radius: 10px; border: none; font-size: 15px; font-weight: 700;
+  }
+  .btn-advance { background: var(--accent); color: #fff; }
+  .btn-cancel { background: #fff; color: var(--danger); border: 1px solid var(--danger) !important; }
+  .actions button:disabled { opacity: 0.5; }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --card-bg: #1e2128; --ink: #e6e8eb; --muted: #8b93a1; --border: #2c313a;
+    }
+    #loginBox input { background: #171a1f; color: #e6e8eb; }
+    .items { color: #d1d5db; }
+    .badge.status-3 { background: #2c313a; color: #d1d5db; }
+  }
+</style>
+</head>
+<body>
+
+  <div id="loginScreen">
+    <div id="loginBox">
+      <h1>Kitchen</h1>
+      <p class="sub">Sign in with your staff account to see incoming mobile orders.</p>
+      <input id="username" type="text" placeholder="Username" autocomplete="username" />
+      <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+      <button id="loginBtn">Sign In</button>
+      <div id="loginError"></div>
+    </div>
+  </div>
+
+  <div id="boardScreen">
+    <header>
+      <h1>Kitchen — Mobile Orders</h1>
+      <label><input type="checkbox" id="showAllChk" /> Show completed/cancelled</label>
+      <div class="spacer"></div>
+      <div id="printStatus"></div>
+      <label id="acceptingLabel">
+        <input type="checkbox" id="acceptingChk" />
+        Accepting Online Orders
+      </label>
+      <button id="logoutBtn">Log Out</button>
+    </header>
+    <div id="board"></div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  const API = ""; // same-origin
+  const STATUS = { PLACED: 0, PREPARING: 1, READY: 2, COMPLETED: 3, CANCELLED: 4 };
+  const STATUS_NAME = { 0: "Placed", 1: "Preparing", 2: "Ready", 3: "Completed", 4: "Cancelled" };
+  const ADVANCE_LABEL = { 0: "Start Preparing", 1: "Mark Ready", 2: "Complete" };
+  const ADVANCE_NEXT = { 0: STATUS.PREPARING, 1: STATUS.READY, 2: STATUS.COMPLETED };
+  const PERMISSION_ORDERS = 4;
+
+  // Matches clsOrderBusiness.MobileOrderAutoCancelMinutesSettingKey/DefaultAutoCancelMinutes
+  const AUTO_CANCEL_SETTING_KEY = "MobileOrderAutoCancelMinutes";
+  const DEFAULT_AUTO_CANCEL_MINUTES = 10;
+  const ACCEPTING_ORDERS_SETTING_KEY = "AcceptingOnlineOrders";
+
+  const REFRESH_INTERVAL_MS = 5000;
+  const HEARTBEAT_INTERVAL_MS = 30000;
+  const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
+
+  const state = {
+    token: null,
+    refreshToken: null,
+    permissions: 0,
+    timeZoneOffsetHours: 0,
+    autoCancelMinutes: DEFAULT_AUTO_CANCEL_MINUTES,
+    itemNames: new Map(),
+    orders: [],
+    suppressAcceptingEvent: false,
+    // orderId -> { status, total, items } - avoids re-fetching an order's
+    // full item detail every 5s poll when nothing about it has changed.
+    // Refetching unconditionally (every order, every cycle) was chatty
+    // enough on its own to trip the API's rate limiter alongside WinForms'
+    // own polling - this cuts it down to only new/changed orders.
+    detailCache: new Map()
+  };
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- HTTP ----------
+  async function api(path, options) {
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + state.token
+    });
+    const res = await fetch(API + path, options);
+    if (res.status === 401) {
+      const refreshed = await tryRefreshToken();
+      if (refreshed) return api(path, options); // one retry with the new token
+      logout();
+      throw new Error("Session expired");
+    }
+    return res;
+  }
+
+  async function tryRefreshToken() {
+    if (!state.refreshToken) return false;
+    try {
+      const res = await fetch(API + "/api/users/refresh-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ RefreshToken: state.refreshToken })
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      state.token = data.token;
+      state.refreshToken = data.refreshToken;
+      persistSession();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ---------- Session persistence ----------
+  function persistSession() {
+    localStorage.setItem("chef.token", state.token);
+    localStorage.setItem("chef.refreshToken", state.refreshToken);
+    localStorage.setItem("chef.permissions", String(state.permissions));
+  }
+  function clearSession() {
+    localStorage.removeItem("chef.token");
+    localStorage.removeItem("chef.refreshToken");
+    localStorage.removeItem("chef.permissions");
+  }
+  function loadSession() {
+    const token = localStorage.getItem("chef.token");
+    const refreshToken = localStorage.getItem("chef.refreshToken");
+    const permissions = localStorage.getItem("chef.permissions");
+    if (!token || !refreshToken) return false;
+    state.token = token;
+    state.refreshToken = refreshToken;
+    state.permissions = Number(permissions) || 0;
+    return true;
+  }
+
+  // ---------- Login ----------
+  $("loginBtn").addEventListener("click", doLogin);
+  $("password").addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
+
+  async function doLogin() {
+    const username = $("username").value.trim();
+    const password = $("password").value;
+    if (!username || !password) return;
+
+    $("loginBtn").disabled = true;
+    $("loginError").textContent = "";
+    try {
+      const res = await fetch(API + "/api/users/verify-credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ UserName: username, Password: password })
+      });
+      if (!res.ok) {
+        $("loginError").textContent = "Incorrect username or password.";
+        return;
+      }
+      const data = await res.json();
+      if ((data.user.permissions & PERMISSION_ORDERS) === 0) {
+        $("loginError").textContent = "This account isn't allowed to manage orders.";
+        return;
+      }
+      state.token = data.token;
+      state.refreshToken = data.refreshToken;
+      state.permissions = data.user.permissions;
+      persistSession();
+      await startBoard();
+    } catch {
+      $("loginError").textContent = "Could not reach the server. Check your connection.";
+    } finally {
+      $("loginBtn").disabled = false;
+    }
+  }
+
+  $("logoutBtn").addEventListener("click", logout);
+
+  function logout() {
+    if (state.refreshToken && state.token) {
+      // Best-effort - don't block logout on a network hiccup.
+      fetch(API + "/api/users/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + state.token },
+        body: JSON.stringify({ RefreshToken: state.refreshToken })
+      }).catch(() => {});
+    }
+    clearSession();
+    stopTimers();
+    state.token = null;
+    state.refreshToken = null;
+    $("boardScreen").style.display = "none";
+    $("loginScreen").style.display = "flex";
+    $("username").value = "";
+    $("password").value = "";
+  }
+
+  // ---------- Board bootstrap ----------
+  async function startBoard() {
+    $("loginScreen").style.display = "none";
+    $("boardScreen").style.display = "flex";
+
+    await Promise.all([
+      loadTimeZoneOffset(),
+      loadAutoCancelMinutes(),
+      loadAcceptingToggle(),
+      loadItemNames()
+    ]);
+
+    await refreshOrders();
+    startTimers();
+  }
+
+  async function loadTimeZoneOffset() {
+    try {
+      const res = await api("/api/settings/TimeZoneOffsetHours");
+      if (res.ok) {
+        const s = await res.json();
+        state.timeZoneOffsetHours = s.value ? parseFloat(s.value) : 0;
+      }
+    } catch { /* fall back to 0 */ }
+  }
+
+  async function loadAutoCancelMinutes() {
+    try {
+      const res = await api("/api/settings/" + AUTO_CANCEL_SETTING_KEY);
+      if (res.ok) {
+        const s = await res.json();
+        const minutes = s.value ? parseInt(s.value, 10) : NaN;
+        state.autoCancelMinutes = minutes > 0 ? minutes : DEFAULT_AUTO_CANCEL_MINUTES;
+      }
+    } catch { /* keep default */ }
+  }
+
+  async function loadItemNames() {
+    try {
+      const res = await api("/api/items?includeInactive=true");
+      if (res.ok) {
+        const items = await res.json();
+        state.itemNames = new Map(items.map((i) => [i.itemId, i.itemName]));
+      }
+    } catch { /* names fall back to "Item #n" */ }
+  }
+
+  // ---------- Accepting Online Orders toggle ----------
+  async function loadAcceptingToggle() {
+    try {
+      const res = await api("/api/settings/" + ACCEPTING_ORDERS_SETTING_KEY);
+      const value = res.ok ? (await res.json()).value : null;
+      state.suppressAcceptingEvent = true;
+      $("acceptingChk").checked = value !== "false"; // missing/anything else defaults to accepting
+      state.suppressAcceptingEvent = false;
+      applyAcceptingLabelStyle();
+    } catch { /* leave as-is */ }
+  }
+
+  function applyAcceptingLabelStyle() {
+    $("acceptingLabel").classList.toggle("off", !$("acceptingChk").checked);
+  }
+
+  $("acceptingChk").addEventListener("change", async () => {
+    if (state.suppressAcceptingEvent) return;
+    const isAccepting = $("acceptingChk").checked;
+    $("acceptingChk").disabled = true;
+    try {
+      await api("/api/settings/accepting-online-orders", {
+        method: "POST",
+        body: JSON.stringify(isAccepting)
+      });
+      applyAcceptingLabelStyle();
+    } catch {
+      await loadAcceptingToggle(); // revert to whatever the server actually has
+    } finally {
+      $("acceptingChk").disabled = false;
+    }
+  });
+
+  // ---------- Orders ----------
+  $("showAllChk").addEventListener("change", render);
+
+  async function refreshOrders() {
+    const today = new Date();
+    const dateStr = today.getFullYear() + "-" + pad(today.getMonth() + 1) + "-" + pad(today.getDate());
+
+    let res;
+    try {
+      // OrderSource=1 is Mobile - a cashier order is paid/handed over at
+      // creation (starts at Completed already), never meaningful in a
+      // working kitchen queue.
+      res = await api(`/api/orders?startDate=${dateStr}&endDate=${dateStr}&orderSource=1`);
+    } catch {
+      return; // session handling already dealt with (logout) if it was a 401
+    }
+    if (!res.ok) return;
+
+    const summaries = await res.json();
+
+    // Full item detail per order (name/qty/comment) is the actual point of a
+    // kitchen screen - unlike the WinForms grid (which only shows a compact
+    // row with a "View" button), the chef needs to see what's inside every
+    // card without an extra tap. Only fetched for an order the first time
+    // it's seen, or again if its status/total changed since - an order
+    // sitting unchanged in Preparing for several poll cycles costs zero
+    // extra requests after the first.
+    const detailed = await Promise.all(summaries.map(async (o) => {
+      const cached = state.detailCache.get(o.orderId);
+      if (cached && cached.status === o.status && cached.total === o.total) {
+        return Object.assign({}, o, { items: cached.items });
+      }
+      try {
+        const detailRes = await api(`/api/orders/${o.orderId}`);
+        if (detailRes.ok) {
+          const full = await detailRes.json();
+          state.detailCache.set(o.orderId, { status: full.status, total: full.total, items: full.items });
+          return full;
+        }
+      } catch { /* fall through to the summary-only shape below */ }
+      return Object.assign({}, o, { items: cached ? cached.items : [] });
+    }));
+
+    // Drop cache entries for orders no longer in today's list (rolled past
+    // midnight, etc.) so this doesn't grow without bound across a long shift.
+    const liveIds = new Set(summaries.map((o) => o.orderId));
+    for (const id of state.detailCache.keys()) {
+      if (!liveIds.has(id)) state.detailCache.delete(id);
+    }
+
+    state.orders = detailed;
+    render();
+  }
+
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+
+  function toLocalDisplay(utcIso) {
+    const utcMs = Date.parse(utcIso);
+    const localMs = utcMs + state.timeZoneOffsetHours * 3600000;
+    const d = new Date(localMs);
+    return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes());
+  }
+
+  function render() {
+    const showAll = $("showAllChk").checked;
+    const visible = state.orders.filter((o) =>
+      showAll || o.status === STATUS.PLACED || o.status === STATUS.PREPARING || o.status === STATUS.READY);
+
+    // Oldest first - matches a real kitchen queue, the order that's waited
+    // longest belongs first, not buried under newer arrivals.
+    visible.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+
+    const board = $("board");
+    board.innerHTML = "";
+
+    if (visible.length === 0) {
+      board.innerHTML = '<div id="empty">No orders right now.</div>';
+      return;
+    }
+
+    for (const order of visible) board.appendChild(renderCard(order));
+  }
+
+  function renderCard(order) {
+    const card = document.createElement("div");
+    card.className = "card status-" + order.status;
+
+    const row1 = document.createElement("div");
+    row1.className = "row1";
+    const orderNum = document.createElement("div");
+    orderNum.className = "orderNum";
+    orderNum.textContent = "#" + (order.serialNumber ?? order.orderId);
+    const time = document.createElement("div");
+    time.className = "time";
+    time.textContent = toLocalDisplay(order.date);
+    row1.appendChild(orderNum);
+    row1.appendChild(time);
+    card.appendChild(row1);
+
+    const badge = document.createElement("span");
+    badge.className = "badge status-" + order.status;
+    badge.textContent = STATUS_NAME[order.status];
+    card.appendChild(badge);
+
+    const items = document.createElement("div");
+    items.className = "items";
+    for (const oi of (order.items || [])) {
+      const line = document.createElement("div");
+      line.className = "line";
+      const name = document.createElement("span");
+      name.innerHTML = '<span class="qty">x' + oi.quantity + '</span> ' +
+        escapeHtml(state.itemNames.get(oi.itemId) || ("Item #" + oi.itemId));
+      line.appendChild(name);
+      items.appendChild(line);
+      if (oi.comment) {
+        const comment = document.createElement("div");
+        comment.className = "comment";
+        comment.textContent = oi.comment;
+        items.appendChild(comment);
+      }
+    }
+    card.appendChild(items);
+
+    if (order.status === STATUS.PLACED) {
+      const countdown = document.createElement("div");
+      countdown.className = "countdown";
+      countdown.dataset.orderDate = order.date;
+      updateCountdown(countdown);
+      card.appendChild(countdown);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    if (order.status in ADVANCE_NEXT) {
+      const advanceBtn = document.createElement("button");
+      advanceBtn.className = "btn-advance";
+      advanceBtn.textContent = ADVANCE_LABEL[order.status];
+      advanceBtn.addEventListener("click", () => advanceOrder(order));
+      actions.appendChild(advanceBtn);
+    }
+
+    if (order.status === STATUS.PLACED || order.status === STATUS.PREPARING || order.status === STATUS.READY) {
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn-cancel";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => cancelOrder(order));
+      actions.appendChild(cancelBtn);
+    }
+
+    if (actions.children.length > 0) card.appendChild(actions);
+
+    return card;
+  }
+
+  function escapeHtml(s) {
+    const div = document.createElement("div");
+    div.textContent = s;
+    return div.innerHTML;
+  }
+
+  async function advanceOrder(order) {
+    const next = ADVANCE_NEXT[order.status];
+    if (next === undefined) return;
+    try {
+      const res = await api(`/api/orders/${order.orderId}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ Status: next })
+      });
+      if (!res.ok) { alert("Could not update this order's status."); return; }
+      // Printing is handled by the cashier PC's background poller now, not
+      // this page - a browser can't open a raw socket to the ESC/POS
+      // printer. See clsOrderDataAccess.GetOrdersNeedingKitchenTicketAsync.
+      await refreshOrders();
+    } catch { /* 401 already handled inside api() */ }
+  }
+
+  async function cancelOrder(order) {
+    if (!confirm(`Cancel order #${order.serialNumber ?? order.orderId}?`)) return;
+    try {
+      const res = await api(`/api/orders/${order.orderId}/cancel`, { method: "POST" });
+      if (!res.ok) { alert("Could not cancel this order."); return; }
+      await refreshOrders();
+    } catch { /* 401 already handled inside api() */ }
+  }
+
+  // ---------- Countdown (per-second repaint, no re-fetch) ----------
+  function updateCountdown(el) {
+    const deadlineMs = Date.parse(el.dataset.orderDate) + state.autoCancelMinutes * 60000;
+    const remainingMs = deadlineMs - Date.now();
+    if (remainingMs <= 0) {
+      el.textContent = "Cancelling...";
+      el.classList.add("urgent");
+      return;
+    }
+    const totalSeconds = Math.floor(remainingMs / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    el.textContent = `Auto-cancel in ${m}:${pad(s)}`;
+    el.classList.toggle("urgent", remainingMs < 60000);
+  }
+
+  function tickCountdowns() {
+    document.querySelectorAll(".countdown").forEach(updateCountdown);
+  }
+
+  // ---------- Timers ----------
+  let refreshTimer, countdownTimer, heartbeatTimer, tokenRefreshTimer;
+
+  function startTimers() {
+    stopTimers();
+    refreshTimer = setInterval(refreshOrders, REFRESH_INTERVAL_MS);
+    countdownTimer = setInterval(tickCountdowns, 1000);
+    heartbeatTimer = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+    tokenRefreshTimer = setInterval(tryRefreshToken, TOKEN_REFRESH_INTERVAL_MS);
+    sendHeartbeat(); // immediately, not just on the first tick
+  }
+  function stopTimers() {
+    clearInterval(refreshTimer);
+    clearInterval(countdownTimer);
+    clearInterval(heartbeatTimer);
+    clearInterval(tokenRefreshTimer);
+  }
+
+  async function sendHeartbeat() {
+    // Same "someone is actually watching mobile orders" signal FormMain
+    // sends from WinForms - the chef tablet is an equally legitimate source
+    // of that signal, not just a read-only view.
+    try { await api("/api/settings/heartbeat", { method: "POST" }); } catch { /* best-effort */ }
+  }
+
+  function showPrintNote() {
+    // Kitchen tickets print from the cashier PC's background poller now
+    // (this page has no printer access) - a short standing note avoids the
+    // chef wondering why nothing came out of a printer next to the tablet.
+    $("printStatus").textContent = "Kitchen tickets print automatically at the register.";
+  }
+
+  // ---------- Boot ----------
+  showPrintNote();
+  if (loadSession()) {
+    startBoard().catch(() => logout());
+  }
+})();
+</script>
+</body>
+</html>

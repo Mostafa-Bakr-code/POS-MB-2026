@@ -143,15 +143,32 @@ builder.Services.AddRateLimiter(options =>
 
     // Baseline for every endpoint - general abuse/DoS protection, not aimed at
     // brute-force specifically (that's the tighter "login" policy below).
+    //
+    // Partitioned by the authenticated user's id when there is one, not raw
+    // IP - multiple legitimate devices (the chef tablet, WinForms, a second
+    // cashier PC) can share one IP, either today (everything running on one
+    // dev machine is all "::1") or later in production (a shop's shared
+    // connection, or a cloud-hosted API behind NAT). Per-IP would let one
+    // device's polling exhaust the whole shop's budget and start 429-ing
+    // completely unrelated staff actions - this is exactly what happened
+    // during chef-tablet testing. Falls back to IP for anonymous requests
+    // (there's no user id yet before login).
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+    {
+        var userId = context.User.Identity?.IsAuthenticated == true
+            ? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            : null;
+        var partitionKey = userId ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
             factory: _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 100,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
-            }));
+            });
+    });
 
     // Applied to verify-credentials and refresh-token - the two endpoints that
     // accept a guessable secret without already requiring a valid token. A
@@ -208,13 +225,30 @@ else
 
 app.UseHttpsRedirection();
 
-// Ahead of auth on purpose: a flood of login attempts should be rejected before
-// spending CPU on password verification, not after.
-app.UseRateLimiter();
-
 app.UseCors("Default");
 
+// Serves the chef tablet (wwwroot/chef) - a plain static HTML/CSS/JS page,
+// same-origin from this API, calling the same JSON endpoints WinForms uses.
+// Ahead of auth/authorization since the static files themselves (the login
+// page) must be reachable before a token exists; the API calls the page
+// makes are still protected normally.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Authentication ahead of the rate limiter (not just ahead of Authorization)
+// so the global limiter below can read context.User and partition by the
+// logged-in user's id rather than raw IP - see the comment on GlobalLimiter
+// for why that matters. This only decodes/validates a presented token, it
+// doesn't reject anything by itself (that's still Authorization, below the
+// limiter) - so the "reject a login flood before spending CPU on password
+// verification" goal is untouched: verify-credentials never carries a valid
+// token anyway, so it still falls back to IP partitioning here, and the
+// actual expensive work (password hashing) only ever runs after every
+// middleware in this pipeline, rate limiter included.
 app.UseAuthentication();
+
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
 app.MapControllers();

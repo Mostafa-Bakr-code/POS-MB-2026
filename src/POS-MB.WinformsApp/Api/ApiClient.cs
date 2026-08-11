@@ -181,6 +181,22 @@ public class ApiClient
         return response.IsSuccessStatusCode;
     }
 
+    // Feeds the background kitchen-ticket poller (KitchenTicketPrintService) -
+    // any mobile order that just entered Preparing, regardless of which
+    // client (this app or the chef tablet) moved it there and hasn't had its
+    // ticket printed yet.
+    public async Task<List<OrderDto>> GetOrdersNeedingKitchenTicketAsync()
+    {
+        var result = await _httpClient.GetFromJsonAsync<List<OrderDto>>("api/orders/needing-kitchen-ticket");
+        return result ?? [];
+    }
+
+    public async Task<bool> MarkKitchenTicketPrintedAsync(int orderId)
+    {
+        var response = await _httpClient.PostAsync($"api/orders/{orderId}/mark-kitchen-ticket-printed", null);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<List<UserDto>> GetUsersAsync(bool includeInactive = false)
     {
         var url = $"api/users?includeInactive={includeInactive}";

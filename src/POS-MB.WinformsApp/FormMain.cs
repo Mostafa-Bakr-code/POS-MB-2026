@@ -14,12 +14,22 @@ public class FormMain : Form
     // a specific control like Order Status being the active view.
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
+    // Same reasoning as the heartbeat above - a kitchen ticket needs to print
+    // regardless of which screen (or client entirely - the chef tablet can
+    // move an order to Preparing too) is currently active. See
+    // KitchenTicketPrintService for why printing had to move out of
+    // OrderStatusControl once a browser-only client could also accept orders.
+    private static readonly TimeSpan KitchenTicketPollInterval = TimeSpan.FromSeconds(5);
+
     private readonly ApiClient _apiClient = new();
+    private readonly KitchenTicketPrintService _kitchenTicketPrintService;
     private TokenRefreshTimer? _refreshTimer;
     private System.Windows.Forms.Timer? _heartbeatTimer;
+    private System.Windows.Forms.Timer? _kitchenTicketTimer;
     private readonly Panel _navBar;
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
+    private readonly Label _lblPrintStatus;
     private readonly Button _btnNewOrder;
     private readonly Button _btnOrderStatus;
     private readonly Button _btnCategories;
@@ -37,6 +47,8 @@ public class FormMain : Form
         Text = "POS-MB";
         WindowState = FormWindowState.Maximized;
         Font = new Font("Segoe UI", 12F);
+
+        _kitchenTicketPrintService = new KitchenTicketPrintService(_apiClient);
 
         _navBar = new Panel
         {
@@ -59,6 +71,30 @@ public class FormMain : Form
             TextAlign = ContentAlignment.MiddleCenter,
             Dock = DockStyle.Top,
             Height = 85
+        };
+
+        // Kitchen-ticket print status now shows here (not on OrderStatusControl)
+        // since printing can fire while any screen - or the chef tablet
+        // entirely - is what accepted the order, not just this one.
+        _lblPrintStatus = new Label
+        {
+            ForeColor = Color.FromArgb(180, 190, 200),
+            Font = new Font("Segoe UI", 8.5F),
+            AutoSize = false,
+            TextAlign = ContentAlignment.TopCenter,
+            Dock = DockStyle.Top,
+            Height = 40,
+            Padding = new Padding(6, 2, 6, 0)
+        };
+
+        _kitchenTicketPrintService.StatusChanged += (text, success) =>
+        {
+            void Apply()
+            {
+                _lblPrintStatus.Text = text;
+                _lblPrintStatus.ForeColor = success ? Color.FromArgb(40, 200, 130) : Color.FromArgb(255, 140, 140);
+            }
+            if (InvokeRequired) BeginInvoke(Apply); else Apply();
         };
 
         _btnNewOrder = CreateNavButton("New Order");
@@ -125,6 +161,7 @@ public class FormMain : Form
         navButtonsPanel.Controls.Add(_btnLogs);
 
         rightPanel.Controls.Add(_btnLogout);
+        rightPanel.Controls.Add(_lblPrintStatus);
         rightPanel.Controls.Add(_lblActiveUser);
 
         _navBar.Controls.Add(navButtonsPanel);
@@ -191,6 +228,11 @@ public class FormMain : Form
             _heartbeatTimer.Tick += async (_, _) => await _apiClient.SendHeartbeatAsync();
             _heartbeatTimer.Start();
             _ = _apiClient.SendHeartbeatAsync(); // immediately at login, not just on the first tick
+
+            _kitchenTicketTimer = new System.Windows.Forms.Timer { Interval = (int)KitchenTicketPollInterval.TotalMilliseconds };
+            _kitchenTicketTimer.Tick += async (_, _) => await _kitchenTicketPrintService.PollOnceAsync();
+            _kitchenTicketTimer.Start();
+            _ = _kitchenTicketPrintService.PollOnceAsync();
         }
 
         ShowOrderTaking();
@@ -243,6 +285,8 @@ public class FormMain : Form
         _refreshTimer?.Dispose();
         _heartbeatTimer?.Stop();
         _heartbeatTimer?.Dispose();
+        _kitchenTicketTimer?.Stop();
+        _kitchenTicketTimer?.Dispose();
 
         if (AppSession.LogId is int logId)
         {
