@@ -58,7 +58,7 @@ public abstract class DatabaseTestBase : IDisposable
         // see PaymobHmacTests/PaymobPaymentResultTests) - this just satisfies the
         // constructor. The HttpClient is never actually used.
         var paymobClient = new PaymobClient(new HttpClient { BaseAddress = new Uri("https://accept.paymob.com/") }, new PaymobOptions());
-        OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness, paymobClient);
+        OrderBusiness = new clsOrderBusiness(new clsOrderDataAccess(ConnectionFactory), SettingsBusiness, paymobClient, NullLogger<clsOrderBusiness>.Instance);
         ReportingBusiness = new clsReportingBusiness(new clsReportingDataAccess(ConnectionFactory), SettingsBusiness);
 
         // Mobile order creation requires a recent "shop heartbeat" (see

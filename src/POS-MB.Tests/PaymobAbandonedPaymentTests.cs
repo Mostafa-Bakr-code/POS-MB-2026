@@ -52,7 +52,7 @@ public class PaymobAbandonedPaymentTests : DatabaseTestBase
         await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-15));
         // The webhook already confirmed payment and moved it to Placed -
         // must not be swept up here just because the order is old.
-        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
 
         var cancelledCount = await OrderBusiness.CancelAbandonedPaymentsAsync();
 

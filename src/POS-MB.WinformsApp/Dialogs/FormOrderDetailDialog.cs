@@ -11,24 +11,48 @@ public class FormOrderDetailDialog : Form
             : order.StudentEmail is not null ? $"  (Student: {order.StudentEmail})"
             : "";
 
+        var hasPaymentInfo = order.PaymobTransactionId is not null;
+
         Text = $"Order #{order.SerialNumber ?? order.OrderId}";
-        ClientSize = new Size(600, 560);
+        ClientSize = new Size(600, hasPaymentInfo ? 600 : 560);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         Font = new Font("Segoe UI", 12F);
 
+        // Only a Mobile order ever paid through Paymob has a transaction id -
+        // this is the same id you'd search for on Paymob's own dashboard if
+        // a student disputes a charge/refund, so it needs to be somewhere
+        // staff can actually find it without asking a developer to check the
+        // database. Blank for a Cashier order or one never paid (Cash on
+        // pickup isn't a thing here, but a complimentary/manually-created
+        // mobile order could still lack one).
+        // Paymob creates a separate transaction record for the refund itself
+        // (linked to the original charge via its own parent_transaction
+        // field, not the same id) - Paymob's own confirmation email
+        // references the refund's id, not the original charge's, so showing
+        // only one of the two here would leave staff unable to match what
+        // the email says against what this order shows.
+        var paymentInfo = order.PaymobTransactionId is long transactionId
+            ? $"\nPaid via Paymob (Transaction #{transactionId})" +
+              (order.RefundedAt is DateTime refundedAt
+                  ? $"\nRefunded: {AppSession.ToLocalDisplay(refundedAt):yyyy-MM-dd HH:mm}" +
+                    (order.RefundTransactionId is long refundTransactionId ? $" (Refund Transaction #{refundTransactionId})" : "")
+                  : "")
+            : "";
+
         var lblHeader = new Label
         {
             Dock = DockStyle.Top,
-            Height = 150,
+            Height = 150 + (string.IsNullOrEmpty(paymentInfo) ? 0 : 40),
             Padding = new Padding(20, 15, 20, 0),
             Text =
                 $"Date: {AppSession.ToLocalDisplay(order.Date):yyyy-MM-dd HH:mm}\n" +
                 $"Source: {order.OrderSource}{placedBy}\n" +
                 $"Status: {order.Status}{(order.IsComplimentary ? "  (Complimentary)" : "")}\n" +
-                $"Total: {order.Total:0.00}"
+                $"Total: {order.Total:0.00}" +
+                paymentInfo
         };
 
         var grid = new DataGridView

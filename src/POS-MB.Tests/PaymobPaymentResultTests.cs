@@ -26,10 +26,33 @@ public class PaymobPaymentResultTests : DatabaseTestBase
     {
         var orderId = await CreateAwaitingPaymentOrderAsync(100m);
 
-        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Placed, order!.Status);
+    }
+
+    [Fact]
+    public async Task MarkOrderPaymentResult_PersistsTheTransactionId_ForALaterRefund()
+    {
+        var orderId = await CreateAwaitingPaymentOrderAsync(100m);
+
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(555111, order!.PaymobTransactionId);
+    }
+
+    [Fact]
+    public async Task MarkOrderPaymentResult_Throws_WhenSucceededButNoTransactionIdProvided()
+    {
+        var orderId = await CreateAwaitingPaymentOrderAsync(100m);
+
+        // obj.id is part of the HMAC-verified field set, so a genuine
+        // callback always has one - this defends against a malformed
+        // callback silently leaving no way to ever refund this order.
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: null));
     }
 
     [Fact]
@@ -37,7 +60,7 @@ public class PaymobPaymentResultTests : DatabaseTestBase
     {
         var orderId = await CreateAwaitingPaymentOrderAsync(100m);
 
-        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: false, amountEgpPaid: 0m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: false, amountEgpPaid: 0m, transactionId: null);
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
@@ -51,7 +74,7 @@ public class PaymobPaymentResultTests : DatabaseTestBase
         // Paymob says success and reports a real payment, but for the wrong
         // amount - must not be trusted just because success=true.
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 50m));
+            OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 50m, transactionId: 555111));
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.AwaitingPayment, order!.Status);
@@ -61,12 +84,12 @@ public class PaymobPaymentResultTests : DatabaseTestBase
     public async Task MarkOrderPaymentResult_IsIdempotent_IgnoresACallbackForAnOrderThatAlreadyMovedOn()
     {
         var orderId = await CreateAwaitingPaymentOrderAsync(100m);
-        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
 
         // A duplicate delivery of the same "succeeded" callback (Paymob, like
         // most webhook systems, can retry) must be a harmless no-op, not
         // re-process an order that's already Placed.
-        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Placed, order!.Status);
@@ -77,6 +100,6 @@ public class PaymobPaymentResultTests : DatabaseTestBase
     {
         // Should not throw - an unrecognized order id (never happens in
         // practice, but must fail safe) is simply not our problem to act on.
-        await OrderBusiness.MarkOrderPaymentResultAsync(999999999, paymentSucceeded: true, amountEgpPaid: 100m);
+        await OrderBusiness.MarkOrderPaymentResultAsync(999999999, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
     }
 }

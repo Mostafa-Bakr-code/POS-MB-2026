@@ -32,6 +32,12 @@ public class PaymentsController(PaymobClient paymobClient, clsOrderBusiness orde
         var success = obj.TryGetProperty("success", out var successProp) && successProp.ValueKind == JsonValueKind.True;
         var amountCents = obj.TryGetProperty("amount_cents", out var amountProp) ? amountProp.GetInt64() : 0;
 
+        // Paymob's own transaction id - persisted on success so a later
+        // cancellation can refund this exact transaction (see
+        // clsOrderBusiness.RefundIfPaidAsync). Not our OrderId, not
+        // Paymob's order id - obj.id is the transaction itself.
+        var transactionId = obj.TryGetProperty("id", out var idProp) && idProp.TryGetInt64(out var tid) ? tid : (long?)null;
+
         // special_reference (see PaymobOrderReference - deliberately not the
         // raw OrderId, since Paymob's own emails display this to the
         // customer) comes back here.
@@ -54,7 +60,7 @@ public class PaymentsController(PaymobClient paymobClient, clsOrderBusiness orde
 
         try
         {
-            await orderBusiness.MarkOrderPaymentResultAsync(order.OrderId, success, amountCents / 100m);
+            await orderBusiness.MarkOrderPaymentResultAsync(order.OrderId, success, amountCents / 100m, transactionId);
         }
         catch (InvalidOperationException ex)
         {

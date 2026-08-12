@@ -1,11 +1,12 @@
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Business;
 
-public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness, PaymobClient paymobClient)
+public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness, PaymobClient paymobClient, ILogger<clsOrderBusiness> logger)
 {
     // Paymob's own intention has an "expiration" too - matches this app's
     // own auto-cancel default (see MobileOrderAutoCancelMinutesSettingKey)
@@ -168,7 +169,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         if (order.Status is not (OrderStatus.AwaitingPayment or OrderStatus.Placed))
             throw new ArgumentException("This order can no longer be cancelled - the kitchen has already started preparing it.", nameof(orderId));
 
-        return await dataAccess.CancelForStudentAsync(orderId, studentId);
+        var cancelled = await dataAccess.CancelForStudentAsync(orderId, studentId);
+        if (cancelled)
+            await RefundIfPaidAsync(order);
+
+        return cancelled;
     }
 
     public Task<Order?> GetByDateAndSerialNumberAsync(DateTime orderDateUtc, int serialNumber) =>
@@ -205,7 +210,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // delivery, and only acting while still AwaitingPayment means a second
     // delivery of the same "succeeded" callback is a harmless no-op instead
     // of double-processing an order that already moved on.
-    public async Task MarkOrderPaymentResultAsync(int orderId, bool paymentSucceeded, decimal amountEgpPaid)
+    public async Task MarkOrderPaymentResultAsync(int orderId, bool paymentSucceeded, decimal amountEgpPaid, long? transactionId)
     {
         var order = await dataAccess.GetByIdAsync(orderId);
         if (order is null || order.Status != OrderStatus.AwaitingPayment) return;
@@ -223,11 +228,57 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         if (Math.Abs(amountEgpPaid - order.Total) > 0.01m)
             throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match order total {order.Total} for OrderId={orderId}.");
 
-        await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Placed);
+        // obj.id is one of the fields HMAC-verified as part of the callback
+        // itself, so a genuine successful callback always carries it - this
+        // is a defensive guard, not an expected path. Needed to refund this
+        // exact transaction later if the order gets cancelled - see
+        // RefundIfPaidAsync.
+        if (transactionId is null)
+            throw new InvalidOperationException($"Paymob webhook reported success but had no transaction id for OrderId={orderId}.");
+
+        await dataAccess.MarkPaidAsync(orderId, transactionId.Value);
     }
 
-    public Task<bool> CancelAsync(int id) =>
-        dataAccess.UpdateStatusAsync(id, OrderStatus.Cancelled);
+    public async Task<bool> CancelAsync(int id)
+    {
+        var order = await dataAccess.GetByIdAsync(id);
+        if (order is null) return false;
+
+        var cancelled = await dataAccess.UpdateStatusAsync(id, OrderStatus.Cancelled);
+        if (cancelled)
+            await RefundIfPaidAsync(order);
+
+        return cancelled;
+    }
+
+    // Best-effort, never blocks or fails the cancellation itself - an order
+    // should always actually cancel even if Paymob is unreachable right now.
+    // A failed/rejected refund is logged loudly instead, so a human can
+    // process it manually via Paymob's own dashboard rather than it silently
+    // vanishing. The PaymobTransactionId/RefundedAt guards mean this is a
+    // no-op for anything never paid through Paymob (Cashier orders, or a
+    // Mobile order that never completed checkout) or already refunded.
+    private async Task RefundIfPaidAsync(Order order)
+    {
+        if (order.PaymobTransactionId is null || order.RefundedAt is not null) return;
+
+        try
+        {
+            var result = await paymobClient.RefundAsync(order.PaymobTransactionId.Value, order.Total);
+            if (result is { Success: true, RefundTransactionId: long refundTransactionId })
+                await dataAccess.MarkRefundedAsync(order.OrderId, refundTransactionId);
+            else
+                logger.LogError(
+                    "Paymob refund was rejected for OrderId={OrderId}, PaymobTransactionId={TransactionId} - needs manual review.",
+                    order.OrderId, order.PaymobTransactionId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Paymob refund threw for OrderId={OrderId}, PaymobTransactionId={TransactionId} - needs manual review.",
+                order.OrderId, order.PaymobTransactionId);
+        }
+    }
 
     // Key missing entirely (never touched) falls back to DefaultAutoCancelMinutes -
     // same "no seeding needed" reasoning as the other resilience settings.

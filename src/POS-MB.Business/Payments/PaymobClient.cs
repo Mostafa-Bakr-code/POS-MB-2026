@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -6,6 +7,12 @@ using System.Text.Json;
 namespace POS_MB.Business.Payments;
 
 public record PaymobIntentionResult(string ClientSecret, long PaymobOrderId);
+
+// Success is whether Paymob actually processed the refund. RefundTransactionId
+// is the refund's own transaction id - a separate record from the original
+// charge being refunded (linked to it via Paymob's own parent_transaction
+// field), only meaningful when Success is true.
+public record PaymobRefundResult(bool Success, long? RefundTransactionId);
 
 // Talks to Paymob's Intention API (https://developers.paymob.com) - the
 // Secret Key never leaves this class/the server it runs on. Base URL is
@@ -68,6 +75,44 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
     // support another region (UAE/KSA/Oman have their own checkout hosts).
     public string BuildCheckoutUrl(string clientSecret) =>
         $"https://eg.checkout.paymob.com/?publicKey={options.PublicKey}&clientSecret={clientSecret}";
+
+    // Full refund of a previously successful transaction - see Paymob's
+    // "Refund" API docs. transactionId is Paymob's own transaction id (the
+    // webhook callback's obj.id, persisted as Orders.PaymobTransactionId
+    // when payment succeeded), not our own OrderId or Paymob's order id -
+    // those are three different numbers. Same SecretKey Bearer auth as
+    // CreateIntentionAsync; no separate token exchange needed. Both fields
+    // in the request body are documented as strings even though they carry
+    // integer values - matches Paymob's own example exactly rather than
+    // guessing at a numeric encoding.
+    //
+    // virtual so tests can substitute a fake that never touches the network -
+    // this app has no automated coverage that's allowed to hit Paymob's real
+    // API (same reasoning as CreateIntentionAsync never being called from a
+    // test), and refunding is real money, not something to risk on a typo.
+    public virtual async Task<PaymobRefundResult> RefundAsync(long transactionId, decimal amountEgp)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "api/acceptance/void_refund/refund");
+        request.Headers.Add("Authorization", $"Token {options.SecretKey}");
+        request.Content = JsonContent.Create(new
+        {
+            transaction_id = transactionId.ToString(CultureInfo.InvariantCulture),
+            amount_cents = ((int)Math.Round(amountEgp * 100)).ToString(CultureInfo.InvariantCulture)
+        });
+
+        var response = await httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode) return new PaymobRefundResult(false, null);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var success = body.TryGetProperty("success", out var successProp) && successProp.ValueKind == JsonValueKind.True;
+        // "id" here is the refund's own new transaction id, not the original
+        // charge's - Paymob creates a separate transaction record for every
+        // refund, linked back to the original via its own parent_transaction
+        // field.
+        var refundTransactionId = success && body.TryGetProperty("id", out var idProp) && idProp.TryGetInt64(out var rid) ? rid : (long?)null;
+
+        return new PaymobRefundResult(success, refundTransactionId);
+    }
 
     // Exact field list/order from Paymob's "HMAC Transaction Callback" docs -
     // already lexicographically sorted by key name, not something to

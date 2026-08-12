@@ -71,6 +71,9 @@ public class OrderDto
     public OrderSource OrderSource { get; set; }
     public OrderStatus Status { get; set; }
     public bool IsComplimentary { get; set; }
+    public long? PaymobTransactionId { get; set; }
+    public DateTime? RefundedAt { get; set; }
+    public long? RefundTransactionId { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<OrderItemDto> Items { get; set; } = [];
 }

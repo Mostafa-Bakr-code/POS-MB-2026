@@ -65,6 +65,12 @@ public class OrderHistoryControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Date", HeaderText = "Date", DataPropertyName = "Date", FillWeight = 110, MinimumWidth = 150 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", FillWeight = 80, MinimumWidth = 100 });
+        // Only ever meaningful for a Mobile order that was paid through
+        // Paymob and later cancelled - see clsOrderBusiness.RefundIfPaidAsync.
+        // Blank for everything else (never paid through Paymob, or paid but
+        // not cancelled) rather than an explicit "No", since "was this ever
+        // even eligible for a refund" isn't the question this answers.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Refunded", HeaderText = "Refunded", DataPropertyName = "RefundedAt", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Total", HeaderText = "Total", DataPropertyName = "Total", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "IsComplimentary", HeaderText = "Comp.", DataPropertyName = "IsComplimentary", FillWeight = 50, MinimumWidth = 60 });
         _grid.Columns.Add(new DataGridViewButtonColumn { Name = "View", HeaderText = "", Text = "View", UseColumnTextForButtonValue = true, FillWeight = 70, MinimumWidth = 90 });
@@ -93,6 +99,11 @@ public class OrderHistoryControl : UserControl
         else if (_grid.Columns[e.ColumnIndex].Name == "Total" && e.Value is decimal total)
         {
             e.Value = total.ToString("0.00");
+            e.FormattingApplied = true;
+        }
+        else if (_grid.Columns[e.ColumnIndex].Name == "Refunded")
+        {
+            e.Value = e.Value is DateTime refundedAt ? AppSession.ToLocalDisplay(refundedAt).ToString("yyyy-MM-dd HH:mm") : "";
             e.FormattingApplied = true;
         }
     }
@@ -125,7 +136,7 @@ public class OrderHistoryControl : UserControl
     private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
     {
         var columnName = _grid.Columns[e.ColumnIndex].Name;
-        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary")) return;
+        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary" or "Refunded")) return;
 
         _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
         _sortColumn = columnName;
@@ -142,6 +153,7 @@ public class OrderHistoryControl : UserControl
             "Status" => _orders.OrderBy(o => o.Status),
             "Total" => _orders.OrderBy(o => o.Total),
             "IsComplimentary" => _orders.OrderBy(o => o.IsComplimentary),
+            "Refunded" => _orders.OrderBy(o => o.RefundedAt),
             _ => _orders
         };
         if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();

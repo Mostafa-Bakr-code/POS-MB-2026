@@ -127,7 +127,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
     private async Task<object> BuildOrderDtoAsync(Order order)
     {
         var items = await orderBusiness.GetItemsByOrderIdAsync(order.OrderId);
-        return new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.CashierName, order.StudentEmail, order.OrderSource, order.Status, order.IsComplimentary, order.CreatedAt, order.UpdatedAt, Items = items };
+        return new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.UserId, order.StudentId, order.CashierName, order.StudentEmail, order.OrderSource, order.Status, order.IsComplimentary, order.PaymobTransactionId, order.RefundedAt, order.RefundTransactionId, order.CreatedAt, order.UpdatedAt, Items = items };
     }
 }
 

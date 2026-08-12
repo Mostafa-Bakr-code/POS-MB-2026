@@ -84,6 +84,9 @@ CREATE TABLE dbo.Orders
     Status          TINYINT           NOT NULL CONSTRAINT DF_Orders_Status DEFAULT (0), -- 0=Placed,1=Preparing,2=Ready,3=Completed,4=Cancelled
     IsComplimentary BIT               NOT NULL CONSTRAINT DF_Orders_IsComplimentary DEFAULT (0),
     KitchenTicketPrintedAt DATETIME2  NULL, -- set once the cashier PC's poller has printed this order's kitchen ticket; NULL means "still needs printing" (only meaningful for Mobile orders in Preparing)
+    PaymobTransactionId BIGINT        NULL, -- set once Paymob confirms payment (the webhook's obj.id); needed to tell Paymob which transaction to refund if the order is later cancelled
+    RefundedAt      DATETIME2         NULL, -- set once an automatic refund succeeds; guards against ever double-refunding the same order
+    RefundTransactionId BIGINT        NULL, -- Paymob's own transaction id for the refund itself - a separate record from PaymobTransactionId (the original charge), linked to it via Paymob's own parent_transaction field
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Orders PRIMARY KEY CLUSTERED (OrderId),

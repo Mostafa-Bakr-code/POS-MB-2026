@@ -236,6 +236,38 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return rowsAffected > 0;
     }
 
+    // Records the successful payment's Paymob transaction id alongside moving
+    // the order to Placed - needed later to tell Paymob which transaction to
+    // refund if this order is ever cancelled (see clsOrderBusiness.RefundIfPaidAsync).
+    public async Task<bool> MarkPaidAsync(int id, long transactionId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET Status = @Status, PaymobTransactionId = @TransactionId, UpdatedAt = SYSUTCDATETIME()
+            WHERE OrderId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, Status = OrderStatus.Placed, TransactionId = transactionId });
+        return rowsAffected > 0;
+    }
+
+    // The RefundedAt IS NULL guard makes this safely idempotent - the same
+    // protection as MarkKitchenTicketPrintedAsync, but here it's guarding
+    // against ever attempting to refund real money twice.
+    public async Task<bool> MarkRefundedAsync(int id, long refundTransactionId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET RefundedAt = SYSUTCDATETIME(), RefundTransactionId = @RefundTransactionId
+            WHERE OrderId = @Id AND RefundedAt IS NULL";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, RefundTransactionId = refundTransactionId });
+        return rowsAffected > 0;
+    }
+
     public async Task<bool> UpdateStatusAsync(int id, OrderStatus status)
     {
         using var connection = connectionFactory.CreateConnection();
