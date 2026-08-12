@@ -16,13 +16,38 @@ public class MobileOrderAutoCancelTests : DatabaseTestBase
         await SettingsBusiness.SetAsync("MobileOrderAutoCancelMinutes", "10");
 
         var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
-        await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-15)); // 15 > 10-minute timeout
+        // Backdating UpdatedAt (when it actually became Placed), not Date
+        // (when checkout started) - see clsOrderDataAccess.GetStaleMobileOrdersAsync.
+        await SetOrderUpdatedAtAsync(orderId, DateTime.UtcNow.AddMinutes(-15)); // 15 > 10-minute timeout
 
         var cancelledCount = await OrderBusiness.CancelStaleMobileOrdersAsync();
 
         Assert.Equal(1, cancelledCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+    }
+
+    [Fact]
+    public async Task CancelStaleMobileOrders_LeavesOrderAlone_WhenOnlyCreationTimeIsStale()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        await SettingsBusiness.SetAsync("MobileOrderAutoCancelMinutes", "10");
+
+        // Simulates a slow Paymob checkout: the order was created 15 minutes
+        // ago (Date), but only just became Placed (UpdatedAt = now, from
+        // CreateOrderAsync's own default). The timeout must not fire here -
+        // the kitchen has only had this order for a moment, regardless of
+        // how long checkout took before that.
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-15));
+
+        var cancelledCount = await OrderBusiness.CancelStaleMobileOrdersAsync();
+
+        Assert.Equal(0, cancelledCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, order!.Status);
     }
 
     [Fact]
@@ -52,7 +77,7 @@ public class MobileOrderAutoCancelTests : DatabaseTestBase
         // No SetAsync call for the timeout at all - must fall back to 10 minutes.
 
         var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
-        await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-11));
+        await SetOrderUpdatedAtAsync(orderId, DateTime.UtcNow.AddMinutes(-11));
 
         var cancelledCount = await OrderBusiness.CancelStaleMobileOrdersAsync();
 
@@ -94,7 +119,7 @@ public class MobileOrderAutoCancelTests : DatabaseTestBase
         // Status already happened to rule it out.
         var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
         await OrderBusiness.UpdateStatusAsync(orderId, OrderStatus.Placed);
-        await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-30));
+        await SetOrderUpdatedAtAsync(orderId, DateTime.UtcNow.AddMinutes(-30));
 
         var cancelledCount = await OrderBusiness.CancelStaleMobileOrdersAsync();
 

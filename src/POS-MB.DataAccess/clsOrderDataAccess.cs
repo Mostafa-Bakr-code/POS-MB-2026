@@ -176,13 +176,26 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     // safety net (stale Placed orders nobody accepted) and the abandoned-
     // payment cleanup (stale AwaitingPayment orders nobody ever paid for) -
     // same query shape, different status/threshold.
-    public async Task<IEnumerable<Order>> GetStaleMobileOrdersAsync(OrderStatus status, DateTime olderThanUtc)
+    //
+    // useUpdatedAt distinguishes what "how long has it been sitting here"
+    // actually means for each case: for AwaitingPayment, [Date] (order
+    // creation/checkout start) is the right anchor - that's genuinely how
+    // long the student has been mid-checkout. For Placed, [Date] would be
+    // wrong - a mobile order sits at AwaitingPayment first, so anchoring the
+    // kitchen's "un-accepted too long" timeout to order creation silently
+    // burns however long the student spent entering card details before the
+    // kitchen could ever have seen it. UpdatedAt is set the instant the
+    // order actually transitions into Placed (MarkOrderPaymentResultAsync)
+    // and nothing else touches it while Status stays Placed, so it's the
+    // correct "became visible to the kitchen at" anchor.
+    public async Task<IEnumerable<Order>> GetStaleMobileOrdersAsync(OrderStatus status, DateTime olderThanUtc, bool useUpdatedAt = false)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        const string query = @"
+        var column = useUpdatedAt ? "UpdatedAt" : "[Date]";
+        var query = $@"
             SELECT * FROM Orders
-            WHERE OrderSource = @OrderSource AND Status = @Status AND [Date] < @OlderThanUtc";
+            WHERE OrderSource = @OrderSource AND Status = @Status AND {column} < @OlderThanUtc";
 
         return await connection.QueryAsync<Order>(
             query, new { OrderSource = OrderSource.Mobile, Status = status, OlderThanUtc = olderThanUtc });

@@ -449,8 +449,22 @@
 
   function pad(n) { return n < 10 ? "0" + n : String(n); }
 
+  // The API sends timestamps like "2026-08-11T14:37:00.167" - no trailing
+  // "Z"/offset, because they come from a SQL Server DATETIME2 column that
+  // carries no timezone marker at all, even though every value is UTC by
+  // convention throughout this app. Date.parse() on a string like that is
+  // NOT treated as UTC - the ES spec has browsers interpret a date-time
+  // string with no timezone designator as LOCAL time, which silently
+  // shifted every deadline/timestamp on this page by the browser's own
+  // timezone offset (multiple hours here). Appending "Z" forces the
+  // unambiguous, correct interpretation everywhere a server timestamp is
+  // parsed - never call Date.parse directly on one of these strings.
+  function parseUtc(iso) {
+    return Date.parse(/[Zz]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z");
+  }
+
   function toLocalDisplay(utcIso) {
-    const utcMs = Date.parse(utcIso);
+    const utcMs = parseUtc(utcIso);
     const localMs = utcMs + state.timeZoneOffsetHours * 3600000;
     const d = new Date(localMs);
     return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes());
@@ -463,7 +477,7 @@
 
     // Oldest first - matches a real kitchen queue, the order that's waited
     // longest belongs first, not buried under newer arrivals.
-    visible.sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
+    visible.sort((a, b) => parseUtc(a.date) - parseUtc(b.date));
 
     const board = $("board");
     board.innerHTML = "";
@@ -519,7 +533,12 @@
     if (order.status === STATUS.PLACED) {
       const countdown = document.createElement("div");
       countdown.className = "countdown";
-      countdown.dataset.orderDate = order.date;
+      // updatedAt, not date - a mobile order sits at AwaitingPayment before
+      // Placed, so anchoring to order creation would silently burn however
+      // long checkout took before this even became visible here. updatedAt
+      // is set the instant it actually became Placed - see
+      // clsOrderDataAccess.GetStaleMobileOrdersAsync for the server side.
+      countdown.dataset.orderUpdatedAt = order.updatedAt;
       updateCountdown(countdown);
       card.appendChild(countdown);
     }
@@ -581,7 +600,7 @@
 
   // ---------- Countdown (per-second repaint, no re-fetch) ----------
   function updateCountdown(el) {
-    const deadlineMs = Date.parse(el.dataset.orderDate) + state.autoCancelMinutes * 60000;
+    const deadlineMs = parseUtc(el.dataset.orderUpdatedAt) + state.autoCancelMinutes * 60000;
     const remainingMs = deadlineMs - Date.now();
     if (remainingMs <= 0) {
       el.textContent = "Cancelling...";

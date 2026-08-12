@@ -249,7 +249,14 @@ public class OrderStatusControl : UserControl
                 return;
             }
 
-            var deadlineUtc = order.Date.AddMinutes(_autoCancelMinutes);
+            // UpdatedAt, not Date - a mobile order sits at AwaitingPayment
+            // before Placed, so anchoring to order creation would silently
+            // burn however long checkout took before the kitchen could ever
+            // have seen it. UpdatedAt is set the instant it actually became
+            // Placed and nothing else touches it while it stays Placed - see
+            // clsOrderDataAccess.GetStaleMobileOrdersAsync for the server side
+            // of this same fix.
+            var deadlineUtc = order.UpdatedAt.AddMinutes(_autoCancelMinutes);
             var remaining = deadlineUtc - DateTime.UtcNow;
 
             // The actual cancellation is a once-a-minute background sweep

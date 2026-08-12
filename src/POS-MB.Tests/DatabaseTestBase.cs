@@ -102,6 +102,17 @@ public abstract class DatabaseTestBase : IDisposable
             new { Date = utcDate, OrderId = orderId });
     }
 
+    // CancelStaleMobileOrdersAsync's Placed sweep is anchored to UpdatedAt
+    // (when the order actually became Placed/visible to the kitchen), not
+    // Date (order creation) - see clsOrderDataAccess.GetStaleMobileOrdersAsync.
+    // Backdating this directly is what makes those timeout tests deterministic.
+    protected async Task SetOrderUpdatedAtAsync(int orderId, DateTime utcDate)
+    {
+        using var connection = ConnectionFactory.CreateConnection();
+        await connection.ExecuteAsync("UPDATE Orders SET UpdatedAt = @UpdatedAt WHERE OrderId = @OrderId",
+            new { UpdatedAt = utcDate, OrderId = orderId });
+    }
+
     public void Dispose()
     {
         _scope.Dispose();

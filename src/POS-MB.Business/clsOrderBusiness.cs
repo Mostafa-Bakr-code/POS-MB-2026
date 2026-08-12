@@ -250,7 +250,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             : DefaultAutoCancelMinutes;
 
         var cutoffUtc = DateTime.UtcNow.AddMinutes(-minutes);
-        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.Placed, cutoffUtc);
+        // useUpdatedAt: true - the timeout measures how long the kitchen has
+        // had a visible, un-accepted order, not how long ago checkout
+        // started (that's a completely different window, already covered by
+        // CancelAbandonedPaymentsAsync below). See GetStaleMobileOrdersAsync.
+        var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.Placed, cutoffUtc, useUpdatedAt: true);
 
         var cancelledCount = 0;
         foreach (var order in staleOrders)
