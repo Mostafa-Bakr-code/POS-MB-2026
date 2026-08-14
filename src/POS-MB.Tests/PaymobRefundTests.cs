@@ -117,6 +117,100 @@ public class PaymobRefundTests : DatabaseTestBase
     }
 
     [Fact]
+    public async Task LateSuccessfulPayment_ForAnAlreadyCancelledOrder_RefundsAutomatically()
+    {
+        // The race this covers: a student self-cancels (or the abandoned-
+        // payment sweep fires) in the same narrow window the payment is
+        // actually completing on Paymob's side - the webhook's "succeeded"
+        // callback arrives after the order is already Cancelled. See
+        // clsOrderBusiness.MarkOrderPaymentResultAsync.
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true, refundTransactionId: 999333);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await orderBusiness.CancelForStudentAsync(orderId, studentId); // cancelled before the webhook arrives
+
+        // The webhook's success callback arrives late.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 777444);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        // Never resurrected back to Placed - the kitchen/system already
+        // moved on from this order.
+        Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        Assert.Equal(777444, order.PaymobTransactionId);
+        Assert.NotNull(order.RefundedAt);
+        Assert.Equal(999333, order.RefundTransactionId);
+        Assert.Equal(1, fake.CallCount);
+        Assert.Equal(777444, fake.LastTransactionId);
+    }
+
+    [Fact]
+    public async Task LateSuccessfulPayment_IsIdempotent_ARetriedWebhookDeliveryDoesNotRefundTwice()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await orderBusiness.CancelForStudentAsync(orderId, studentId);
+
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 777444);
+        // Paymob retries webhook delivery - same callback, second time.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 777444);
+
+        Assert.Equal(1, fake.CallCount); // not refunded twice
+    }
+
+    [Fact]
+    public async Task LateFailedPayment_ForAnAlreadyCancelledOrder_IsANoOp()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await orderBusiness.CancelForStudentAsync(orderId, studentId);
+
+        // A failed-payment callback landing late has nothing to undo - no
+        // money was ever taken.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: false, amountEgpPaid: 0m, transactionId: null);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        Assert.Null(order.PaymobTransactionId);
+        Assert.Equal(0, fake.CallCount);
+    }
+
+    [Fact]
+    public async Task SuccessCallback_ForAnOrderAlreadyFullyProcessed_IsIgnored()
+    {
+        // A duplicate delivery of a callback for an order that's already
+        // Placed (not Cancelled) - the normal idempotency case, distinct
+        // from the late-cancel race above.
+        var orderId = await CreatePaidOrderAsync(100m, transactionId: 777888);
+        var fake = new FakePaymobClient(refundSucceeds: true);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 777888);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, order!.Status);
+        Assert.Equal(777888, order.PaymobTransactionId);
+        Assert.Null(order.RefundedAt); // never cancelled, so never refunded
+        Assert.Equal(0, fake.CallCount); // no refund was ever attempted
+    }
+
+    [Fact]
     public async Task StudentCancel_RefundsAPaidOrder_TheSameWayStaffCancelDoes()
     {
         var categoryId = await CreateCategoryAsync();

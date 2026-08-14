@@ -252,6 +252,24 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return rowsAffected > 0;
     }
 
+    // Records a payment's transaction id WITHOUT touching Status - used when
+    // a payment succeeds for an order that's already Cancelled (the charge
+    // landed just after cancellation, see clsOrderBusiness.MarkOrderPaymentResultAsync)
+    // so the order isn't silently resurrected back to Placed, but the charge
+    // is still tracked for the automatic refund that follows.
+    public async Task<bool> RecordPaymobTransactionIdAsync(int id, long transactionId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET PaymobTransactionId = @TransactionId
+            WHERE OrderId = @Id AND PaymobTransactionId IS NULL";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, TransactionId = transactionId });
+        return rowsAffected > 0;
+    }
+
     // The RefundedAt IS NULL guard makes this safely idempotent - the same
     // protection as MarkKitchenTicketPrintedAsync, but here it's guarding
     // against ever attempting to refund real money twice.

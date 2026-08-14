@@ -207,36 +207,72 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // duplicated here.
     //
     // Idempotent on purpose: Paymob (like most webhook systems) can retry
-    // delivery, and only acting while still AwaitingPayment means a second
-    // delivery of the same "succeeded" callback is a harmless no-op instead
-    // of double-processing an order that already moved on.
+    // delivery, so a second delivery of a callback we've already fully
+    // processed must be a harmless no-op instead of double-processing an
+    // order that already moved on.
     public async Task MarkOrderPaymentResultAsync(int orderId, bool paymentSucceeded, decimal amountEgpPaid, long? transactionId)
     {
         var order = await dataAccess.GetByIdAsync(orderId);
-        if (order is null || order.Status != OrderStatus.AwaitingPayment) return;
+        if (order is null) return;
 
-        if (!paymentSucceeded)
+        if (order.Status == OrderStatus.AwaitingPayment)
         {
-            await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Cancelled);
+            if (!paymentSucceeded)
+            {
+                await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Cancelled);
+                return;
+            }
+
+            // The HMAC proves the callback is genuinely from Paymob, but not
+            // that it's reporting the amount we actually asked for - this is
+            // a cheap extra check that the two agree before treating the
+            // order as real, rather than trusting "success: true" alone.
+            if (Math.Abs(amountEgpPaid - order.Total) > 0.01m)
+                throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match order total {order.Total} for OrderId={orderId}.");
+
+            // obj.id is one of the fields HMAC-verified as part of the
+            // callback itself, so a genuine successful callback always
+            // carries it - this is a defensive guard, not an expected path.
+            if (transactionId is null)
+                throw new InvalidOperationException($"Paymob webhook reported success but had no transaction id for OrderId={orderId}.");
+
+            await dataAccess.MarkPaidAsync(orderId, transactionId.Value);
             return;
         }
 
-        // The HMAC proves the callback is genuinely from Paymob, but not that
-        // it's reporting the amount we actually asked for - this is a cheap
-        // extra check that the two agree before treating the order as real,
-        // rather than trusting "success: true" alone.
-        if (Math.Abs(amountEgpPaid - order.Total) > 0.01m)
-            throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match order total {order.Total} for OrderId={orderId}.");
+        // The order already moved on before this callback arrived. A failed
+        // payment for an order that's no longer AwaitingPayment is a
+        // harmless no-op - nothing was ever charged, so there's nothing to
+        // undo (same as a duplicate delivery of a callback already
+        // processed).
+        if (!paymentSucceeded) return;
 
-        // obj.id is one of the fields HMAC-verified as part of the callback
-        // itself, so a genuine successful callback always carries it - this
-        // is a defensive guard, not an expected path. Needed to refund this
-        // exact transaction later if the order gets cancelled - see
-        // RefundIfPaidAsync.
-        if (transactionId is null)
-            throw new InvalidOperationException($"Paymob webhook reported success but had no transaction id for OrderId={orderId}.");
+        // A successful payment landing for an order that's already
+        // Cancelled is a genuine race, not a duplicate callback: the charge
+        // went through on Paymob's side right as/just after the order got
+        // cancelled here (a student self-cancelling in the same window the
+        // payment was completing, or the abandoned-payment sweep firing at
+        // an unlucky moment). Silently dropping this would mean real money
+        // taken with zero record and no refund - instead, treat it exactly
+        // like any other paid-then-cancelled order and refund it
+        // immediately. Deliberately does NOT resurrect the order back to
+        // Placed - the kitchen/system already moved on from it, possibly
+        // with real consequences (ingredients reallocated), so quietly
+        // un-cancelling it would be its own kind of surprise.
+        //
+        // order.PaymobTransactionId already set here means this exact
+        // late-success callback was already handled once (Paymob retried
+        // delivery) - safe to stop, refunding twice would be the real bug.
+        if (order.Status == OrderStatus.Cancelled && transactionId is not null && order.PaymobTransactionId is null)
+        {
+            await dataAccess.RecordPaymobTransactionIdAsync(orderId, transactionId.Value);
+            order.PaymobTransactionId = transactionId;
+            await RefundIfPaidAsync(order);
+        }
 
-        await dataAccess.MarkPaidAsync(orderId, transactionId.Value);
+        // Any other case (already Placed/Preparing/Ready/Completed) is a
+        // duplicate delivery of a success callback for an order already
+        // fully processed - nothing left to do.
     }
 
     public async Task<bool> CancelAsync(int id)
