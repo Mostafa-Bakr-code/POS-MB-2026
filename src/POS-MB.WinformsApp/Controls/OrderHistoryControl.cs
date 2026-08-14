@@ -13,8 +13,15 @@ public class OrderHistoryControl : UserControl
     private readonly DateTimePicker _dtpStart;
     private readonly DateTimePicker _dtpEnd;
     private readonly ComboBox _cboSource;
+    private readonly CheckBox _chkHideUnpaidCancelled;
     private readonly DataGridView _grid;
 
+    // _allOrders is the raw last fetch from the server; _orders is that,
+    // filtered (Hide Unpaid Cancellations) and sorted, which is what's
+    // actually bound to the grid - same split as OrderStatusControl's
+    // _allOrders/_displayedOrders, so toggling the filter doesn't require a
+    // server round-trip and never loses the underlying data.
+    private List<OrderDto> _allOrders = [];
     private List<OrderDto> _orders = [];
     private string? _sortColumn;
     private bool _sortAscending = true;
@@ -42,11 +49,21 @@ public class OrderHistoryControl : UserControl
         var btnRefresh = new Button { Text = "Refresh", Width = 130, Height = 44, Font = new Font("Segoe UI", 11F, FontStyle.Bold), Margin = new Padding(0, 6, 0, 6) };
         btnRefresh.Click += async (_, _) => await LoadAsync();
 
+        // Off by default - a mobile order cancelled before ever paying (backed
+        // out of checkout, or the abandoned-payment safety net caught it) is
+        // still real signal (how often do students start an order and not
+        // finish?), not just clutter, so it stays visible unless staff
+        // deliberately wants a cleaner view. Purely a client-side filter over
+        // the already-fetched _allOrders - no server round-trip needed.
+        _chkHideUnpaidCancelled = new CheckBox { Text = "Hide Unpaid Cancellations", AutoSize = true, Margin = new Padding(0, 14, 10, 0) };
+        _chkHideUnpaidCancelled.CheckedChanged += (_, _) => ApplySortAndBind();
+
         toolbar.Controls.Add(_chkUseDateRange);
         toolbar.Controls.Add(_dtpStart);
         toolbar.Controls.Add(_dtpEnd);
         toolbar.Controls.Add(_cboSource);
         toolbar.Controls.Add(btnRefresh);
+        toolbar.Controls.Add(_chkHideUnpaidCancelled);
 
         _grid = new DataGridView
         {
@@ -65,6 +82,14 @@ public class OrderHistoryControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Date", HeaderText = "Date", DataPropertyName = "Date", FillWeight = 110, MinimumWidth = 150 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", FillWeight = 80, MinimumWidth = 100 });
+        // Lets staff tell apart, at a glance, a Cancelled mobile order that
+        // was actually charged (backed out/refunded after paying - has a
+        // matching transaction on Paymob's own dashboard) from one that
+        // never reached payment at all (backed out of checkout, or the
+        // abandoned-payment safety net caught it - genuinely nothing on
+        // Paymob's side to show, not a discrepancy). A Cashier order is
+        // never paid through Paymob at all, so this is always blank there.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "PaidViaPaymob", HeaderText = "Paid via Paymob", DataPropertyName = "PaymobTransactionId", FillWeight = 80, MinimumWidth = 110 });
         // Only ever meaningful for a Mobile order that was paid through
         // Paymob and later cancelled - see clsOrderBusiness.RefundIfPaidAsync.
         // Blank for everything else (never paid through Paymob, or paid but
@@ -106,6 +131,11 @@ public class OrderHistoryControl : UserControl
             e.Value = e.Value is DateTime refundedAt ? AppSession.ToLocalDisplay(refundedAt).ToString("yyyy-MM-dd HH:mm") : "";
             e.FormattingApplied = true;
         }
+        else if (_grid.Columns[e.ColumnIndex].Name == "PaidViaPaymob")
+        {
+            e.Value = e.Value is long ? "Yes" : "";
+            e.FormattingApplied = true;
+        }
     }
 
     private async Task LoadAsync()
@@ -125,7 +155,7 @@ public class OrderHistoryControl : UserControl
             return;
         }
 
-        _orders = await _apiClient.GetOrdersAsync(start, end, source);
+        _allOrders = await _apiClient.GetOrdersAsync(start, end, source);
 
         ApplySortAndBind();
     }
@@ -136,7 +166,7 @@ public class OrderHistoryControl : UserControl
     private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
     {
         var columnName = _grid.Columns[e.ColumnIndex].Name;
-        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary" or "Refunded")) return;
+        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary" or "Refunded" or "PaidViaPaymob")) return;
 
         _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
         _sortColumn = columnName;
@@ -145,16 +175,26 @@ public class OrderHistoryControl : UserControl
 
     private void ApplySortAndBind()
     {
+        // A mobile order cancelled before ever reaching payment - no
+        // PaymobTransactionId at all - is what "Hide Unpaid Cancellations"
+        // hides. A Cashier order is never paid through Paymob in the first
+        // place, so this filter never touches Cashier cancellations - those
+        // are real walk-in activity, not checkout abandonment.
+        IEnumerable<OrderDto> visible = _chkHideUnpaidCancelled.Checked
+            ? _allOrders.Where(o => !(o.Status == OrderStatus.Cancelled && o.OrderSource == OrderSource.Mobile && o.PaymobTransactionId is null))
+            : _allOrders;
+
         IEnumerable<OrderDto> sorted = _sortColumn switch
         {
-            "SerialNumber" => _orders.OrderBy(o => o.SerialNumber),
-            "Date" => _orders.OrderBy(o => o.Date),
-            "OrderSource" => _orders.OrderBy(o => o.OrderSource),
-            "Status" => _orders.OrderBy(o => o.Status),
-            "Total" => _orders.OrderBy(o => o.Total),
-            "IsComplimentary" => _orders.OrderBy(o => o.IsComplimentary),
-            "Refunded" => _orders.OrderBy(o => o.RefundedAt),
-            _ => _orders
+            "SerialNumber" => visible.OrderBy(o => o.SerialNumber),
+            "Date" => visible.OrderBy(o => o.Date),
+            "OrderSource" => visible.OrderBy(o => o.OrderSource),
+            "Status" => visible.OrderBy(o => o.Status),
+            "Total" => visible.OrderBy(o => o.Total),
+            "IsComplimentary" => visible.OrderBy(o => o.IsComplimentary),
+            "Refunded" => visible.OrderBy(o => o.RefundedAt),
+            "PaidViaPaymob" => visible.OrderBy(o => o.PaymobTransactionId),
+            _ => visible
         };
         if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();
 
