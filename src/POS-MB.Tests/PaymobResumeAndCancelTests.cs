@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using POS_MB.Business;
+using POS_MB.Business.Payments;
 using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Tests;
@@ -8,6 +11,34 @@ namespace POS_MB.Tests;
 // and the CancelForStudentAsync extension to allow AwaitingPayment too.
 public class PaymobResumeAndCancelTests : DatabaseTestBase
 {
+    // Never touches the real network - resuming checkout is real money, not
+    // something to risk on a test typo. Lets tests control both what the
+    // "did this already succeed?" inquiry reports and what a fresh checkout
+    // attempt would return.
+    private class FakePaymobClient(PaymobInquiryResult inquiryResult) : PaymobClient(new HttpClient(), new PaymobOptions())
+    {
+        public int InquiryCallCount { get; private set; }
+        public string? LastInquiredReference { get; private set; }
+        public int CreateIntentionCallCount { get; private set; }
+
+        public override Task<PaymobInquiryResult> InquireByMerchantOrderIdAsync(string merchantOrderId)
+        {
+            InquiryCallCount++;
+            LastInquiredReference = merchantOrderId;
+            return Task.FromResult(inquiryResult);
+        }
+
+        public override Task<PaymobIntentionResult> CreateIntentionAsync(
+            decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds)
+        {
+            CreateIntentionCallCount++;
+            return Task.FromResult(new PaymobIntentionResult("fake_client_secret", 123456789));
+        }
+    }
+
+    private clsOrderBusiness CreateOrderBusinessWith(FakePaymobClient fakeClient) =>
+        new(new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory), SettingsBusiness, fakeClient, NullLogger<clsOrderBusiness>.Instance);
+
     private async Task<(int OrderId, int StudentId)> CreateAwaitingPaymentOrderAsync()
     {
         var categoryId = await CreateCategoryAsync();
@@ -51,6 +82,77 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             OrderBusiness.ResumeCheckoutAsync(orderId, otherStudentId, "other@example.com"));
+    }
+
+    [Fact]
+    public async Task ResumeCheckout_SkipsInquiry_WhenNoPriorReferenceExists()
+    {
+        // Created directly via CreateOrderAsync, never through
+        // CreateStudentOrderAsync/StartPaymobCheckoutAsync - no checkout
+        // attempt has ever actually been sent to Paymob yet, so there's
+        // nothing to ask about.
+        var (orderId, studentId) = await CreateAwaitingPaymentOrderAsync();
+        var fake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+
+        Assert.NotNull(checkoutUrl);
+        Assert.Equal(0, fake.InquiryCallCount);
+        Assert.Equal(1, fake.CreateIntentionCallCount);
+    }
+
+    [Fact]
+    public async Task ResumeCheckout_DetectsAnAlreadySucceededPayment_ReconcilesInsteadOfChargingAgain()
+    {
+        // The actual race this closes: a first payment succeeds on
+        // Paymob's side, but our own database hasn't heard about it yet
+        // (the webhook hasn't arrived) when the student taps "Continue to
+        // Payment" again.
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+
+        // Establish a real LastPaymobReference the way CreateStudentOrderAsync
+        // normally would, via a fake client standing in for the initial checkout.
+        var setupFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var (orderId, _) = await CreateOrderBusinessWith(setupFake).CreateStudentOrderAsync(studentId, "student@example.com", [new NewOrderItem(itemId, 1, null)]);
+
+        // Now the student taps "Continue to Payment" - Paymob reports the
+        // original attempt actually already succeeded.
+        var resumeFake = new FakePaymobClient(new PaymobInquiryResult(true, true, 888999, 100m));
+        var orderBusiness = CreateOrderBusinessWith(resumeFake);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com"));
+
+        Assert.Equal(0, resumeFake.CreateIntentionCallCount); // never opened a second payment window
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, order!.Status);
+        Assert.Equal(888999, order.PaymobTransactionId);
+    }
+
+    [Fact]
+    public async Task ResumeCheckout_ProceedsNormally_WhenNothingWasFound()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+
+        var setupFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var (orderId, _) = await CreateOrderBusinessWith(setupFake).CreateStudentOrderAsync(studentId, "student@example.com", [new NewOrderItem(itemId, 1, null)]);
+
+        // Genuinely never completed - the normal, expected resume case.
+        var resumeFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(resumeFake);
+
+        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+
+        Assert.NotNull(checkoutUrl);
+        Assert.Equal(1, resumeFake.InquiryCallCount);
+        Assert.Equal(1, resumeFake.CreateIntentionCallCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.AwaitingPayment, order!.Status); // untouched
     }
 
     [Fact]

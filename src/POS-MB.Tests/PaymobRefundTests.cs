@@ -211,6 +211,61 @@ public class PaymobRefundTests : DatabaseTestBase
     }
 
     [Fact]
+    public async Task LateDuplicateCharge_ForAnAlreadyPaidOrder_RefundsTheStrayChargeOnly()
+    {
+        // The double-charge race: a student taps "Continue to Payment"
+        // again in the narrow window before the first payment's webhook
+        // has arrived (see ResumeCheckoutAsync), then actually pays a
+        // second time on the new checkout session. The order was only ever
+        // meant to be charged once - the extra charge must be refunded on
+        // its own, without disturbing the order's own legitimate
+        // transaction/status.
+        var orderId = await CreatePaidOrderAsync(100m, transactionId: 777888);
+        var fake = new FakePaymobClient(refundSucceeds: true, refundTransactionId: 999555);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        // A second, genuinely different transaction id succeeding for the
+        // same order.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 555111);
+
+        Assert.Equal(1, fake.CallCount);
+        Assert.Equal(555111, fake.LastTransactionId); // refunded the STRAY charge, not the original
+        Assert.Equal(100m, fake.LastAmount);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        // The order's own record is untouched - it's still the original,
+        // legitimate payment.
+        Assert.Equal(OrderStatus.Placed, order!.Status);
+        Assert.Equal(777888, order.PaymobTransactionId);
+        Assert.Null(order.RefundedAt); // the ORDER was never refunded - only the stray charge was
+    }
+
+    [Fact]
+    public async Task MarkPaidAsync_DoesNotOverwriteStatus_WhenOrderIsNoLongerAwaitingPayment()
+    {
+        // Directly exercises the DataAccess-level guard that closes a real
+        // database race: clsOrderBusiness reads Status, decides what to do,
+        // then writes separately - a concurrent cancel can land in that gap.
+        // Without "AND Status = AwaitingPayment" in MarkPaidAsync's own
+        // WHERE clause, this write would blindly resurrect a Cancelled
+        // order back to Placed.
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await OrderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await OrderBusiness.CancelForStudentAsync(orderId, studentId); // simulates the concurrent cancel that "won"
+
+        var dataAccess = new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory);
+        var wrote = await dataAccess.MarkPaidAsync(orderId, 777888);
+
+        Assert.False(wrote); // the guard correctly refused to write
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Cancelled, order!.Status); // untouched
+        Assert.Null(order.PaymobTransactionId);
+    }
+
+    [Fact]
     public async Task StudentCancel_RefundsAPaidOrder_TheSameWayStaffCancelDoes()
     {
         var categoryId = await CreateCategoryAsync();

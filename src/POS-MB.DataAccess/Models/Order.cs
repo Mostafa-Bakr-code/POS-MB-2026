@@ -43,6 +43,12 @@ public class Order
     // confirmation email references this number instead of the original one.
     public long? RefundTransactionId { get; set; }
 
+    // The special_reference sent on the most recent Paymob checkout attempt
+    // (initial or resumed) - lets ResumeCheckoutAsync ask Paymob directly
+    // "did this already succeed?" via their Transaction Inquiry API before
+    // ever opening a second payment window for the same order.
+    public string? LastPaymobReference { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

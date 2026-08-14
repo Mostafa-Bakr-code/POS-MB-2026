@@ -14,6 +14,13 @@ public record PaymobIntentionResult(string ClientSecret, long PaymobOrderId);
 // field), only meaningful when Success is true.
 public record PaymobRefundResult(bool Success, long? RefundTransactionId);
 
+// Found is false when Paymob has no transaction at all for the given
+// reference (nobody ever attempted payment, or the inquiry call itself
+// failed) - Success/TransactionId/AmountEgp are only meaningful when Found
+// is true, and even then Success reflects whether that transaction
+// actually succeeded (a failed/declined attempt is still "found").
+public record PaymobInquiryResult(bool Found, bool Success, long? TransactionId, decimal? AmountEgp);
+
 // Talks to Paymob's Intention API (https://developers.paymob.com) - the
 // Secret Key never leaves this class/the server it runs on. Base URL is
 // configured on the injected HttpClient (see Program.cs), not hardcoded here,
@@ -26,7 +33,10 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
     // notification_url/redirection_url come from configuration (PaymobOptions),
     // not from the caller - they're deployment concerns (which webhook host,
     // which marker URL), not something specific to any one order.
-    public async Task<PaymobIntentionResult> CreateIntentionAsync(
+    // virtual for the same reason RefundAsync/InquireByMerchantOrderIdAsync
+    // are - ResumeCheckoutAsync can fall through to calling this, and tests
+    // exercising that path must never risk a real call to Paymob's API.
+    public virtual async Task<PaymobIntentionResult> CreateIntentionAsync(
         decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "v1/intention/");
@@ -112,6 +122,81 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
         var refundTransactionId = success && body.TryGetProperty("id", out var idProp) && idProp.TryGetInt64(out var rid) ? rid : (long?)null;
 
         return new PaymobRefundResult(success, refundTransactionId);
+    }
+
+    // Paymob's classic/legacy API (Transaction Inquiry, unlike Intention/
+    // Refund) authenticates via a short-lived session token exchanged from
+    // the ApiKey, not the SecretKey Bearer header - see "Authentication
+    // Request (Generate Auth Token)" in their docs. Fetched fresh on every
+    // call rather than cached - this is only ever called from
+    // ResumeCheckoutAsync, a rare, low-traffic path where an extra ~1s
+    // round trip doesn't matter, and it avoids having to reason about
+    // whether a cached token has expired.
+    private async Task<string> GetAuthTokenAsync()
+    {
+        var response = await httpClient.PostAsJsonAsync("api/auth/tokens", new { api_key = options.ApiKey });
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.GetProperty("token").GetString()
+            ?? throw new InvalidOperationException("Paymob auth response did not include a token.");
+    }
+
+    // Asks Paymob directly whether a checkout attempt for this exact
+    // special_reference has already succeeded - see
+    // clsOrderBusiness.ResumeCheckoutAsync, which calls this before ever
+    // opening a second payment window for an order, specifically to close
+    // the double-charge race where a first payment succeeds right before
+    // the student taps "Continue to Payment" again. Not found (no matching
+    // transaction at all - nobody ever completed a payment attempt for this
+    // reference, or the reference is simply invalid) is treated the same as
+    // "not paid yet", not as an error - the caller should proceed with a
+    // normal new checkout attempt in that case.
+    //
+    // virtual for the same reason RefundAsync is - tests must never risk a
+    // real call to Paymob's API.
+    public virtual async Task<PaymobInquiryResult> InquireByMerchantOrderIdAsync(string merchantOrderId)
+    {
+        var authToken = await GetAuthTokenAsync();
+
+        var response = await httpClient.PostAsJsonAsync("api/ecommerce/orders/transaction_inquiry", new
+        {
+            auth_token = authToken,
+            merchant_order_id = merchantOrderId
+        });
+        if (!response.IsSuccessStatusCode) return new PaymobInquiryResult(false, false, null, null);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return ParseInquiryResponse(body);
+    }
+
+    // Extracted so the (verified-live, not guessed) is_refund/is_void
+    // handling below can be unit-tested against a raw JSON payload without
+    // any network call - see PaymobInquiryParsingTests.
+    //
+    // This endpoint returns the LAST transaction for the reference, not
+    // specifically the last payment - verified live against a real refunded
+    // order: once cancelled-and-refunded, the "last transaction" it returns
+    // IS the refund itself (is_refund: true), still carrying success: true,
+    // with the original payment's id only reachable via parent_transaction.
+    // Blindly trusting success here would misread "this order was refunded"
+    // as "this order was just paid" - a refund/void is never a successful
+    // NEW payment for ResumeCheckoutAsync's purposes, regardless of what
+    // "success" says.
+    public static PaymobInquiryResult ParseInquiryResponse(JsonElement body)
+    {
+        if (!body.TryGetProperty("id", out var idProp) || !idProp.TryGetInt64(out var transactionId))
+            return new PaymobInquiryResult(false, false, null, null);
+
+        var isRefundOrVoid =
+            (body.TryGetProperty("is_refund", out var isRefundProp) && isRefundProp.ValueKind == JsonValueKind.True) ||
+            (body.TryGetProperty("is_void", out var isVoidProp) && isVoidProp.ValueKind == JsonValueKind.True);
+
+        var success = !isRefundOrVoid
+            && body.TryGetProperty("success", out var successProp) && successProp.ValueKind == JsonValueKind.True;
+        var amountEgp = body.TryGetProperty("amount_cents", out var amountProp) ? amountProp.GetInt64() / 100m : (decimal?)null;
+
+        return new PaymobInquiryResult(true, success, transactionId, amountEgp);
     }
 
     // Exact field list/order from Paymob's "HMAC Transaction Callback" docs -

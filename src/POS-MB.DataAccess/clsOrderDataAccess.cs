@@ -239,6 +239,16 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     // Records the successful payment's Paymob transaction id alongside moving
     // the order to Placed - needed later to tell Paymob which transaction to
     // refund if this order is ever cancelled (see clsOrderBusiness.RefundIfPaidAsync).
+    //
+    // The "AND Status = @AwaitingPaymentStatus" guard is not optional - the
+    // business layer reads the order's status, decides what to do, then
+    // calls this separately, which leaves a real gap for a concurrent
+    // cancel to land in between. Without this guard in the WHERE clause
+    // itself, this UPDATE would blindly overwrite whatever the row's
+    // current status is (even Cancelled), silently resurrecting an order
+    // someone just cancelled. Returning false when the guard fails lets
+    // clsOrderBusiness detect the race and re-route through the same
+    // handling as any other "payment landed after the order moved on" case.
     public async Task<bool> MarkPaidAsync(int id, long transactionId)
     {
         using var connection = connectionFactory.CreateConnection();
@@ -246,10 +256,24 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         const string query = @"
             UPDATE Orders
             SET Status = @Status, PaymobTransactionId = @TransactionId, UpdatedAt = SYSUTCDATETIME()
-            WHERE OrderId = @Id";
+            WHERE OrderId = @Id AND Status = @AwaitingPaymentStatus";
 
-        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, Status = OrderStatus.Placed, TransactionId = transactionId });
+        var rowsAffected = await connection.ExecuteAsync(
+            query, new { Id = id, Status = OrderStatus.Placed, AwaitingPaymentStatus = OrderStatus.AwaitingPayment, TransactionId = transactionId });
         return rowsAffected > 0;
+    }
+
+    // Remembers which special_reference was last sent to Paymob for this
+    // order (initial checkout or a resume) - see clsOrderBusiness.ResumeCheckoutAsync,
+    // which uses this to ask Paymob directly whether that attempt already
+    // succeeded before ever opening a second payment window.
+    public async Task SetLastPaymobReferenceAsync(int id, string reference)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = "UPDATE Orders SET LastPaymobReference = @Reference WHERE OrderId = @Id";
+
+        await connection.ExecuteAsync(query, new { Id = id, Reference = reference });
     }
 
     // Records a payment's transaction id WITHOUT touching Status - used when

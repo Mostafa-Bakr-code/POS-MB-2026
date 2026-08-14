@@ -117,6 +117,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // at AwaitingPayment with no way forward otherwise - this starts a fresh
     // Paymob checkout session for that same order rather than making them
     // wait out the auto-cancel timeout with no recourse.
+    //
+    // Before ever opening that second payment window, this asks Paymob
+    // directly whether the previous attempt already succeeded - closing a
+    // real double-charge race: our own database might still show
+    // AwaitingPayment for a few seconds after a payment has genuinely
+    // succeeded on Paymob's side, simply because the webhook confirming it
+    // hasn't arrived yet. Trusting our own stale copy here would hand out a
+    // second, real, working payment link for an order that's already paid.
     public async Task<string> ResumeCheckoutAsync(int orderId, int studentId, string studentEmail)
     {
         var order = await dataAccess.GetByIdForStudentAsync(orderId, studentId)
@@ -124,6 +132,20 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
 
         if (order.Status != OrderStatus.AwaitingPayment)
             throw new ArgumentException("This order is not waiting for payment.", nameof(orderId));
+
+        if (order.LastPaymobReference is not null)
+        {
+            var inquiry = await paymobClient.InquireByMerchantOrderIdAsync(order.LastPaymobReference);
+            if (inquiry is { Found: true, Success: true, TransactionId: long transactionId })
+            {
+                // Reuses the exact same race-safe reconciliation a late
+                // webhook goes through - this genuinely is that same
+                // situation, just discovered by asking instead of waiting
+                // to be told.
+                await MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, inquiry.AmountEgp ?? order.Total, transactionId);
+                throw new ArgumentException("This order has already been paid.", nameof(orderId));
+            }
+        }
 
         return await StartPaymobCheckoutAsync(order, studentEmail, isRetry: true);
     }
@@ -137,6 +159,12 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             : PaymobOrderReference.Build(order.Date, serialNumber);
 
         var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds);
+
+        // Remembered so a future ResumeCheckoutAsync call can ask Paymob
+        // whether THIS specific attempt succeeded before opening yet
+        // another one.
+        await dataAccess.SetLastPaymobReferenceAsync(order.OrderId, reference);
+
         return paymobClient.BuildCheckoutUrl(intention.ClientSecret);
     }
 
@@ -236,43 +264,96 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             if (transactionId is null)
                 throw new InvalidOperationException($"Paymob webhook reported success but had no transaction id for OrderId={orderId}.");
 
-            await dataAccess.MarkPaidAsync(orderId, transactionId.Value);
+            // Reading Status above and writing here are two separate steps,
+            // not one atomic operation - a concurrent cancel can land in
+            // between them. MarkPaidAsync's own WHERE clause re-checks
+            // Status = AwaitingPayment at the moment it actually writes, so
+            // if that guard fails, the order genuinely moved on between our
+            // read and this write (a real race, not just a hypothetical
+            // one) - re-fetch the current truth and handle it exactly like
+            // any other "payment landed after the order moved on" case
+            // below, instead of assuming success.
+            if (await dataAccess.MarkPaidAsync(orderId, transactionId.Value))
+                return;
+
+            order = await dataAccess.GetByIdAsync(orderId);
+            if (order is null) return;
+        }
+
+        await HandleLateOrDuplicatePaymentAsync(order, paymentSucceeded, transactionId);
+    }
+
+    // Reached whenever a payment result callback arrives for an order that
+    // is not (or is no longer) AwaitingPayment - either it already moved on
+    // before the callback arrived, or it moved on in the narrow window
+    // between this method's initial read and its own write (see the
+    // MarkPaidAsync race-guard above).
+    private async Task HandleLateOrDuplicatePaymentAsync(Order order, bool paymentSucceeded, long? transactionId)
+    {
+        // A failed payment for an order that's no longer AwaitingPayment is
+        // a harmless no-op - nothing was ever charged, so there's nothing
+        // to undo (same as a duplicate delivery of a callback already
+        // processed).
+        if (!paymentSucceeded || transactionId is null) return;
+
+        // The exact same successful transaction we've already recorded for
+        // this order, delivered again - Paymob's own retry behavior, not a
+        // second real charge. True no-op.
+        if (order.PaymobTransactionId == transactionId) return;
+
+        if (order.PaymobTransactionId is null)
+        {
+            // First time we're hearing about ANY charge for this order, and
+            // it's no longer AwaitingPayment - most commonly, it's already
+            // Cancelled and the charge landed just after (a student self-
+            // cancelling in the same window the payment was completing, or
+            // the abandoned-payment sweep firing at an unlucky moment).
+            // Silently dropping this would mean real money taken with zero
+            // record and no refund - instead, record it and refund it
+            // immediately, exactly like any other paid-then-cancelled
+            // order (see RefundIfPaidAsync). Deliberately does NOT
+            // resurrect a Cancelled order back to Placed - the kitchen/
+            // system already moved on from it, possibly with real
+            // consequences (ingredients reallocated), so quietly
+            // un-cancelling it would be its own kind of surprise.
+            await dataAccess.RecordPaymobTransactionIdAsync(order.OrderId, transactionId.Value);
+            order.PaymobTransactionId = transactionId;
+            await RefundIfPaidAsync(order);
             return;
         }
 
-        // The order already moved on before this callback arrived. A failed
-        // payment for an order that's no longer AwaitingPayment is a
-        // harmless no-op - nothing was ever charged, so there's nothing to
-        // undo (same as a duplicate delivery of a callback already
-        // processed).
-        if (!paymentSucceeded) return;
+        // The order already has a different, legitimate transaction on
+        // file - this is a genuine second, extra real charge, not a
+        // duplicate callback (e.g. a resumed checkout that was actually
+        // paid a second time in the narrow window before the first
+        // payment's webhook had a chance to move the order out of
+        // AwaitingPayment - see ResumeCheckoutAsync). The order was only
+        // ever meant to be charged once, so this stray charge gets refunded
+        // on its own - the order's own recorded transaction/status is left
+        // exactly as it was, since that one is the legitimate one.
+        await RefundStrayChargeAsync(order.OrderId, transactionId.Value, order.Total);
+    }
 
-        // A successful payment landing for an order that's already
-        // Cancelled is a genuine race, not a duplicate callback: the charge
-        // went through on Paymob's side right as/just after the order got
-        // cancelled here (a student self-cancelling in the same window the
-        // payment was completing, or the abandoned-payment sweep firing at
-        // an unlucky moment). Silently dropping this would mean real money
-        // taken with zero record and no refund - instead, treat it exactly
-        // like any other paid-then-cancelled order and refund it
-        // immediately. Deliberately does NOT resurrect the order back to
-        // Placed - the kitchen/system already moved on from it, possibly
-        // with real consequences (ingredients reallocated), so quietly
-        // un-cancelling it would be its own kind of surprise.
-        //
-        // order.PaymobTransactionId already set here means this exact
-        // late-success callback was already handled once (Paymob retried
-        // delivery) - safe to stop, refunding twice would be the real bug.
-        if (order.Status == OrderStatus.Cancelled && transactionId is not null && order.PaymobTransactionId is null)
+    private async Task RefundStrayChargeAsync(int orderId, long transactionId, decimal amountEgp)
+    {
+        try
         {
-            await dataAccess.RecordPaymobTransactionIdAsync(orderId, transactionId.Value);
-            order.PaymobTransactionId = transactionId;
-            await RefundIfPaidAsync(order);
+            var result = await paymobClient.RefundAsync(transactionId, amountEgp);
+            if (result.Success)
+                logger.LogWarning(
+                    "Refunded a duplicate/stray Paymob charge for OrderId={OrderId}, TransactionId={TransactionId} - this order already had a different transaction on file.",
+                    orderId, transactionId);
+            else
+                logger.LogError(
+                    "Paymob rejected refunding a duplicate/stray charge for OrderId={OrderId}, TransactionId={TransactionId} - needs manual review.",
+                    orderId, transactionId);
         }
-
-        // Any other case (already Placed/Preparing/Ready/Completed) is a
-        // duplicate delivery of a success callback for an order already
-        // fully processed - nothing left to do.
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Refunding a duplicate/stray Paymob charge threw for OrderId={OrderId}, TransactionId={TransactionId} - needs manual review.",
+                orderId, transactionId);
+        }
     }
 
     public async Task<bool> CancelAsync(int id)
