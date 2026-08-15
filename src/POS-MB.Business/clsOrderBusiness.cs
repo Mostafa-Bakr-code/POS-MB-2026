@@ -280,7 +280,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             if (order is null) return;
         }
 
-        await HandleLateOrDuplicatePaymentAsync(order, paymentSucceeded, transactionId);
+        await HandleLateOrDuplicatePaymentAsync(order, paymentSucceeded, amountEgpPaid, transactionId);
     }
 
     // Reached whenever a payment result callback arrives for an order that
@@ -288,7 +288,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // before the callback arrived, or it moved on in the narrow window
     // between this method's initial read and its own write (see the
     // MarkPaidAsync race-guard above).
-    private async Task HandleLateOrDuplicatePaymentAsync(Order order, bool paymentSucceeded, long? transactionId)
+    private async Task HandleLateOrDuplicatePaymentAsync(Order order, bool paymentSucceeded, decimal amountEgpPaid, long? transactionId)
     {
         // A failed payment for an order that's no longer AwaitingPayment is
         // a harmless no-op - nothing was ever charged, so there's nothing
@@ -318,7 +318,15 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             // un-cancelling it would be its own kind of surprise.
             await dataAccess.RecordPaymobTransactionIdAsync(order.OrderId, transactionId.Value);
             order.PaymobTransactionId = transactionId;
-            await RefundIfPaidAsync(order);
+            // amountEgpPaid, not order.Total - refund exactly what this
+            // transaction actually holds. Paymob rejects a refund request
+            // for more than the transaction's own amount (a documented
+            // error: "Requested Refund Amount is greater than the maximum
+            // refund amount permissible"), so trusting order.Total here
+            // instead of the amount this specific callback actually
+            // reported would risk that exact failure if the two ever
+            // disagreed, however unlikely that normally is.
+            await RefundIfPaidAsync(order, amountEgpPaid);
             return;
         }
 
@@ -331,7 +339,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         // ever meant to be charged once, so this stray charge gets refunded
         // on its own - the order's own recorded transaction/status is left
         // exactly as it was, since that one is the legitimate one.
-        await RefundStrayChargeAsync(order.OrderId, transactionId.Value, order.Total);
+        await RefundStrayChargeAsync(order.OrderId, transactionId.Value, amountEgpPaid);
     }
 
     private async Task RefundStrayChargeAsync(int orderId, long transactionId, decimal amountEgp)
@@ -375,13 +383,23 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // vanishing. The PaymobTransactionId/RefundedAt guards mean this is a
     // no-op for anything never paid through Paymob (Cashier orders, or a
     // Mobile order that never completed checkout) or already refunded.
-    private async Task RefundIfPaidAsync(Order order)
+    // amountEgpOverride: when refunding an order the normal way (cancelled
+    // via CancelAsync/CancelForStudentAsync), order.Total is exactly what
+    // was validated against the original payment when it was first marked
+    // paid (see the AwaitingPayment branch of MarkOrderPaymentResultAsync),
+    // so it's safe to trust here. The late-arrival caller passes the
+    // callback's own reported amount instead, since order.Total is only an
+    // expectation there, never actually verified against this particular
+    // transaction.
+    private async Task RefundIfPaidAsync(Order order, decimal? amountEgpOverride = null)
     {
         if (order.PaymobTransactionId is null || order.RefundedAt is not null) return;
 
+        var amountEgp = amountEgpOverride ?? order.Total;
+
         try
         {
-            var result = await paymobClient.RefundAsync(order.PaymobTransactionId.Value, order.Total);
+            var result = await paymobClient.RefundAsync(order.PaymobTransactionId.Value, amountEgp);
             if (result is { Success: true, RefundTransactionId: long refundTransactionId })
                 await dataAccess.MarkRefundedAsync(order.OrderId, refundTransactionId);
             else

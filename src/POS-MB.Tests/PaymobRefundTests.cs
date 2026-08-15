@@ -149,6 +149,37 @@ public class PaymobRefundTests : DatabaseTestBase
     }
 
     [Fact]
+    public async Task LateSuccessfulPayment_RefundsTheActualReportedAmount_NotTheOrderTotal()
+    {
+        // Paymob rejects a refund request for more than a transaction's own
+        // amount ("Requested Refund Amount is greater than the maximum
+        // refund amount permissible" - straight from their own "Common
+        // errors" docs). order.Total is only ever an expectation for a
+        // late-arriving callback, never actually verified against this
+        // specific transaction the way the normal AwaitingPayment path
+        // does - refunding order.Total instead of what this callback
+        // actually reports would risk exactly that failure if the two ever
+        // disagreed.
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true, refundTransactionId: 999333);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await orderBusiness.CancelForStudentAsync(orderId, studentId);
+
+        // Reports an amount deliberately different from the order's own
+        // Total (100m) - a contrived case for the test, but the amount this
+        // callback reports is the only figure that's actually verified
+        // truth about what Paymob really charged.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 85m, transactionId: 777444);
+
+        Assert.Equal(85m, fake.LastAmount);
+    }
+
+    [Fact]
     public async Task LateSuccessfulPayment_IsIdempotent_ARetriedWebhookDeliveryDoesNotRefundTwice()
     {
         var categoryId = await CreateCategoryAsync();
