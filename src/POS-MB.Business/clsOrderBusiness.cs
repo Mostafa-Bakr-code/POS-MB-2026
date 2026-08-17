@@ -6,7 +6,7 @@ using POS_MB.DataAccess.Models;
 
 namespace POS_MB.Business;
 
-public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness, PaymobClient paymobClient, ILogger<clsOrderBusiness> logger)
+public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness settingsBusiness, PaymobClient paymobClient, ILogger<clsOrderBusiness> logger, clsStudentBusiness studentBusiness)
 {
     // Paymob's own intention has an "expiration" too - matches this app's
     // own auto-cancel default (see MobileOrderAutoCancelMinutesSettingKey)
@@ -100,7 +100,15 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // order - that stays Placed, since plenty of other call sites (tests,
     // any future direct-creation path) rely on that and have nothing to do
     // with payment.
-    public async Task<(int OrderId, string CheckoutUrl)> CreateStudentOrderAsync(int studentId, string studentEmail, IReadOnlyList<NewOrderItem> items)
+    // useSavedCard: the student explicitly chose "pay with my saved card" at
+    // checkout - not the default, since a student should always know
+    // whether they're about to skip re-entering card details or not, never
+    // have it silently assumed for them. Silently falls back to a normal
+    // checkout (asking for card details) if they don't actually have one
+    // saved - the mobile app is expected to only offer this option when it
+    // already knows a saved card exists, so this is a defensive fallback,
+    // not the primary guard.
+    public async Task<(int OrderId, string CheckoutUrl)> CreateStudentOrderAsync(int studentId, string studentEmail, IReadOnlyList<NewOrderItem> items, bool useSavedCard = false)
     {
         var orderId = await CreateOrderAsync(OrderSource.Mobile, userId: null, studentId, isComplimentary: false, items);
         await dataAccess.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
@@ -108,7 +116,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var order = await dataAccess.GetByIdAsync(orderId)
             ?? throw new InvalidOperationException($"Order {orderId} was just created but could not be found.");
 
-        var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: false);
+        string? savedCardToken = null;
+        if (useSavedCard)
+        {
+            var student = await studentBusiness.GetByIdAsync(studentId);
+            savedCardToken = student?.SavedCardToken;
+        }
+
+        var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: false, savedCardToken);
         return (orderId, checkoutUrl);
     }
 
@@ -150,7 +165,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         return await StartPaymobCheckoutAsync(order, studentEmail, isRetry: true);
     }
 
-    private async Task<string> StartPaymobCheckoutAsync(Order order, string studentEmail, bool isRetry)
+    private async Task<string> StartPaymobCheckoutAsync(Order order, string studentEmail, bool isRetry, string? savedCardToken = null)
     {
         var serialNumber = order.SerialNumber
             ?? throw new InvalidOperationException($"Order {order.OrderId} has no SerialNumber - cannot start a Paymob checkout for it.");
@@ -158,7 +173,17 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             ? PaymobOrderReference.BuildRetry(order.Date, serialNumber)
             : PaymobOrderReference.Build(order.Date, serialNumber);
 
-        var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds);
+        var orderItems = await dataAccess.GetItemsWithNamesByOrderIdAsync(order.OrderId);
+        // Per-unit price, not the line total - verified live against
+        // Paymob's real API: it multiplies amount by quantity itself to
+        // validate the items sum to the order total, and rejects the
+        // request (406 "unmatched_item_prices") if given the line total
+        // instead.
+        var itemLines = orderItems
+            .Select(oi => new PaymobItemLine(oi.ItemName ?? $"Item #{oi.ItemId}", oi.Price, oi.Quantity, oi.Comment ?? ""))
+            .ToList();
+
+        var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds, itemLines, savedCardToken);
 
         // Remembered so a future ResumeCheckoutAsync call can ask Paymob
         // whether THIS specific attempt succeeded before opening yet
@@ -459,6 +484,18 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // (PaymentExpirationSeconds) rather than a separate setting - there's no
     // reason to keep an order around waiting for a payment session that
     // Paymob itself has already expired on its end.
+    //
+    // Before cancelling any of these, this asks Paymob directly whether it
+    // was actually paid - closing the same gap ResumeCheckoutAsync closes,
+    // but for the case where nobody's around to trigger a resume. A webhook
+    // is a one-shot delivery attempt; if this server was briefly unreachable
+    // (a deploy, a crash, a network blip - exactly the kind of thing that
+    // happened repeatedly tonight) at the moment Paymob tried to deliver it,
+    // the payment can succeed for real while this app never finds out, and
+    // this sweep would otherwise cancel an order that was genuinely paid for
+    // - real money taken, order lost. Reusing the inquiry here means a paid
+    // order always gets reconciled correctly regardless of whether the
+    // webhook ever arrives.
     public async Task<int> CancelAbandonedPaymentsAsync()
     {
         var cutoffUtc = DateTime.UtcNow.AddSeconds(-PaymentExpirationSeconds);
@@ -467,10 +504,39 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var cancelledCount = 0;
         foreach (var order in staleOrders)
         {
+            if (await WasActuallyPaidAsync(order))
+                continue; // reconciled as paid instead of cancelled - see MarkOrderPaymentResultAsync
+
             if (await CancelAsync(order.OrderId))
                 cancelledCount++;
         }
 
         return cancelledCount;
+    }
+
+    // Best-effort: if Paymob's inquiry API is itself unreachable, this falls
+    // back to the old behavior (cancel as unpaid) rather than blocking the
+    // whole sweep - the resume-checkout path and this same reconciliation on
+    // a later sweep run remain as further safety nets for that rarer case.
+    private async Task<bool> WasActuallyPaidAsync(Order order)
+    {
+        if (order.LastPaymobReference is null) return false;
+
+        try
+        {
+            var inquiry = await paymobClient.InquireByMerchantOrderIdAsync(order.LastPaymobReference);
+            if (inquiry is not { Found: true, Success: true, TransactionId: long transactionId })
+                return false;
+
+            await MarkOrderPaymentResultAsync(order.OrderId, paymentSucceeded: true, inquiry.AmountEgp ?? order.Total, transactionId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Paymob inquiry threw while checking OrderId={OrderId} before auto-cancelling it - falling back to cancelling as unpaid.",
+                order.OrderId);
+            return false;
+        }
     }
 }

@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using POS_MB.Business;
 using POS_MB.Business.Payments;
@@ -29,7 +30,8 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         }
 
         public override Task<PaymobIntentionResult> CreateIntentionAsync(
-            decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds)
+            decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds,
+            IReadOnlyList<PaymobItemLine>? items = null, string? savedCardToken = null)
         {
             CreateIntentionCallCount++;
             return Task.FromResult(new PaymobIntentionResult("fake_client_secret", 123456789));
@@ -37,7 +39,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
     }
 
     private clsOrderBusiness CreateOrderBusinessWith(FakePaymobClient fakeClient) =>
-        new(new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory), SettingsBusiness, fakeClient, NullLogger<clsOrderBusiness>.Instance);
+        new(new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory), SettingsBusiness, fakeClient, NullLogger<clsOrderBusiness>.Instance, StudentBusiness);
 
     private async Task<(int OrderId, int StudentId)> CreateAwaitingPaymentOrderAsync()
     {
@@ -153,6 +155,70 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         Assert.Equal(1, resumeFake.CreateIntentionCallCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.AwaitingPayment, order!.Status); // untouched
+    }
+
+    // CancelAbandonedPaymentsAsync's own reconciliation check - added after a
+    // real incident: a webhook never arrived (the delivery path was down),
+    // the sweep would otherwise have cancelled a genuinely paid order,
+    // taking the student's money with no record of it. See
+    // clsOrderBusiness.WasActuallyPaidAsync.
+    private async Task<int> CreateStaleAwaitingPaymentOrderAsync(string? lastPaymobReference)
+    {
+        var (orderId, _) = await CreateAwaitingPaymentOrderAsync();
+        await SetOrderDateAsync(orderId, DateTime.UtcNow.AddMinutes(-15)); // past the 600s expiration window
+        if (lastPaymobReference is not null)
+        {
+            using var connection = ConnectionFactory.CreateConnection();
+            await connection.ExecuteAsync("UPDATE Orders SET LastPaymobReference = @Ref WHERE OrderId = @OrderId",
+                new { Ref = lastPaymobReference, OrderId = orderId });
+        }
+        return orderId;
+    }
+
+    [Fact]
+    public async Task CancelAbandonedPayments_ReconcilesAsPaid_InsteadOfCancelling_WhenPaymobConfirmsSuccess()
+    {
+        var orderId = await CreateStaleAwaitingPaymentOrderAsync("20260101-1");
+        var fake = new FakePaymobClient(new PaymobInquiryResult(true, true, 777888, 100m));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var cancelledCount = await orderBusiness.CancelAbandonedPaymentsAsync();
+
+        Assert.Equal(0, cancelledCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, order!.Status);
+        Assert.Equal(777888, order.PaymobTransactionId);
+    }
+
+    [Fact]
+    public async Task CancelAbandonedPayments_CancelsNormally_WhenPaymobConfirmsNothingWasPaid()
+    {
+        var orderId = await CreateStaleAwaitingPaymentOrderAsync("20260101-2");
+        var fake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var cancelledCount = await orderBusiness.CancelAbandonedPaymentsAsync();
+
+        Assert.Equal(1, cancelledCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Cancelled, order!.Status);
+    }
+
+    [Fact]
+    public async Task CancelAbandonedPayments_CancelsNormally_WhenNoCheckoutWasEverStarted()
+    {
+        // No LastPaymobReference at all - nothing to ask Paymob about,
+        // should behave exactly as before this change.
+        var orderId = await CreateStaleAwaitingPaymentOrderAsync(lastPaymobReference: null);
+        var fake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var cancelledCount = await orderBusiness.CancelAbandonedPaymentsAsync();
+
+        Assert.Equal(1, cancelledCount);
+        Assert.Equal(0, fake.InquiryCallCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Cancelled, order!.Status);
     }
 
     [Fact]

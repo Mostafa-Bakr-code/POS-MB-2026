@@ -8,6 +8,14 @@ namespace POS_MB.Business.Payments;
 
 public record PaymobIntentionResult(string ClientSecret, long PaymobOrderId);
 
+// One line of the itemized breakdown shown on Paymob's own checkout page
+// (toggled on via their "Show Item / Product" checkout-customization
+// setting) - AmountEgp is the PER-UNIT price, not the line total. Verified
+// live against Paymob's real API: it multiplies amount by quantity itself
+// to validate the items sum to the order's total, and rejects the request
+// (406 "unmatched_item_prices") if given the line total instead.
+public record PaymobItemLine(string Name, decimal AmountEgp, int Quantity, string? Description);
+
 // Success is whether Paymob actually processed the refund. RefundTransactionId
 // is the refund's own transaction id - a separate record from the original
 // charge being refunded (linked to it via Paymob's own parent_transaction
@@ -37,7 +45,8 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
     // are - ResumeCheckoutAsync can fall through to calling this, and tests
     // exercising that path must never risk a real call to Paymob's API.
     public virtual async Task<PaymobIntentionResult> CreateIntentionAsync(
-        decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds)
+        decimal amountEgp, string specialReference, string customerEmail, int expirationSeconds,
+        IReadOnlyList<PaymobItemLine>? items = null, string? savedCardToken = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "v1/intention/");
         request.Headers.Add("Authorization", $"Token {options.SecretKey}");
@@ -46,16 +55,38 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
             amount = (int)Math.Round(amountEgp * 100),
             currency = "EGP",
             payment_methods = new[] { options.CardIntegrationId },
+            // Present only when charging a previously saved card (CIT) -
+            // Paymob accepts up to 3, we only ever have the one.
+            card_tokens = savedCardToken is null ? null : new[] { savedCardToken },
+            // Only sent when the caller has real items to show - Paymob's
+            // own "Show Item / Product" checkout-customization toggle has
+            // nothing to display without this. amount here is per-unit
+            // (see PaymobItemLine) - Paymob multiplies by quantity itself
+            // and rejects the request if that doesn't sum to the top-level
+            // amount above. description is never sent as a literal null -
+            // Paymob echoes a JSON null back as the string "None" in its
+            // own intention detail, which isn't something a customer should
+            // ever see, so callers pass an empty string instead.
+            items = items?.Select(i => new
+            {
+                name = Truncate(i.Name, 50),
+                amount = (int)Math.Round(i.AmountEgp * 100),
+                description = Truncate(i.Description ?? "", 255),
+                quantity = i.Quantity
+            }).ToArray(),
             // Real billing address fields aren't meaningful for a digital food
             // pickup order - Paymob's own examples use placeholder values for
-            // exactly this reason, only email is real (used for the student's
-            // own receipt/communication from Paymob, not looked up by us).
+            // exactly this reason. first_name carries the student's actual
+            // email so Paymob's own dashboard (Transactions list "Customer"
+            // column) can tell orders apart instead of every single one
+            // showing the same generic placeholder - we don't collect a real
+            // first/last name anywhere in student signup.
             billing_data = new
             {
                 apartment = "NA",
                 floor = "NA",
-                first_name = "Student",
-                last_name = "Order",
+                first_name = Truncate(customerEmail, 50),
+                last_name = "Student",
                 street = "NA",
                 building = "NA",
                 phone_number = "+201000000000",
@@ -80,6 +111,12 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
 
         return new PaymobIntentionResult(clientSecret, paymobOrderId);
     }
+
+    // Item name/description and the billing email all have documented max
+    // lengths on Paymob's side (50/255/50 chars respectively) - defensive
+    // truncation here rather than risking a 400 over something cosmetic.
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     // Egypt-specific - see PaymobOptions/Program.cs if this ever needs to
     // support another region (UAE/KSA/Oman have their own checkout hosts).
@@ -228,15 +265,44 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
         "obj.success"
     ];
 
+    // Exact field list/order from Paymob's "HMAC Card Token Callback" docs -
+    // already lexicographically sorted by key name. Verified by hand against
+    // their own documented worked example (see PaymobHmacTests) - a
+    // completely different shape from the transaction callback above (no
+    // "obj." nesting quirks to worry about, but also nothing in common field-
+    // wise), which is exactly why a card-token callback can't be verified
+    // with VerifyTransactionCallback's field list.
+    private static readonly string[] CardTokenHmacFieldPaths =
+    [
+        "obj.card_subtype",
+        "obj.created_at",
+        "obj.email",
+        "obj.id",
+        "obj.masked_pan",
+        "obj.merchant_id",
+        "obj.order_id",
+        "obj.token"
+    ];
+
     // Proves a transaction callback genuinely came from Paymob (and wasn't
     // spoofed/altered) before trusting anything in it - the callback is the
     // only thing this app ever trusts to mark an order as paid, so this check
     // is not optional. receivedHmacHex comes from the callback's own "hmac"
     // query-string parameter, not the JSON body.
-    public bool VerifyTransactionCallback(JsonElement payload, string receivedHmacHex)
+    public bool VerifyTransactionCallback(JsonElement payload, string receivedHmacHex) =>
+        VerifyHmac(payload, HmacFieldPaths, receivedHmacHex);
+
+    // Same idea, for the separate "a card was saved" callback - a
+    // completely different payload shape and field list from a transaction
+    // callback, see PaymentsController for why the two need to be told apart
+    // before either verification is even attempted.
+    public bool VerifyCardTokenCallback(JsonElement payload, string receivedHmacHex) =>
+        VerifyHmac(payload, CardTokenHmacFieldPaths, receivedHmacHex);
+
+    private bool VerifyHmac(JsonElement payload, string[] fieldPaths, string receivedHmacHex)
     {
         var concatenated = new StringBuilder();
-        foreach (var path in HmacFieldPaths)
+        foreach (var path in fieldPaths)
             concatenated.Append(GetRawValueAsString(payload, path));
 
         var computed = ComputeHmacSha512(concatenated.ToString(), options.HmacSecret);
@@ -251,6 +317,15 @@ public class PaymobClient(HttpClient httpClient, PaymobOptions options)
     {
         var concatenated = new StringBuilder();
         foreach (var path in HmacFieldPaths)
+            concatenated.Append(GetRawValueAsString(payload, path));
+        return concatenated.ToString();
+    }
+
+    // Same as above, for the card-token callback's own field list.
+    public static string BuildCardTokenHmacConcatenatedString(JsonElement payload)
+    {
+        var concatenated = new StringBuilder();
+        foreach (var path in CardTokenHmacFieldPaths)
             concatenated.Append(GetRawValueAsString(payload, path));
         return concatenated.ToString();
     }

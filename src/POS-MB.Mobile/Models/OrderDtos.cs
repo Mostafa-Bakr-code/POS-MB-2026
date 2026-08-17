@@ -8,7 +8,9 @@ namespace POS_MB.Mobile.Models;
 public enum OrderStatus { Placed = 0, Preparing = 1, Ready = 2, Completed = 3, Cancelled = 4, AwaitingPayment = 5 }
 
 public record OrderItemLineDto(int ItemId, int Quantity, string? Comment);
-public record PlaceOrderRequest(List<OrderItemLineDto> Items);
+// UseSavedCard defaults to false, same reasoning as the backend's own
+// default - a student always explicitly opts in, it's never assumed.
+public record PlaceOrderRequest(List<OrderItemLineDto> Items, bool UseSavedCard = false);
 
 public record UnavailableItemDto(int ItemId, string ItemName, string Reason);
 

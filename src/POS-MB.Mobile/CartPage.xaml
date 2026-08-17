@@ -5,7 +5,7 @@
              x:Class="POS_MB.Mobile.CartPage"
              Title="Your Cart">
 
-    <Grid RowDefinitions="*,Auto,Auto,Auto" Padding="16" RowSpacing="12">
+    <Grid RowDefinitions="*,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="12">
 
         <CollectionView Grid.Row="0" x:Name="CartView">
             <CollectionView.ItemTemplate>
@@ -33,14 +33,26 @@
             FontAttributes="Bold"
             HorizontalOptions="End" />
 
-        <Label
+        <Grid
             Grid.Row="2"
+            x:Name="SavedCardLayout"
+            ColumnDefinitions="Auto,*"
+            IsVisible="False">
+            <CheckBox Grid.Column="0" x:Name="SavedCardCheckBox" />
+            <Label
+                Grid.Column="1"
+                x:Name="SavedCardLabel"
+                VerticalOptions="Center" />
+        </Grid>
+
+        <Label
+            Grid.Row="3"
             x:Name="ErrorLabel"
             TextColor="Red"
             IsVisible="False" />
 
         <Button
-            Grid.Row="3"
+            Grid.Row="4"
             x:Name="PlaceOrderButton"
             Text="Place Order"
             Clicked="OnPlaceOrderClicked" />

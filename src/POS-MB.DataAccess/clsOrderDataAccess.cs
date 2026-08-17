@@ -147,6 +147,24 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QueryAsync<OrderItem>(query, new { OrderId = orderId });
     }
 
+    // Only for building Paymob's optional itemized checkout display (see
+    // clsOrderBusiness.StartPaymobCheckoutAsync) - every other caller of
+    // GetItemsByOrderIdAsync resolves item names by cross-referencing the
+    // catalog separately, so this stays a dedicated method rather than
+    // changing what the existing one returns everywhere it's used.
+    public async Task<IEnumerable<OrderItem>> GetItemsWithNamesByOrderIdAsync(int orderId)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            SELECT oi.*, i.ItemName
+            FROM OrderItems oi
+            LEFT JOIN Items i ON i.ItemId = oi.ItemId
+            WHERE oi.OrderId = @OrderId";
+
+        return await connection.QueryAsync<OrderItem>(query, new { OrderId = orderId });
+    }
+
     // utcStart/utcEndExclusive are already-resolved UTC instants (local-timezone conversion
     // happens in clsOrderBusiness) - filtering on the raw Date column, not the OrderDate
     // shortcut, since OrderDate reflects the UTC calendar day, not the caller's local day.

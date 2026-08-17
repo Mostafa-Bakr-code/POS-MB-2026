@@ -47,6 +47,14 @@ CREATE TABLE dbo.Students
     StudentId    INT IDENTITY(1,1) NOT NULL,
     Email        NVARCHAR(256)     NOT NULL,
     Password     NVARCHAR(200)     NOT NULL,
+    -- One saved card at a time, not a multi-card wallet - all three are set
+    -- together (from a Paymob card-token webhook) or all left NULL. Token is
+    -- the opaque string needed to charge the card again; MaskedPan/Subtype
+    -- are display-only ("Card ending in 2346 (MasterCard)") - never a real
+    -- card number, Paymob never sends us one.
+    SavedCardToken     NVARCHAR(255) NULL,
+    SavedCardMaskedPan NVARCHAR(32)  NULL,
+    SavedCardSubtype   NVARCHAR(32)  NULL,
     IsActive     BIT               NOT NULL CONSTRAINT DF_Students_IsActive DEFAULT (1),
     CreatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_UpdatedAt DEFAULT (SYSUTCDATETIME()),

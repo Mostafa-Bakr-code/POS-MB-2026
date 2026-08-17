@@ -15,6 +15,13 @@ public class OrderItem
     public string? Comment { get; set; }
     public DateTime CreatedAt { get; set; }
 
+    // Resolved via a LEFT JOIN to Items, not stored on this table - only
+    // populated by clsOrderDataAccess.GetItemsWithNamesByOrderIdAsync (used
+    // to build Paymob's optional itemized checkout display). Every other
+    // caller of GetItemsByOrderIdAsync resolves names by cross-referencing
+    // the item catalog separately and leaves this null.
+    public string? ItemName { get; set; }
+
     public decimal InitialPrice => TotalItemsPrice / (1 + (TaxRate / 100));
     public decimal TaxValue => InitialPrice * (TaxRate / 100);
 }

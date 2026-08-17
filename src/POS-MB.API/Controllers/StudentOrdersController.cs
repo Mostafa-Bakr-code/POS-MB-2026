@@ -40,7 +40,7 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
         // User.GetUserName() is the student's email - see JwtTokenService,
         // the "name" claim on a student token is always set to their email,
         // so this needs no extra lookup.
-        var (id, checkoutUrl) = await orderBusiness.CreateStudentOrderAsync(studentId, User.GetUserName(), items);
+        var (id, checkoutUrl) = await orderBusiness.CreateStudentOrderAsync(studentId, User.GetUserName(), items, request.UseSavedCard);
 
         logger.LogInformation("Student {Email} started checkout for OrderId={OrderId}", User.GetUserName(), id);
 
@@ -85,4 +85,4 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
     }
 }
 
-public record CreateStudentOrderRequest([Required, MinLength(1)] List<CreateOrderItemRequest> Items);
+public record CreateStudentOrderRequest([Required, MinLength(1)] List<CreateOrderItemRequest> Items, bool UseSavedCard = false);

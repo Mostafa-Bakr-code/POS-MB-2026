@@ -42,7 +42,7 @@ public class PaymobRefundTests : DatabaseTestBase
     }
 
     private clsOrderBusiness CreateOrderBusinessWith(FakePaymobClient fakeClient) =>
-        new(new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory), SettingsBusiness, fakeClient, NullLogger<clsOrderBusiness>.Instance);
+        new(new POS_MB.DataAccess.clsOrderDataAccess(ConnectionFactory), SettingsBusiness, fakeClient, NullLogger<clsOrderBusiness>.Instance, StudentBusiness);
 
     [Fact]
     public async Task Cancel_RefundsAPaidOrder_ForItsFullTotal()

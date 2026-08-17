@@ -13,13 +13,30 @@ namespace POS_MB.API.Controllers;
 // every other endpoint in this API.
 [ApiController]
 [Route("api/payments")]
-public class PaymentsController(PaymobClient paymobClient, clsOrderBusiness orderBusiness, ILogger<PaymentsController> logger) : ControllerBase
+public class PaymentsController(
+    PaymobClient paymobClient, clsOrderBusiness orderBusiness, clsStudentBusiness studentBusiness, ILogger<PaymentsController> logger) : ControllerBase
 {
+    // Paymob sends two genuinely different callback shapes to this same URL -
+    // a payment result ("TRANSACTION", the only kind that existed here until
+    // the "save card" feature) and a saved-card notification ("TOKEN"). Each
+    // has its own HMAC field list (see PaymobClient), so the type has to be
+    // read BEFORE picking which verification to even attempt - trying to
+    // verify a token callback's signature with the transaction field list
+    // (or vice versa) will simply never match, silently rejecting a
+    // genuine callback as unauthorized.
     [HttpPost("paymob-webhook")]
     [AllowAnonymous]
     public async Task<IActionResult> PaymobWebhook([FromQuery] string? hmac, [FromBody] JsonElement payload)
     {
-        if (string.IsNullOrEmpty(hmac) || !paymobClient.VerifyTransactionCallback(payload, hmac))
+        if (string.IsNullOrEmpty(hmac))
+            return Unauthorized();
+
+        var type = payload.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
+
+        if (type == "TOKEN")
+            return await HandleCardTokenCallbackAsync(payload, hmac);
+
+        if (!paymobClient.VerifyTransactionCallback(payload, hmac))
         {
             logger.LogWarning("Rejected a Paymob webhook with an invalid/missing HMAC from {RemoteIp}",
                 HttpContext.Connection.RemoteIpAddress);
@@ -70,6 +87,39 @@ public class PaymentsController(PaymobClient paymobClient, clsOrderBusiness orde
             logger.LogError(ex, "Paymob webhook amount mismatch for OrderId={OrderId}", order.OrderId);
         }
 
+        return Ok();
+    }
+
+    // Fired when a student checks "save this card" on Paymob's own checkout
+    // page (see clsStudentBusiness.SaveCardTokenAsync). Matched by email,
+    // not order id - Paymob's order_id here is THEIR numeric order id, not
+    // our special_reference, so it can't be used to look up the order the
+    // way the transaction callback does; email is the one field this
+    // callback carries that correlates directly to one of our accounts.
+    private async Task<IActionResult> HandleCardTokenCallbackAsync(JsonElement payload, string hmac)
+    {
+        if (!paymobClient.VerifyCardTokenCallback(payload, hmac))
+        {
+            logger.LogWarning("Rejected a Paymob card-token webhook with an invalid HMAC from {RemoteIp}",
+                HttpContext.Connection.RemoteIpAddress);
+            return Unauthorized();
+        }
+
+        if (!payload.TryGetProperty("obj", out var obj))
+            return Ok();
+
+        var token = obj.TryGetProperty("token", out var tokenProp) ? tokenProp.GetString() : null;
+        var email = obj.TryGetProperty("email", out var emailProp) ? emailProp.GetString() : null;
+        var maskedPan = obj.TryGetProperty("masked_pan", out var panProp) ? panProp.GetString() : null;
+        var cardSubtype = obj.TryGetProperty("card_subtype", out var subtypeProp) ? subtypeProp.GetString() : null;
+
+        if (token is null || email is null)
+        {
+            logger.LogWarning("Paymob card-token webhook had a valid signature but was missing a token or email - ignoring.");
+            return Ok();
+        }
+
+        await studentBusiness.SaveCardTokenAsync(email, token, maskedPan, cardSubtype);
         return Ok();
     }
 }

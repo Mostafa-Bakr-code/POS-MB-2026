@@ -54,4 +54,35 @@ public class PaymobHmacTests
             "1000002024-06-13T11:33:44.592345EGPfalsefalse1920364654097558truefalsefalsefalsetruefalse217503754302852false2346MasterCardcardtrue",
             concatenated);
     }
+
+    // Same idea, for the separate "a card was saved" callback - Paymob's
+    // "HMAC Card Token Callback" reference page, a completely different
+    // field list/shape from the transaction callback above.
+    [Fact]
+    public void BuildCardTokenHmacConcatenatedString_MatchesPaymobsDocumentedExample()
+    {
+        var payload = JsonDocument.Parse("""
+        {
+          "type": "TOKEN",
+          "obj": {
+            "id": 8555026,
+            "token": "e98aceb96f5a370ddf46460db9d555f88bf12448f80e1839b39f78ab",
+            "masked_pan": "xxxx-xxxx-xxxx-2346",
+            "merchant_id": 246628,
+            "card_subtype": "MasterCard",
+            "created_at": "2024-11-13T12:32:23.859982",
+            "email": "test@test.com",
+            "order_id": "264064419",
+            "user_added": false,
+            "next_payment_intention": "pi_test_2a9c29ead1734ce8ad09ae4936019992"
+          }
+        }
+        """).RootElement;
+
+        var concatenated = PaymobClient.BuildCardTokenHmacConcatenatedString(payload);
+
+        Assert.Equal(
+            "MasterCard2024-11-13T12:32:23.859982test@test.com8555026xxxx-xxxx-xxxx-2346246628264064419e98aceb96f5a370ddf46460db9d555f88bf12448f80e1839b39f78ab",
+            concatenated);
+    }
 }

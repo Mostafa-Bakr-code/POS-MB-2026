@@ -49,6 +49,25 @@ public partial class clsStudentBusiness(clsStudentDataAccess dataAccess)
         return result == PasswordVerificationResult.Failed ? null : student;
     }
 
+    // Called by the webhook controller after it has already verified the
+    // card-token callback's HMAC signature - matches by email (the only
+    // identifier Paymob's card-token callback actually carries that
+    // correlates back to one of our accounts; Paymob's own numeric order_id
+    // in that callback is THEIR order id, not our merchant_order_id/special_reference,
+    // so it can't be used to look up the order the usual way). Silently
+    // does nothing if the email doesn't match a real student - a webhook
+    // has no legitimate reason to fail loudly over that.
+    public async Task SaveCardTokenAsync(string email, string token, string? maskedPan, string? cardSubtype)
+    {
+        var student = await dataAccess.GetByEmailAsync(NormalizeEmail(email));
+        if (student is null) return;
+
+        await dataAccess.SaveCardTokenAsync(student.StudentId, token, maskedPan, cardSubtype);
+    }
+
+    public Task RemoveSavedCardAsync(int studentId) =>
+        dataAccess.RemoveSavedCardAsync(studentId);
+
     // Trim + lowercase before every lookup/storage, rather than relying on the
     // database's collation to happen to be case-insensitive (environment-
     // dependent) and never handling whitespace at all - "Test@Example.com " and

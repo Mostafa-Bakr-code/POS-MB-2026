@@ -119,6 +119,11 @@ public partial class MenuPage : ContentPage
         await Navigation.PushAsync(new OrdersPage());
     }
 
+    private async void OnAccountClicked(object? sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new ProfilePage());
+    }
+
     private async void OnLogoutClicked(object? sender, EventArgs e)
     {
         var confirmed = await DisplayAlert("Log Out", "Are you sure you want to log out?", "Yes", "No");

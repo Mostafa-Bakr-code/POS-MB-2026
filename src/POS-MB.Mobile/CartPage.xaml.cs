@@ -25,6 +25,16 @@ public partial class CartPage : ContentPage
         CartView.ItemsSource = Cart.Lines;
         TotalLabel.Text = $"Total: {Cart.Total:0.00}";
         PlaceOrderButton.IsEnabled = Cart.Lines.Count > 0;
+
+        var maskedPan = AppSession.CurrentStudent?.SavedCardMaskedPan;
+        SavedCardLayout.IsVisible = maskedPan is not null;
+        if (maskedPan is not null)
+        {
+            var subtype = AppSession.CurrentStudent?.SavedCardSubtype;
+            SavedCardLabel.Text = subtype is null
+                ? $"Pay with saved card {maskedPan}"
+                : $"Pay with saved {subtype} {maskedPan}";
+        }
     }
 
     private void OnRemoveClicked(object? sender, EventArgs e)
@@ -57,7 +67,8 @@ public partial class CartPage : ContentPage
         PlaceOrderButton.IsEnabled = false;
 
         var items = Cart.Lines.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
-        var (result, error, unavailableItems) = await _apiClient.PlaceOrderAsync(items);
+        var useSavedCard = SavedCardLayout.IsVisible && SavedCardCheckBox.IsChecked;
+        var (result, error, unavailableItems) = await _apiClient.PlaceOrderAsync(items, useSavedCard);
 
         if (result is null)
         {

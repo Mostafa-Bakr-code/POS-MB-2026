@@ -68,12 +68,12 @@ public class ApiClient
         return result ?? [];
     }
 
-    public async Task<(OrderDetailDto? Result, string? Error, List<UnavailableItemDto> UnavailableItems)> PlaceOrderAsync(List<OrderItemLineDto> items)
+    public async Task<(OrderDetailDto? Result, string? Error, List<UnavailableItemDto> UnavailableItems)> PlaceOrderAsync(List<OrderItemLineDto> items, bool useSavedCard = false)
     {
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.PostAsJsonAsync("api/students/orders", new PlaceOrderRequest(items));
+            response = await _httpClient.PostAsJsonAsync("api/students/orders", new PlaceOrderRequest(items, useSavedCard));
         }
         catch (Exception)
         {
@@ -146,6 +146,21 @@ public class ApiClient
 
         var result = await response.Content.ReadFromJsonAsync<ResumeCheckoutResponse>();
         return (result?.CheckoutUrl, null);
+    }
+
+    public async Task<(bool Success, string? Error)> RemoveSavedCardAsync()
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.DeleteAsync("api/students/saved-card");
+        }
+        catch (Exception)
+        {
+            return (false, "Could not reach the server. Check your connection and try again.");
+        }
+
+        return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
     }
 
     public async Task<string?> GetSettingValueAsync(string key)

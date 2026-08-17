@@ -87,8 +87,20 @@ public class StudentsController(
         return NoContent();
     }
 
+    // Included on every login/signup response (not a separate "do I have a
+    // saved card" endpoint) so the app always knows without an extra round
+    // trip whether to offer "pay with your saved card ending in X" at
+    // checkout.
+    [HttpDelete("saved-card")]
+    public async Task<IActionResult> RemoveSavedCard()
+    {
+        await studentBusiness.RemoveSavedCardAsync(User.GetUserId());
+        logger.LogInformation("Student {Email} removed their saved card", User.GetUserName());
+        return NoContent();
+    }
+
     private static StudentResponse ToResponse(Student student) =>
-        new(student.StudentId, student.Email, student.IsActive, student.CreatedAt, student.UpdatedAt);
+        new(student.StudentId, student.Email, student.IsActive, student.SavedCardMaskedPan, student.SavedCardSubtype, student.CreatedAt, student.UpdatedAt);
 }
 
 // Email/password length bounds match Students.Email NVARCHAR(256) and the same
@@ -106,5 +118,5 @@ public record StudentLoginRequest(
     [Required, StringLength(256)] string Email,
     [Required, StringLength(200)] string Password);
 
-public record StudentResponse(int StudentId, string Email, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt);
+public record StudentResponse(int StudentId, string Email, bool IsActive, string? SavedCardMaskedPan, string? SavedCardSubtype, DateTime CreatedAt, DateTime UpdatedAt);
 public record StudentLoginResponse(string Token, string RefreshToken, StudentResponse Student);
