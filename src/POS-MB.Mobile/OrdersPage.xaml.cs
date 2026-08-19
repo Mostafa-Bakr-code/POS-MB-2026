@@ -173,4 +173,7 @@ public partial class OrdersPage : ContentPage
         await LoadAsync();
         OrdersRefreshView.IsRefreshing = false;
     }
+
+    private async void OnHomeClicked(object? sender, EventArgs e) =>
+        await NavigationHelper.GoHomeAsync(Navigation);
 }

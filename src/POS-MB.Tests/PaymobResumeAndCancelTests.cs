@@ -16,10 +16,15 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
     // something to risk on a test typo. Lets tests control both what the
     // "did this already succeed?" inquiry reports and what a fresh checkout
     // attempt would return.
-    private class FakePaymobClient(PaymobInquiryResult inquiryResult) : PaymobClient(new HttpClient(), new PaymobOptions())
+    // inquiryByReference: lets a test give different orders' worth of
+    // references different answers (see the multi-attempt history tests
+    // below) - falls back to the single fixed inquiryResult when omitted,
+    // which is all every other test here needs.
+    private class FakePaymobClient(PaymobInquiryResult inquiryResult, Func<string, PaymobInquiryResult>? inquiryByReference = null) : PaymobClient(new HttpClient(), new PaymobOptions())
     {
         public int InquiryCallCount { get; private set; }
         public string? LastInquiredReference { get; private set; }
+        public List<string> InquiredReferences { get; } = [];
         public int CreateIntentionCallCount { get; private set; }
         public string? LastSavedCardToken { get; private set; }
 
@@ -27,7 +32,8 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         {
             InquiryCallCount++;
             LastInquiredReference = merchantOrderId;
-            return Task.FromResult(inquiryResult);
+            InquiredReferences.Add(merchantOrderId);
+            return Task.FromResult(inquiryByReference?.Invoke(merchantOrderId) ?? inquiryResult);
         }
 
         public override Task<PaymobIntentionResult> CreateIntentionAsync(
@@ -119,7 +125,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
         var studentId = await CreateStudentAsync();
 
-        // Establish a real LastPaymobReference the way CreateStudentOrderAsync
+        // Establish a real PaymobReferences entry the way CreateStudentOrderAsync
         // normally would, via a fake client standing in for the initial checkout.
         var setupFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
         var (orderId, _) = await CreateOrderBusinessWith(setupFake).CreateStudentOrderAsync(studentId, "student@example.com", [new NewOrderItem(itemId, 1, null)]);
@@ -165,6 +171,49 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         Assert.Equal(1, resumeFake.CreateIntentionCallCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.AwaitingPayment, order!.Status); // untouched
+    }
+
+    // Found live: a student backed out mid-attempt (abandoning the bank's
+    // own 3D Secure step), and a retry created a second, different Paymob
+    // reference. Only remembering the newest one would mean an earlier
+    // attempt that later resolves to a real charge becomes permanently
+    // unverifiable by anything except a webhook - see Order.PaymobReferences.
+    [Fact]
+    public async Task ResumeCheckout_FindsASuccessOnAnEarlierAttempt_NotJustTheLatestOne()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+
+        // First attempt: created, but the student backed out before it
+        // resolved (still not-found/unresolved when checked at the time).
+        var firstAttemptFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var (orderId, _) = await CreateOrderBusinessWith(firstAttemptFake).CreateStudentOrderAsync(studentId, "student@example.com", [new NewOrderItem(itemId, 1, null)]);
+
+        // Second attempt (a resume/retry): also never resolves at the time
+        // the student is looking at it.
+        var secondAttemptFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        await CreateOrderBusinessWith(secondAttemptFake).ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        var references = order!.PaymobReferences!.Split(';');
+        Assert.Equal(2, references.Length); // both attempts were actually recorded, not just the latest
+
+        // Some time later, it turns out the FIRST attempt actually succeeded
+        // (the bank approved it after all) - the second one never did.
+        var checkFake = new FakePaymobClient(
+            new PaymobInquiryResult(false, false, null, null),
+            reference => reference == references[0]
+                ? new PaymobInquiryResult(true, true, 999111, 100m)
+                : new PaymobInquiryResult(false, false, null, null));
+
+        var (checkoutUrl, alreadyPaid) = await CreateOrderBusinessWith(checkFake).ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+
+        Assert.True(alreadyPaid);
+        Assert.Null(checkoutUrl);
+        var reconciled = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, reconciled!.Status);
+        Assert.Equal(999111, reconciled.PaymobTransactionId);
     }
 
     // ReconcileIfAwaitingPaymentAsync - lets the order-detail poll notice a
@@ -218,7 +267,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         if (lastPaymobReference is not null)
         {
             using var connection = ConnectionFactory.CreateConnection();
-            await connection.ExecuteAsync("UPDATE Orders SET LastPaymobReference = @Ref WHERE OrderId = @OrderId",
+            await connection.ExecuteAsync("UPDATE Orders SET PaymobReferences = @Ref WHERE OrderId = @OrderId",
                 new { Ref = lastPaymobReference, OrderId = orderId });
         }
         return orderId;
@@ -256,9 +305,10 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
     [Fact]
     public async Task CancelAbandonedPayments_CancelsNormally_WhenNoCheckoutWasEverStarted()
     {
-        // No LastPaymobReference at all - nothing to ask Paymob about,
-        // should behave exactly as before this change.
+        // No PaymobReferences at all - nothing to ask Paymob about, should
+        // behave exactly as before this change.
         var orderId = await CreateStaleAwaitingPaymentOrderAsync(lastPaymobReference: null);
+
         var fake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
         var orderBusiness = CreateOrderBusinessWith(fake);
 

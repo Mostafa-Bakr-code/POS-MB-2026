@@ -209,4 +209,7 @@ public partial class OrderDetailPage : ContentPage
         StopPolling(); // PaymentCheckoutPage will pop this page from the stack on completion
         await Navigation.PushAsync(new PaymentCheckoutPage(checkoutUrl, _orderId));
     }
+
+    private async void OnHomeClicked(object? sender, EventArgs e) =>
+        await NavigationHelper.GoHomeAsync(Navigation);
 }

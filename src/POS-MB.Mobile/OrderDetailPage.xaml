@@ -5,6 +5,10 @@
              x:Class="POS_MB.Mobile.OrderDetailPage"
              Title="Order Details">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Home" Clicked="OnHomeClicked" />
+    </ContentPage.ToolbarItems>
+
     <Grid RowDefinitions="Auto,*,Auto,Auto" Padding="16" RowSpacing="12">
 
         <Label

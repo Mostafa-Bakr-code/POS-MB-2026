@@ -281,15 +281,21 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return rowsAffected > 0;
     }
 
-    // Remembers which special_reference was last sent to Paymob for this
-    // order (initial checkout or a resume) - see clsOrderBusiness.ResumeCheckoutAsync,
-    // which uses this to ask Paymob directly whether that attempt already
-    // succeeded before ever opening a second payment window.
-    public async Task SetLastPaymobReferenceAsync(int id, string reference)
+    // Appends (never overwrites) the special_reference sent to Paymob for
+    // this checkout attempt - see clsOrderBusiness's PaymobReferenceHistory,
+    // which reads the full semicolon-separated list back to verify every
+    // attempt with Paymob, not just the newest one.
+    public async Task AppendPaymobReferenceAsync(int id, string reference)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        const string query = "UPDATE Orders SET LastPaymobReference = @Reference WHERE OrderId = @Id";
+        const string query = @"
+            UPDATE Orders
+            SET PaymobReferences = CASE
+                WHEN PaymobReferences IS NULL OR PaymobReferences = '' THEN @Reference
+                ELSE PaymobReferences + ';' + @Reference
+            END
+            WHERE OrderId = @Id";
 
         await connection.ExecuteAsync(query, new { Id = id, Reference = reference });
     }

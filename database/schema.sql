@@ -95,7 +95,7 @@ CREATE TABLE dbo.Orders
     PaymobTransactionId BIGINT        NULL, -- set once Paymob confirms payment (the webhook's obj.id); needed to tell Paymob which transaction to refund if the order is later cancelled
     RefundedAt      DATETIME2         NULL, -- set once an automatic refund succeeds; guards against ever double-refunding the same order
     RefundTransactionId BIGINT        NULL, -- Paymob's own transaction id for the refund itself - a separate record from PaymobTransactionId (the original charge), linked to it via Paymob's own parent_transaction field
-    LastPaymobReference NVARCHAR(64)  NULL, -- special_reference sent on the most recent Paymob checkout attempt (initial or resumed) - lets ResumeCheckoutAsync ask Paymob directly "did this already succeed?" before ever opening a second payment window
+    PaymobReferences NVARCHAR(500) NULL, -- semicolon-separated special_reference of EVERY Paymob checkout attempt for this order (initial + every retry), not just the latest - a student backing out mid-attempt and retrying must never make an earlier, still-resolving attempt permanently unverifiable. Lets ResumeCheckoutAsync/the auto-cancel sweep/the order-detail poll ask Paymob directly "did any of these already succeed?"
     CancelledBy     NVARCHAR(100)     NULL, -- who/what cancelled this order - "Student", "Staff: {username}", "Auto (kitchen didn't accept in time)", "Auto (payment abandoned)"; NULL for anything never cancelled
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_UpdatedAt DEFAULT (SYSUTCDATETIME()),

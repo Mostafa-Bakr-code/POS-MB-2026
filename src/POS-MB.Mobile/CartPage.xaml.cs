@@ -110,5 +110,15 @@ public partial class CartPage : ContentPage
         }
 
         await Navigation.PushAsync(new PaymentCheckoutPage(result.CheckoutUrl, result.OrderId));
+
+        // The cart is already empty at this point (cleared above) - leaving
+        // this page in the stack meant pressing back from the payment
+        // screen landed on a pointless empty cart, requiring a second back
+        // tap to actually get anywhere. Removing it here means back goes
+        // straight to the menu instead.
+        Navigation.RemovePage(this);
     }
+
+    private async void OnHomeClicked(object? sender, EventArgs e) =>
+        await NavigationHelper.GoHomeAsync(Navigation);
 }

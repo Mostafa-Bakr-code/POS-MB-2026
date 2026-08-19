@@ -4,6 +4,10 @@
              x:Class="POS_MB.Mobile.ProfilePage"
              Title="Account">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Home" Clicked="OnHomeClicked" />
+    </ContentPage.ToolbarItems>
+
     <VerticalStackLayout Padding="16" Spacing="16">
 
         <Label

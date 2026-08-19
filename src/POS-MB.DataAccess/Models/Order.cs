@@ -43,11 +43,14 @@ public class Order
     // confirmation email references this number instead of the original one.
     public long? RefundTransactionId { get; set; }
 
-    // The special_reference sent on the most recent Paymob checkout attempt
-    // (initial or resumed) - lets ResumeCheckoutAsync ask Paymob directly
-    // "did this already succeed?" via their Transaction Inquiry API before
-    // ever opening a second payment window for the same order.
-    public string? LastPaymobReference { get; set; }
+    // Semicolon-separated special_reference of EVERY Paymob checkout attempt
+    // for this order (initial + every retry) - not just the latest. Found
+    // live: a student backing out mid-attempt (e.g. abandoning the bank's
+    // 3D Secure step) and retrying created a second reference; only
+    // remembering the newest one meant the earlier, still-resolving attempt
+    // became permanently unverifiable by anything except a webhook. See
+    // PaymobReferenceHistory in clsOrderBusiness for how this is read.
+    public string? PaymobReferences { get; set; }
 
     // Who/what cancelled this order - "Student", "Staff: {username}", or one
     // of the two auto-cancel sweep reasons. Null for anything never

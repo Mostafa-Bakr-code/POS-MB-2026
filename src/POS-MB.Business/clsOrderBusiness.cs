@@ -175,18 +175,13 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             throw new ArgumentException("This order is not waiting for payment.", nameof(orderId));
         }
 
-        if (order.LastPaymobReference is not null)
+        if (await FindSuccessfulPaymentAsync(order) is { } payment)
         {
-            var inquiry = await paymobClient.InquireByMerchantOrderIdAsync(order.LastPaymobReference);
-            if (inquiry is { Found: true, Success: true, TransactionId: long transactionId })
-            {
-                // Reuses the exact same race-safe reconciliation a late
-                // webhook goes through - this genuinely is that same
-                // situation, just discovered by asking instead of waiting
-                // to be told.
-                await MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, inquiry.AmountEgp ?? order.Total, transactionId);
-                return (null, true);
-            }
+            // Reuses the exact same race-safe reconciliation a late webhook
+            // goes through - this genuinely is that same situation, just
+            // discovered by asking instead of waiting to be told.
+            await MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, payment.AmountEgp, payment.TransactionId);
+            return (null, true);
         }
 
         string? savedCardToken = null;
@@ -220,10 +215,10 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
 
         var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds, itemLines, savedCardToken);
 
-        // Remembered so a future ResumeCheckoutAsync call can ask Paymob
-        // whether THIS specific attempt succeeded before opening yet
-        // another one.
-        await dataAccess.SetLastPaymobReferenceAsync(order.OrderId, reference);
+        // Appended (not overwritten) so a future check can ask Paymob about
+        // every attempt this order has ever made, not just this one - see
+        // FindSuccessfulPaymentAsync.
+        await dataAccess.AppendPaymobReferenceAsync(order.OrderId, reference);
 
         return paymobClient.BuildCheckoutUrl(intention.ClientSecret);
     }
@@ -579,15 +574,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // a later sweep run remain as further safety nets for that rarer case.
     private async Task<bool> WasActuallyPaidAsync(Order order)
     {
-        if (order.LastPaymobReference is null) return false;
+        if (order.PaymobReferences is null) return false;
 
         try
         {
-            var inquiry = await paymobClient.InquireByMerchantOrderIdAsync(order.LastPaymobReference);
-            if (inquiry is not { Found: true, Success: true, TransactionId: long transactionId })
+            if (await FindSuccessfulPaymentAsync(order) is not { } payment)
                 return false;
 
-            await MarkOrderPaymentResultAsync(order.OrderId, paymentSucceeded: true, inquiry.AmountEgp ?? order.Total, transactionId);
+            await MarkOrderPaymentResultAsync(order.OrderId, paymentSucceeded: true, payment.AmountEgp, payment.TransactionId);
             return true;
         }
         catch (Exception ex)
@@ -597,5 +591,32 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
                 order.OrderId);
             return false;
         }
+    }
+
+    // Every reference this order's checkout has ever used (initial + every
+    // retry), newest first - see Order.PaymobReferences. A student backing
+    // out mid-attempt (e.g. abandoning the bank's own 3D Secure step) and
+    // retrying must never make an earlier, still-resolving attempt
+    // permanently unverifiable, so every check against Paymob goes through
+    // every one of these, not just the latest.
+    private static IEnumerable<string> PaymobReferenceHistory(Order order) =>
+        order.PaymobReferences is string raw
+            ? raw.Split(';', StringSplitOptions.RemoveEmptyEntries).Reverse()
+            : [];
+
+    // Asks Paymob about every checkout attempt this order has ever made,
+    // returning the first one that actually succeeded, if any. Shared by
+    // ResumeCheckoutAsync (asking on demand) and WasActuallyPaidAsync (the
+    // auto-cancel sweep asking before giving up on an order).
+    private async Task<(long TransactionId, decimal AmountEgp)?> FindSuccessfulPaymentAsync(Order order)
+    {
+        foreach (var reference in PaymobReferenceHistory(order))
+        {
+            var inquiry = await paymobClient.InquireByMerchantOrderIdAsync(reference);
+            if (inquiry is { Found: true, Success: true, TransactionId: long transactionId })
+                return (transactionId, inquiry.AmountEgp ?? order.Total);
+        }
+
+        return null;
     }
 }

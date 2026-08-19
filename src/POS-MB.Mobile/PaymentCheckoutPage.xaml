@@ -4,6 +4,10 @@
              x:Class="POS_MB.Mobile.PaymentCheckoutPage"
              Title="Payment">
 
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Home" Clicked="OnHomeClicked" />
+    </ContentPage.ToolbarItems>
+
     <Grid>
         <WebView x:Name="CheckoutWebView" Navigating="OnNavigating" Navigated="OnNavigated" />
 

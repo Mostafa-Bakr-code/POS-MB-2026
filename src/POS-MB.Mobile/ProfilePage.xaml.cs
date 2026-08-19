@@ -66,4 +66,7 @@ public partial class ProfilePage : ContentPage
 
         Refresh();
     }
+
+    private async void OnHomeClicked(object? sender, EventArgs e) =>
+        await NavigationHelper.GoHomeAsync(Navigation);
 }
