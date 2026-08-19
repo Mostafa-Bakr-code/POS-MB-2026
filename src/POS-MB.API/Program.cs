@@ -74,6 +74,15 @@ builder.Services.AddSingleton(paymobOptions);
 builder.Services.AddHttpClient<PaymobClient>(client =>
 {
     client.BaseAddress = new Uri("https://accept.paymob.com/");
+    // The default HttpClient timeout (100s) is too generous for the
+    // auto-cancel background sweep, which checks multiple orders against
+    // Paymob per tick - one slow call at 100s could stall the whole sweep
+    // for a long time during rush hour. 30s is the floor, not lower: a real
+    // student's checkout creation has been observed live taking up to ~22s
+    // under a genuinely bad-but-working network, and this same HttpClient
+    // is shared by that call too - a tighter timeout would risk failing a
+    // real order that was actually about to succeed.
+    client.Timeout = TimeSpan.FromSeconds(30);
 });
 
 builder.Services.AddSingleton<JwtTokenService>();

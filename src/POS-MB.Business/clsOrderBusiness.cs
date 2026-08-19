@@ -19,6 +19,15 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // of sync with each other.
     private const string AbandonedPaymentCancelReason = "Auto (payment abandoned)";
 
+    // Bounds how many orders the three auto-cancel/reconciliation sweeps
+    // check against Paymob at once - found worth adding after noticing
+    // these checked orders strictly one at a time, so a rush-hour backlog
+    // would take a full round-trip per order in sequence. Paymob calls are
+    // pure I/O wait, not CPU work, so checking a handful concurrently is
+    // safe and doesn't hammer Paymob the way full unbounded parallelism
+    // would.
+    private const int MaxConcurrentPaymobChecks = 5;
+
 
     // Key is missing entirely until staff first touches the toggle - treated as
     // "accepting" (the safe/normal default) so nothing needs seeding/migrating.
@@ -528,11 +537,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.Placed, cutoffUtc, useUpdatedAt: true);
 
         var cancelledCount = 0;
-        foreach (var order in staleOrders)
+        await Parallel.ForEachAsync(staleOrders, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentPaymobChecks }, async (order, _) =>
         {
             if (await CancelAsync(order.OrderId, "Auto (kitchen didn't accept in time)"))
-                cancelledCount++;
-        }
+                Interlocked.Increment(ref cancelledCount);
+        });
 
         return cancelledCount;
     }
@@ -562,14 +571,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var staleOrders = await dataAccess.GetStaleMobileOrdersAsync(OrderStatus.AwaitingPayment, cutoffUtc);
 
         var cancelledCount = 0;
-        foreach (var order in staleOrders)
+        await Parallel.ForEachAsync(staleOrders, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentPaymobChecks }, async (order, _) =>
         {
             if (await WasActuallyPaidAsync(order))
-                continue; // reconciled as paid instead of cancelled - see MarkOrderPaymentResultAsync
+                return; // reconciled as paid instead of cancelled - see MarkOrderPaymentResultAsync
 
             if (await CancelAsync(order.OrderId, AbandonedPaymentCancelReason))
-                cancelledCount++;
-        }
+                Interlocked.Increment(ref cancelledCount);
+        });
 
         return cancelledCount;
     }
@@ -599,11 +608,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var candidates = await dataAccess.GetRecentlyAbandonedUnpaidOrdersAsync(AbandonedPaymentCancelReason, windowStartUtc, windowEndUtc);
 
         var reconciledCount = 0;
-        foreach (var order in candidates)
+        await Parallel.ForEachAsync(candidates, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentPaymobChecks }, async (order, _) =>
         {
             if (await WasActuallyPaidAsync(order))
-                reconciledCount++;
-        }
+                Interlocked.Increment(ref reconciledCount);
+        });
 
         return reconciledCount;
     }
