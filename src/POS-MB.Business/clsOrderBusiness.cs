@@ -13,6 +13,12 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // so neither one meaningfully outlives the other.
     private const int PaymentExpirationSeconds = 600;
 
+    // Shared between CancelAbandonedPaymentsAsync (which writes it) and
+    // RecheckRecentlyAbandonedPaymentsAsync (which reads it back to find
+    // candidates) - a single source of truth so the two can never drift out
+    // of sync with each other.
+    private const string AbandonedPaymentCancelReason = "Auto (payment abandoned)";
+
 
     // Key is missing entirely until staff first touches the toggle - treated as
     // "accepting" (the safe/normal default) so nothing needs seeding/migrating.
@@ -561,11 +567,45 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             if (await WasActuallyPaidAsync(order))
                 continue; // reconciled as paid instead of cancelled - see MarkOrderPaymentResultAsync
 
-            if (await CancelAsync(order.OrderId, "Auto (payment abandoned)"))
+            if (await CancelAsync(order.OrderId, AbandonedPaymentCancelReason))
                 cancelledCount++;
         }
 
         return cancelledCount;
+    }
+
+    // A second, one-time check for orders CancelAbandonedPaymentsAsync
+    // already gave up on - closes a real residual gap found live: a
+    // student's payment attempt (the bank's own 3D Secure step) can resolve
+    // AFTER the 10-minute auto-cancel sweep already ran and gave up on it.
+    // Every Paymob checkout session this app creates has a hard
+    // PaymentExpirationSeconds (10-minute) expiration, so by 15 minutes
+    // after cancellation, every attempt tied to the order has necessarily
+    // reached a final outcome one way or the other - one more check here is
+    // enough, no need to poll indefinitely. The 15-20 minute window (not
+    // "15 minutes and later") is what makes this a one-time check per order
+    // without needing a separate "already re-checked" flag - see
+    // GetRecentlyAbandonedUnpaidOrdersAsync.
+    //
+    // Reuses WasActuallyPaidAsync/MarkOrderPaymentResultAsync exactly as-is
+    // - for an order that's Cancelled (not AwaitingPayment), that path
+    // already does the right thing on its own: record the transaction and
+    // auto-refund it, never resurrect the order (the kitchen's already
+    // moved on - see HandleLateOrDuplicatePaymentAsync).
+    public async Task<int> RecheckRecentlyAbandonedPaymentsAsync()
+    {
+        var windowStartUtc = DateTime.UtcNow.AddMinutes(-20);
+        var windowEndUtc = DateTime.UtcNow.AddMinutes(-15);
+        var candidates = await dataAccess.GetRecentlyAbandonedUnpaidOrdersAsync(AbandonedPaymentCancelReason, windowStartUtc, windowEndUtc);
+
+        var reconciledCount = 0;
+        foreach (var order in candidates)
+        {
+            if (await WasActuallyPaidAsync(order))
+                reconciledCount++;
+        }
+
+        return reconciledCount;
     }
 
     // Best-effort: if Paymob's inquiry API is itself unreachable, this falls

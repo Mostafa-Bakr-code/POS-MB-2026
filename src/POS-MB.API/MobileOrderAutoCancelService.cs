@@ -2,11 +2,13 @@ using POS_MB.Business;
 
 namespace POS_MB.API;
 
-// Runs for the lifetime of the API process, checking every minute for two
+// Runs for the lifetime of the API process, checking every minute for three
 // different kinds of stuck mobile orders: ones stuck at Placed too long (the
-// resilience safety net - clsOrderBusiness.CancelStaleMobileOrdersAsync) and
+// resilience safety net - clsOrderBusiness.CancelStaleMobileOrdersAsync),
 // ones stuck at AwaitingPayment too long, i.e. an abandoned/never-finished
-// Paymob checkout (clsOrderBusiness.CancelAbandonedPaymentsAsync).
+// Paymob checkout (clsOrderBusiness.CancelAbandonedPaymentsAsync), and a
+// one-time follow-up on orders the second check already gave up on, in case
+// the payment resolved shortly after (clsOrderBusiness.RecheckRecentlyAbandonedPaymentsAsync).
 public class MobileOrderAutoCancelService(IServiceScopeFactory scopeFactory, ILogger<MobileOrderAutoCancelService> logger) : BackgroundService
 {
     private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(1);
@@ -31,6 +33,10 @@ public class MobileOrderAutoCancelService(IServiceScopeFactory scopeFactory, ILo
                 var abandonedPaymentCount = await orderBusiness.CancelAbandonedPaymentsAsync();
                 if (abandonedPaymentCount > 0)
                     logger.LogInformation("Auto-cancelled {Count} abandoned/unpaid mobile order(s)", abandonedPaymentCount);
+
+                var recheckedCount = await orderBusiness.RecheckRecentlyAbandonedPaymentsAsync();
+                if (recheckedCount > 0)
+                    logger.LogInformation("Reconciled {Count} recently-abandoned order(s) that turned out to have actually been paid", recheckedCount);
             }
             catch (Exception ex)
             {

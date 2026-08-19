@@ -219,6 +219,32 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             query, new { OrderSource = OrderSource.Mobile, Status = status, OlderThanUtc = olderThanUtc });
     }
 
+    // A narrow, one-time-per-order window (see clsOrderBusiness.RecheckRecentlyAbandonedPaymentsAsync)
+    // rather than "everything ever auto-cancelled" - CancelledBy plus the
+    // PaymobTransactionId IS NULL guard means an order that already got
+    // reconciled (by this same check, a resume, or a webhook) never matches
+    // again, and the UpdatedAt window means each qualifying order is only
+    // ever picked up once, without needing a separate "already re-checked" flag.
+    public async Task<IEnumerable<Order>> GetRecentlyAbandonedUnpaidOrdersAsync(string cancelledByReason, DateTime windowStartUtc, DateTime windowEndUtc)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            SELECT * FROM Orders
+            WHERE OrderSource = @OrderSource AND Status = @Status AND CancelledBy = @CancelledBy
+              AND PaymobTransactionId IS NULL
+              AND UpdatedAt >= @WindowStartUtc AND UpdatedAt < @WindowEndUtc";
+
+        return await connection.QueryAsync<Order>(query, new
+        {
+            OrderSource = OrderSource.Mobile,
+            Status = OrderStatus.Cancelled,
+            CancelledBy = cancelledByReason,
+            WindowStartUtc = windowStartUtc,
+            WindowEndUtc = windowEndUtc
+        });
+    }
+
     // Feeds the cashier-PC kitchen-ticket poller (see project notes on the
     // chef tablet's print-trigger design) - a browser can't open a raw socket
     // to the ESC/POS printer, so whichever client (tablet or WinForms) moves
