@@ -96,6 +96,7 @@ CREATE TABLE dbo.Orders
     RefundedAt      DATETIME2         NULL, -- set once an automatic refund succeeds; guards against ever double-refunding the same order
     RefundTransactionId BIGINT        NULL, -- Paymob's own transaction id for the refund itself - a separate record from PaymobTransactionId (the original charge), linked to it via Paymob's own parent_transaction field
     LastPaymobReference NVARCHAR(64)  NULL, -- special_reference sent on the most recent Paymob checkout attempt (initial or resumed) - lets ResumeCheckoutAsync ask Paymob directly "did this already succeed?" before ever opening a second payment window
+    CancelledBy     NVARCHAR(100)     NULL, -- who/what cancelled this order - "Student", "Staff: {username}", "Auto (kitchen didn't accept in time)", "Auto (payment abandoned)"; NULL for anything never cancelled
     CreatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt       DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Orders PRIMARY KEY CLUSTERED (OrderId),

@@ -82,6 +82,14 @@ public class OrderHistoryControl : UserControl
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Date", HeaderText = "Date", DataPropertyName = "Date", FillWeight = 110, MinimumWidth = 150 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "OrderSource", HeaderText = "Source", DataPropertyName = "OrderSource", FillWeight = 70, MinimumWidth = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "Status", HeaderText = "Status", DataPropertyName = "Status", FillWeight = 80, MinimumWidth = 100 });
+        // Only meaningful for a Cancelled order - blank for everything else.
+        // "Student"/"Staff: {username}" are a real person's decision; the two
+        // "Auto (...)" reasons are the automatic sweeps (see
+        // clsOrderBusiness.CancelStaleMobileOrdersAsync/CancelAbandonedPaymentsAsync)
+        // - telling these apart at a glance is the whole point of this column,
+        // since "kitchen never noticed it" and "student changed their mind"
+        // call for very different follow-up.
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { Name = "CancelledBy", HeaderText = "Cancelled By", DataPropertyName = "CancelledBy", FillWeight = 90, MinimumWidth = 130 });
         // Lets staff tell apart, at a glance, a Cancelled mobile order that
         // was actually charged (backed out/refunded after paying - has a
         // matching transaction on Paymob's own dashboard) from one that
@@ -166,7 +174,7 @@ public class OrderHistoryControl : UserControl
     private void Grid_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
     {
         var columnName = _grid.Columns[e.ColumnIndex].Name;
-        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary" or "Refunded" or "PaidViaPaymob")) return;
+        if (columnName is not ("SerialNumber" or "Date" or "OrderSource" or "Status" or "Total" or "IsComplimentary" or "Refunded" or "PaidViaPaymob" or "CancelledBy")) return;
 
         _sortAscending = _sortColumn == columnName && _sortAscending ? false : true;
         _sortColumn = columnName;
@@ -194,6 +202,7 @@ public class OrderHistoryControl : UserControl
             "IsComplimentary" => visible.OrderBy(o => o.IsComplimentary),
             "Refunded" => visible.OrderBy(o => o.RefundedAt),
             "PaidViaPaymob" => visible.OrderBy(o => o.PaymobTransactionId),
+            "CancelledBy" => visible.OrderBy(o => o.CancelledBy),
             _ => visible
         };
         if (_sortColumn is not null && !_sortAscending) sorted = sorted.Reverse();

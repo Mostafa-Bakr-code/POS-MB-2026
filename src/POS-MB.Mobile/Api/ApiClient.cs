@@ -129,23 +129,23 @@ public class ApiClient
     // For an order stuck at AwaitingPayment - backed out of the payment
     // screen, app crashed mid-checkout - starts a fresh Paymob checkout
     // session for the same order instead of leaving the student stuck.
-    public async Task<(string? CheckoutUrl, string? Error)> ResumeCheckoutAsync(int orderId)
+    public async Task<(string? CheckoutUrl, bool AlreadyPaid, string? Error)> ResumeCheckoutAsync(int orderId, bool useSavedCard = false)
     {
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.PostAsync($"api/students/orders/{orderId}/resume-checkout", null);
+            response = await _httpClient.PostAsJsonAsync($"api/students/orders/{orderId}/resume-checkout", new { UseSavedCard = useSavedCard });
         }
         catch (Exception)
         {
-            return (null, "Could not reach the server. Check your connection and try again.");
+            return (null, false, "Could not reach the server. Check your connection and try again.");
         }
 
         if (!response.IsSuccessStatusCode)
-            return (null, await ExtractErrorAsync(response));
+            return (null, false, await ExtractErrorAsync(response));
 
         var result = await response.Content.ReadFromJsonAsync<ResumeCheckoutResponse>();
-        return (result?.CheckoutUrl, null);
+        return (result?.CheckoutUrl, result?.AlreadyPaid ?? false, null);
     }
 
     public async Task<(bool Success, string? Error)> RemoveSavedCardAsync()
@@ -195,7 +195,7 @@ public class ApiClient
     }
 
     private record SettingDto(int Id, string Key, string? Value);
-    private record ResumeCheckoutResponse(string CheckoutUrl);
+    private record ResumeCheckoutResponse(string? CheckoutUrl, bool AlreadyPaid);
     private record AcceptingOnlineOrdersStatusDto(bool IsAccepting, string? Reason);
 
     private async Task<(StudentLoginResponse? Result, string? Error)> PostAuthAsync(string path, string email, string password)

@@ -25,6 +25,9 @@ public class MobileOrderAutoCancelTests : DatabaseTestBase
         Assert.Equal(1, cancelledCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        // Lets staff tell this apart from a student/staff cancellation at a
+        // glance - see clsOrderBusiness.CancelStaleMobileOrdersAsync.
+        Assert.Equal("Auto (kitchen didn't accept in time)", order.CancelledBy);
     }
 
     [Fact]

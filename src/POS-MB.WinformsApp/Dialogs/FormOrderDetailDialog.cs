@@ -12,9 +12,10 @@ public class FormOrderDetailDialog : Form
             : "";
 
         var hasPaymentInfo = order.PaymobTransactionId is not null;
+        var hasCancelInfo = order.CancelledBy is not null;
 
         Text = $"Order #{order.SerialNumber ?? order.OrderId}";
-        ClientSize = new Size(600, hasPaymentInfo ? 600 : 560);
+        ClientSize = new Size(600, 560 + (hasPaymentInfo ? 40 : 0) + (hasCancelInfo ? 30 : 0));
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -42,17 +43,23 @@ public class FormOrderDetailDialog : Form
                   : "")
             : "";
 
+        // Only a Cancelled order ever has this - tells staff apart, at a
+        // glance, whether a student/staff member made the call or one of
+        // the two automatic sweeps did (see clsOrderBusiness.CancelAsync).
+        var cancelInfo = order.CancelledBy is string cancelledBy ? $"\nCancelled by: {cancelledBy}" : "";
+
         var lblHeader = new Label
         {
             Dock = DockStyle.Top,
-            Height = 150 + (string.IsNullOrEmpty(paymentInfo) ? 0 : 40),
+            Height = 150 + (string.IsNullOrEmpty(paymentInfo) ? 0 : 40) + (string.IsNullOrEmpty(cancelInfo) ? 0 : 30),
             Padding = new Padding(20, 15, 20, 0),
             Text =
                 $"Date: {AppSession.ToLocalDisplay(order.Date):yyyy-MM-dd HH:mm}\n" +
                 $"Source: {order.OrderSource}{placedBy}\n" +
                 $"Status: {order.Status}{(order.IsComplimentary ? "  (Complimentary)" : "")}\n" +
                 $"Total: {order.Total:0.00}" +
-                paymentInfo
+                paymentInfo +
+                cancelInfo
         };
 
         var grid = new DataGridView

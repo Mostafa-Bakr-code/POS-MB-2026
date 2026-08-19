@@ -30,6 +30,9 @@ public class PaymobAbandonedPaymentTests : DatabaseTestBase
         Assert.Equal(1, cancelledCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        // Distinguishes this from CancelStaleMobileOrdersAsync's own reason -
+        // "never paid at all" vs "kitchen never noticed a paid order".
+        Assert.Equal("Auto (payment abandoned)", order.CancelledBy);
     }
 
     [Fact]

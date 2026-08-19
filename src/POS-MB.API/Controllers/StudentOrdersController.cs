@@ -69,10 +69,10 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
     // screen, app crashed mid-checkout, connectivity blip - rather than
     // making the student wait out the auto-cancel timeout with no recourse.
     [HttpPost("{id:int}/resume-checkout")]
-    public async Task<IActionResult> ResumeCheckout(int id)
+    public async Task<IActionResult> ResumeCheckout(int id, [FromBody] ResumeCheckoutRequest? request = null)
     {
-        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(id, User.GetUserId(), User.GetUserName());
-        return Ok(new { CheckoutUrl = checkoutUrl });
+        var (checkoutUrl, alreadyPaid) = await orderBusiness.ResumeCheckoutAsync(id, User.GetUserId(), User.GetUserName(), request?.UseSavedCard ?? false);
+        return Ok(new { CheckoutUrl = checkoutUrl, AlreadyPaid = alreadyPaid });
     }
 
     private async Task<IActionResult> BuildOrderResponseAsync(int id)
@@ -80,9 +80,16 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
         var order = await orderBusiness.GetByIdForStudentAsync(id, User.GetUserId());
         if (order is null) return NotFound();
 
+        // Polled every few seconds by the mobile app's order-detail screen -
+        // a no-op for every status except AwaitingPayment, where it actively
+        // checks with Paymob so the UI catches a successful payment as soon
+        // as Paymob confirms it, not only once the webhook arrives.
+        order = await orderBusiness.ReconcileIfAwaitingPaymentAsync(order);
+
         var items = await orderBusiness.GetItemsByOrderIdAsync(id);
         return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt, Items = items });
     }
 }
 
 public record CreateStudentOrderRequest([Required, MinLength(1)] List<CreateOrderItemRequest> Items, bool UseSavedCard = false);
+public record ResumeCheckoutRequest(bool UseSavedCard = false);

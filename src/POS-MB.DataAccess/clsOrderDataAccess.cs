@@ -381,11 +381,33 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         const string query = @"
             UPDATE Orders
             SET Status = @Status,
+                CancelledBy = 'Student',
                 UpdatedAt = SYSUTCDATETIME()
             WHERE OrderId = @Id AND StudentId = @StudentId AND Status IN (@AwaitingPaymentStatus, @PlacedStatus)";
 
         var rowsAffected = await connection.ExecuteAsync(
             query, new { Id = id, StudentId = studentId, Status = OrderStatus.Cancelled, AwaitingPaymentStatus = OrderStatus.AwaitingPayment, PlacedStatus = OrderStatus.Placed });
+
+        return rowsAffected > 0;
+    }
+
+    // Separate from the generic UpdateStatusAsync above - that one is shared
+    // by every status transition (Preparing/Ready/Completed/...) and has no
+    // business knowing about cancellation reasons. cancelledBy is one of
+    // "Staff: {username}" or one of the two auto-cancel sweep reasons - see
+    // clsOrderBusiness.CancelAsync.
+    public async Task<bool> CancelAsync(int id, string cancelledBy)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET Status = @Status,
+                CancelledBy = @CancelledBy,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE OrderId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, Status = OrderStatus.Cancelled, CancelledBy = cancelledBy });
 
         return rowsAffected > 0;
     }

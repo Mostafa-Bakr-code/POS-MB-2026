@@ -180,8 +180,24 @@ public partial class OrderDetailPage : ContentPage
     private async void OnContinuePaymentClicked(object? sender, EventArgs e)
     {
         ContinuePaymentButton.IsEnabled = false;
-        var (checkoutUrl, error) = await _apiClient.ResumeCheckoutAsync(_orderId);
+        // Reoffer the saved card on retry too - a student who has one on
+        // file almost certainly still wants to use it, and silently
+        // dropping back to manual card entry on a resumed checkout was a
+        // real, confusing bug found live.
+        var useSavedCard = AppSession.CurrentStudent?.SavedCardMaskedPan is not null;
+        var (checkoutUrl, alreadyPaid, error) = await _apiClient.ResumeCheckoutAsync(_orderId, useSavedCard);
         ContinuePaymentButton.IsEnabled = true;
+
+        // Good news, not an error - the payment actually already succeeded
+        // (a real scenario found live: a saved-card payment took a few
+        // minutes to confirm, and tapping this while waiting used to show a
+        // scary "Error: already paid" for what was actually a success).
+        if (alreadyPaid)
+        {
+            await DisplayAlert("Already Paid", "This order was already paid successfully.", "OK");
+            await LoadAsync();
+            return;
+        }
 
         if (checkoutUrl is null)
         {

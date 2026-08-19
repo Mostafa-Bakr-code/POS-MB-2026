@@ -101,6 +101,20 @@ public class PaymobRefundTests : DatabaseTestBase
     }
 
     [Fact]
+    public async Task Cancel_RecordsWhoCancelledIt()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+
+        await OrderBusiness.CancelAsync(orderId, "Staff: chef_test");
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal("Staff: chef_test", order!.CancelledBy);
+    }
+
+    [Fact]
     public async Task Cancel_NeverRefundsTwice_ForAnOrderAlreadyRefunded()
     {
         var orderId = await CreatePaidOrderAsync(100m, transactionId: 777888);

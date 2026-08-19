@@ -74,6 +74,7 @@ public class OrderDto
     public long? PaymobTransactionId { get; set; }
     public DateTime? RefundedAt { get; set; }
     public long? RefundTransactionId { get; set; }
+    public string? CancelledBy { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<OrderItemDto> Items { get; set; } = [];
 }

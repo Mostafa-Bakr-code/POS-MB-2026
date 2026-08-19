@@ -140,13 +140,40 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // succeeded on Paymob's side, simply because the webhook confirming it
     // hasn't arrived yet. Trusting our own stale copy here would hand out a
     // second, real, working payment link for an order that's already paid.
-    public async Task<string> ResumeCheckoutAsync(int orderId, int studentId, string studentEmail)
+    // useSavedCard: whether THIS retry should offer the saved card again -
+    // not remembered from whatever the original attempt chose (that isn't
+    // tracked anywhere), so the caller (mobile app) decides based on whether
+    // the student currently has one on file. Without this, a resumed
+    // checkout would always silently fall back to asking for card details
+    // again, even for a student who specifically chose "pay with saved
+    // card" the first time - a real bug found live: the original attempt
+    // had actually succeeded, but the student, unsure it was working,
+    // backed out and hit "Continue Payment" while waiting - which used to
+    // drop the saved-card choice entirely.
+    // AlreadyPaid: true whenever there's nothing left to resume because the
+    // order genuinely already succeeded - found live as a real UX bug: this
+    // used to throw for that case, which a client had no way to distinguish
+    // from an actual error, surfacing as a scary "Error" alert for what's
+    // actually good news (the payment worked). A student backing out of a
+    // saved-card payment mid-processing and tapping "Continue Payment"
+    // before the webhook had a chance to land was exactly this situation.
+    public async Task<(string? CheckoutUrl, bool AlreadyPaid)> ResumeCheckoutAsync(int orderId, int studentId, string studentEmail, bool useSavedCard = false)
     {
         var order = await dataAccess.GetByIdForStudentAsync(orderId, studentId)
             ?? throw new ArgumentException("This order could not be found.", nameof(orderId));
 
         if (order.Status != OrderStatus.AwaitingPayment)
+        {
+            // Cancelled is deliberately excluded even if it somehow carries
+            // a transaction id (e.g. a very late payment landed after
+            // cancellation and was refunded) - that one genuinely has
+            // nothing to resume to, and "already paid" would be a
+            // misleading thing to tell the student about a cancelled order.
+            if (order.PaymobTransactionId is not null && order.Status != OrderStatus.Cancelled)
+                return (null, true);
+
             throw new ArgumentException("This order is not waiting for payment.", nameof(orderId));
+        }
 
         if (order.LastPaymobReference is not null)
         {
@@ -158,11 +185,19 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
                 // situation, just discovered by asking instead of waiting
                 // to be told.
                 await MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, inquiry.AmountEgp ?? order.Total, transactionId);
-                throw new ArgumentException("This order has already been paid.", nameof(orderId));
+                return (null, true);
             }
         }
 
-        return await StartPaymobCheckoutAsync(order, studentEmail, isRetry: true);
+        string? savedCardToken = null;
+        if (useSavedCard)
+        {
+            var student = await studentBusiness.GetByIdAsync(studentId);
+            savedCardToken = student?.SavedCardToken;
+        }
+
+        var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: true, savedCardToken);
+        return (checkoutUrl, false);
     }
 
     private async Task<string> StartPaymobCheckoutAsync(Order order, string studentEmail, bool isRetry, string? savedCardToken = null)
@@ -202,6 +237,26 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
 
         return await dataAccess.GetAllForStudentAsync(studentId, utcStart, utcEndExclusive);
+    }
+
+    // Lets a student's order-detail screen (which polls this every few
+    // seconds) notice a payment succeeding as soon as Paymob confirms it,
+    // instead of only finding out passively once the webhook lands - the
+    // same reconciliation the auto-cancel sweep already uses (see
+    // WasActuallyPaidAsync), just triggered by "someone's watching" rather
+    // than "the timeout expired". Found live: without this, a saved-card
+    // payment that took a few minutes to confirm left the student staring
+    // at a stale "Continue Payment" button the whole time, tempting them to
+    // tap it and hit the (now-fixed, but still needless) already-paid path.
+    // Best-effort and silent by design - a poll that doesn't notice this
+    // instant just tries again next tick, same as any other polled update.
+    public async Task<Order> ReconcileIfAwaitingPaymentAsync(Order order)
+    {
+        if (order.Status != OrderStatus.AwaitingPayment) return order;
+
+        return await WasActuallyPaidAsync(order)
+            ? await dataAccess.GetByIdAsync(order.OrderId) ?? order
+            : order;
     }
 
     public Task<Order?> GetByIdForStudentAsync(int orderId, int studentId) =>
@@ -389,12 +444,16 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         }
     }
 
-    public async Task<bool> CancelAsync(int id)
+    // cancelledBy: who/what is cancelling - "Staff: {username}" from the
+    // WinForms Order Status screen, or one of the two auto-cancel sweep
+    // reasons below. Defaults to a plain "Staff" for callers (mostly tests)
+    // that don't care to be specific.
+    public async Task<bool> CancelAsync(int id, string cancelledBy = "Staff")
     {
         var order = await dataAccess.GetByIdAsync(id);
         if (order is null) return false;
 
-        var cancelled = await dataAccess.UpdateStatusAsync(id, OrderStatus.Cancelled);
+        var cancelled = await dataAccess.CancelAsync(id, cancelledBy);
         if (cancelled)
             await RefundIfPaidAsync(order);
 
@@ -470,7 +529,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var cancelledCount = 0;
         foreach (var order in staleOrders)
         {
-            if (await CancelAsync(order.OrderId))
+            if (await CancelAsync(order.OrderId, "Auto (kitchen didn't accept in time)"))
                 cancelledCount++;
         }
 
@@ -507,7 +566,7 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             if (await WasActuallyPaidAsync(order))
                 continue; // reconciled as paid instead of cancelled - see MarkOrderPaymentResultAsync
 
-            if (await CancelAsync(order.OrderId))
+            if (await CancelAsync(order.OrderId, "Auto (payment abandoned)"))
                 cancelledCount++;
         }
 

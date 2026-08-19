@@ -49,6 +49,11 @@ public class Order
     // ever opening a second payment window for the same order.
     public string? LastPaymobReference { get; set; }
 
+    // Who/what cancelled this order - "Student", "Staff: {username}", or one
+    // of the two auto-cancel sweep reasons. Null for anything never
+    // cancelled. See clsOrderBusiness.CancelAsync/CancelForStudentAsync.
+    public string? CancelledBy { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

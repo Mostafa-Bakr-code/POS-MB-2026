@@ -84,7 +84,7 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
     [RequirePermission(Permission.Orders)]
     public async Task<IActionResult> Cancel(int id)
     {
-        var cancelled = await orderBusiness.CancelAsync(id);
+        var cancelled = await orderBusiness.CancelAsync(id, $"Staff: {User.GetUserName()}");
         if (cancelled)
             logger.LogInformation("User {UserName} cancelled order OrderId={OrderId}", User.GetUserName(), id);
         return cancelled ? NoContent() : NotFound();

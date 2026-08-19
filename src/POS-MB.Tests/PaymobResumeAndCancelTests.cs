@@ -21,6 +21,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         public int InquiryCallCount { get; private set; }
         public string? LastInquiredReference { get; private set; }
         public int CreateIntentionCallCount { get; private set; }
+        public string? LastSavedCardToken { get; private set; }
 
         public override Task<PaymobInquiryResult> InquireByMerchantOrderIdAsync(string merchantOrderId)
         {
@@ -34,6 +35,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
             IReadOnlyList<PaymobItemLine>? items = null, string? savedCardToken = null)
         {
             CreateIntentionCallCount++;
+            LastSavedCardToken = savedCardToken;
             return Task.FromResult(new PaymobIntentionResult("fake_client_secret", 123456789));
         }
     }
@@ -61,6 +63,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         Assert.True(cancelled);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        Assert.Equal("Student", order.CancelledBy);
     }
 
     [Fact]
@@ -97,9 +100,10 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         var fake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
         var orderBusiness = CreateOrderBusinessWith(fake);
 
-        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+        var (checkoutUrl, alreadyPaid) = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
 
         Assert.NotNull(checkoutUrl);
+        Assert.False(alreadyPaid);
         Assert.Equal(0, fake.InquiryCallCount);
         Assert.Equal(1, fake.CreateIntentionCallCount);
     }
@@ -125,9 +129,14 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         var resumeFake = new FakePaymobClient(new PaymobInquiryResult(true, true, 888999, 100m));
         var orderBusiness = CreateOrderBusinessWith(resumeFake);
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com"));
+        var (checkoutUrl, alreadyPaid) = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
 
+        // Good news, not an error - a client has no sane way to tell "this
+        // genuinely failed" apart from "this actually already succeeded" if
+        // both throw the same exception, so this must be a normal result,
+        // not a thrown one (see clsOrderBusiness.ResumeCheckoutAsync).
+        Assert.True(alreadyPaid);
+        Assert.Null(checkoutUrl);
         Assert.Equal(0, resumeFake.CreateIntentionCallCount); // never opened a second payment window
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Placed, order!.Status);
@@ -148,13 +157,53 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         var resumeFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
         var orderBusiness = CreateOrderBusinessWith(resumeFake);
 
-        var checkoutUrl = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
+        var (checkoutUrl, alreadyPaid) = await orderBusiness.ResumeCheckoutAsync(orderId, studentId, "student@example.com");
 
         Assert.NotNull(checkoutUrl);
+        Assert.False(alreadyPaid);
         Assert.Equal(1, resumeFake.InquiryCallCount);
         Assert.Equal(1, resumeFake.CreateIntentionCallCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.AwaitingPayment, order!.Status); // untouched
+    }
+
+    // ReconcileIfAwaitingPaymentAsync - lets the order-detail poll notice a
+    // payment succeeding on its own, before the student ever taps "Continue
+    // Payment" and hits the (now harmless, but still needless) already-paid
+    // path. See StudentOrdersController.BuildOrderResponseAsync.
+    [Fact]
+    public async Task ReconcileIfAwaitingPayment_UpdatesTheOrder_WhenPaymobConfirmsSuccess()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+
+        var setupFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var (orderId, _) = await CreateOrderBusinessWith(setupFake).CreateStudentOrderAsync(studentId, "student@example.com", [new NewOrderItem(itemId, 1, null)]);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+
+        var fake = new FakePaymobClient(new PaymobInquiryResult(true, true, 555444, 100m));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var reconciled = await orderBusiness.ReconcileIfAwaitingPaymentAsync(order!);
+
+        Assert.Equal(OrderStatus.Placed, reconciled.Status);
+        Assert.Equal(555444, reconciled.PaymobTransactionId);
+    }
+
+    [Fact]
+    public async Task ReconcileIfAwaitingPayment_LeavesNonAwaitingPaymentOrdersUntouched()
+    {
+        var (orderId, _) = await CreateAwaitingPaymentOrderAsync();
+        await OrderBusiness.UpdateStatusAsync(orderId, OrderStatus.Placed);
+        var placedOrder = (await OrderBusiness.GetByIdAsync(orderId))!;
+
+        var fake = new FakePaymobClient(new PaymobInquiryResult(true, true, 555444, 100m));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        await orderBusiness.ReconcileIfAwaitingPaymentAsync(placedOrder);
+
+        Assert.Equal(0, fake.InquiryCallCount); // no reason to ask Paymob about anything - already resolved
     }
 
     // CancelAbandonedPaymentsAsync's own reconciliation check - added after a
@@ -219,6 +268,30 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         Assert.Equal(0, fake.InquiryCallCount);
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+    }
+
+    // Found live: a student who chose "pay with saved card" backed out
+    // while the first attempt was still processing (it had actually already
+    // succeeded) and tapped "Continue Payment" - which used to silently
+    // drop the saved-card choice and ask for card details again.
+    [Fact]
+    public async Task ResumeCheckout_WithUseSavedCard_ReoffersTheSavedCard()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var email = $"resume-saved-card-{Guid.NewGuid():N}@example.com";
+        var studentId = await CreateStudentAsync(email);
+        await StudentBusiness.SaveCardTokenAsync(email, "tok_abc123", "xxxx-xxxx-xxxx-2346", "MasterCard");
+
+        var setupFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var (orderId, _) = await CreateOrderBusinessWith(setupFake).CreateStudentOrderAsync(studentId, email, [new NewOrderItem(itemId, 1, null)]);
+
+        var resumeFake = new FakePaymobClient(new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(resumeFake);
+
+        await orderBusiness.ResumeCheckoutAsync(orderId, studentId, email, useSavedCard: true);
+
+        Assert.Equal("tok_abc123", resumeFake.LastSavedCardToken);
     }
 
     [Fact]
