@@ -64,6 +64,10 @@ public class PaymobPaymentResultTests : DatabaseTestBase
 
         var order = await OrderBusiness.GetByIdAsync(orderId);
         Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        // Distinct from an abandoned/never-answered checkout - Paymob gave
+        // an explicit failed/declined answer here, worth telling apart in
+        // WinForms. Found live: this used to leave CancelledBy blank.
+        Assert.Equal("Auto (payment failed)", order.CancelledBy);
     }
 
     [Fact]

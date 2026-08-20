@@ -109,7 +109,7 @@ public class PaymobAbandonedPaymentTests : DatabaseTestBase
     // order CancelAbandonedPaymentsAsync already gave up on, in case the
     // payment (e.g. a delayed 3D Secure approval) resolved shortly after.
     // See clsOrderBusiness for the full reasoning on the 15-20 minute window.
-    private async Task<int> CreateRecentlyAbandonedOrderAsync(string paymobReference, TimeSpan sinceCancelled)
+    private async Task<int> CreateRecentlyAbandonedOrderAsync(string paymobReference, TimeSpan sinceCancelled, string cancelledBy = "Auto (payment abandoned)")
     {
         var orderId = await CreateAwaitingPaymentOrderAsync();
 
@@ -119,7 +119,7 @@ public class PaymobAbandonedPaymentTests : DatabaseTestBase
                 new { Ref = paymobReference, OrderId = orderId });
         }
 
-        await OrderBusiness.CancelAsync(orderId, "Auto (payment abandoned)");
+        await OrderBusiness.CancelAsync(orderId, cancelledBy);
         await SetOrderUpdatedAtAsync(orderId, DateTime.UtcNow - sinceCancelled);
         return orderId;
     }
@@ -174,5 +174,27 @@ public class PaymobAbandonedPaymentTests : DatabaseTestBase
         var reconciledCount = await orderBusiness.RecheckRecentlyAbandonedPaymentsAsync();
 
         Assert.Equal(0, reconciledCount);
+    }
+
+    // Found live: Paymob explicitly reported a failed/declined payment,
+    // which cancels the order under a different reason ("Auto (payment
+    // failed)") than an abandoned/never-answered checkout - but Paymob's
+    // own "Try Again" on a failed attempt can still resolve to a real
+    // success afterward, so this reason must be just as eligible for the
+    // follow-up recheck as an abandoned one.
+    [Fact]
+    public async Task RecheckRecentlyAbandoned_AlsoCoversOrdersCancelledForAnExplicitPaymentFailure()
+    {
+        var orderId = await CreateRecentlyAbandonedOrderAsync("20260101-4-120000", TimeSpan.FromMinutes(17), cancelledBy: "Auto (payment failed)");
+        var fake = new FakePaymobClient(reference => reference == "20260101-4-120000"
+            ? new PaymobInquiryResult(true, true, 444222, 100m)
+            : new PaymobInquiryResult(false, false, null, null));
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var reconciledCount = await orderBusiness.RecheckRecentlyAbandonedPaymentsAsync();
+
+        Assert.Equal(1, reconciledCount);
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(444222, order!.PaymobTransactionId);
     }
 }

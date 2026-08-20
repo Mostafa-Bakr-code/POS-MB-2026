@@ -225,13 +225,13 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     // reconciled (by this same check, a resume, or a webhook) never matches
     // again, and the UpdatedAt window means each qualifying order is only
     // ever picked up once, without needing a separate "already re-checked" flag.
-    public async Task<IEnumerable<Order>> GetRecentlyAbandonedUnpaidOrdersAsync(string cancelledByReason, DateTime windowStartUtc, DateTime windowEndUtc)
+    public async Task<IEnumerable<Order>> GetRecentlyAbandonedUnpaidOrdersAsync(IEnumerable<string> cancelledByReasons, DateTime windowStartUtc, DateTime windowEndUtc)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             SELECT * FROM Orders
-            WHERE OrderSource = @OrderSource AND Status = @Status AND CancelledBy = @CancelledBy
+            WHERE OrderSource = @OrderSource AND Status = @Status AND CancelledBy IN @CancelledByReasons
               AND PaymobTransactionId IS NULL
               AND UpdatedAt >= @WindowStartUtc AND UpdatedAt < @WindowEndUtc";
 
@@ -239,7 +239,7 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         {
             OrderSource = OrderSource.Mobile,
             Status = OrderStatus.Cancelled,
-            CancelledBy = cancelledByReason,
+            CancelledByReasons = cancelledByReasons,
             WindowStartUtc = windowStartUtc,
             WindowEndUtc = windowEndUtc
         });

@@ -13,11 +13,21 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // so neither one meaningfully outlives the other.
     private const int PaymentExpirationSeconds = 600;
 
-    // Shared between CancelAbandonedPaymentsAsync (which writes it) and
-    // RecheckRecentlyAbandonedPaymentsAsync (which reads it back to find
-    // candidates) - a single source of truth so the two can never drift out
-    // of sync with each other.
+    // Shared between the sweeps/webhook path that write these (which reason
+    // applies depends on how the order died: nobody ever answered vs.
+    // Paymob gave a definite "no") and RecheckRecentlyAbandonedPaymentsAsync
+    // (which reads them back to find candidates) - a single source of truth
+    // so writers and reader can never drift out of sync with each other.
     private const string AbandonedPaymentCancelReason = "Auto (payment abandoned)";
+
+    // Distinct from AbandonedPaymentCancelReason - Paymob gave an explicit
+    // failed/declined answer here, rather than the checkout session simply
+    // timing out unanswered. Kept as its own reason (not reused) so
+    // WinForms staff can tell "student never finished" apart from "the bank
+    // said no" at a glance - but still eligible for the same follow-up
+    // recheck, since Paymob's own "Try Again" on a failed attempt can still
+    // resolve to a real success afterward.
+    private const string PaymentFailedCancelReason = "Auto (payment failed)";
 
     // Bounds how many orders the three auto-cancel/reconciliation sweeps
     // check against Paymob at once - found worth adding after noticing
@@ -337,7 +347,12 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         {
             if (!paymentSucceeded)
             {
-                await dataAccess.UpdateStatusAsync(orderId, OrderStatus.Cancelled);
+                // Was plain UpdateStatusAsync before - a real gap found
+                // live: it never recorded CancelledBy, so a payment Paymob
+                // explicitly reported as failed/declined showed up blank in
+                // WinForms, indistinguishable from a bug rather than a
+                // normal, expected outcome.
+                await dataAccess.CancelAsync(orderId, PaymentFailedCancelReason);
                 return;
             }
 
@@ -611,7 +626,8 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     {
         var windowStartUtc = DateTime.UtcNow.AddMinutes(-25);
         var windowEndUtc = DateTime.UtcNow.AddMinutes(-15);
-        var candidates = await dataAccess.GetRecentlyAbandonedUnpaidOrdersAsync(AbandonedPaymentCancelReason, windowStartUtc, windowEndUtc);
+        var candidates = await dataAccess.GetRecentlyAbandonedUnpaidOrdersAsync(
+            [AbandonedPaymentCancelReason, PaymentFailedCancelReason], windowStartUtc, windowEndUtc);
 
         var reconciledCount = 0;
         await Parallel.ForEachAsync(candidates, new ParallelOptions { MaxDegreeOfParallelism = MaxConcurrentPaymobChecks }, async (order, _) =>
