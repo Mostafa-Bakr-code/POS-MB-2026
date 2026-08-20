@@ -443,6 +443,15 @@
       if (!liveIds.has(id)) state.detailCache.delete(id);
     }
 
+    // Item names are otherwise only loaded once, at page load - a tablet
+    // left open all shift (the normal way this page is used) would keep
+    // showing "Item #n" forever for anything created afterward. Refreshing
+    // the whole list is wasteful every 5s poll for something that changes
+    // rarely, so only do it on demand, the moment an order actually
+    // references an item id this page doesn't have a name for yet.
+    const hasUnknownItem = detailed.some((o) => (o.items || []).some((oi) => !state.itemNames.has(oi.itemId)));
+    if (hasUnknownItem) await loadItemNames();
+
     state.orders = detailed;
     render();
   }
