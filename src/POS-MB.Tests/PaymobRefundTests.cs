@@ -162,6 +162,71 @@ public class PaymobRefundTests : DatabaseTestBase
         Assert.Equal(777444, fake.LastTransactionId);
     }
 
+    // The one deliberate exception to "never resurrect a cancelled order" -
+    // found live: Paymob's own failure page has a prominent "Try Again"
+    // button, and a student retrying immediately (before the original
+    // failure's webhook is even processed) is common, not rare. An order
+    // cancelled for an explicit payment failure was never Placed, so
+    // there's nothing for a resurrection to surprise - unlike every other
+    // cancellation reason, which keeps the old refund-only behavior (see
+    // LateSuccessfulPayment_ForAnAlreadyCancelledOrder_RefundsAutomatically
+    // above, which must be completely unaffected by this).
+    [Fact]
+    public async Task LateSuccessfulPayment_AfterAnExplicitPaymentFailure_ResurrectsTheOrderInsteadOfRefunding()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+
+        // The first attempt's webhook reports failure - cancels the order
+        // under its own specific reason.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: false, amountEgpPaid: 0m, transactionId: null);
+        var cancelled = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal("Auto (payment failed)", cancelled!.CancelledBy);
+
+        // The retry (a genuinely separate transaction) succeeds, and its
+        // webhook arrives after the order is already cancelled.
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 888222);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Placed, order!.Status);
+        Assert.Equal(888222, order.PaymobTransactionId);
+        Assert.Null(order.CancelledBy); // not cancelled anymore - shouldn't still claim to be
+        Assert.Null(order.RefundedAt); // this charge is the order's legitimate payment, not a stray one
+        Assert.Equal(0, fake.CallCount); // never refunded
+    }
+
+    [Fact]
+    public async Task LateSuccessfulPayment_ForAnOrderCancelledByStaff_StillOnlyRefunds_NeverResurrects()
+    {
+        // Same shape as the payment-failure case above, but cancelled by
+        // staff instead - must NOT be resurrected, since staff cancelling
+        // an already-Placed-visible order is exactly the "kitchen may have
+        // already acted on it" scenario the no-resurrection rule protects.
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var studentId = await CreateStudentAsync();
+        var fake = new FakePaymobClient(refundSucceeds: true, refundTransactionId: 555222);
+        var orderBusiness = CreateOrderBusinessWith(fake);
+
+        var orderId = await orderBusiness.CreateOrderAsync(OrderSource.Mobile, null, studentId, false, [new NewOrderItem(itemId, 1, null)]);
+        await orderBusiness.UpdateStatusAsync(orderId, OrderStatus.AwaitingPayment);
+        await orderBusiness.CancelAsync(orderId, "Staff: chef_test");
+
+        await orderBusiness.MarkOrderPaymentResultAsync(orderId, paymentSucceeded: true, amountEgpPaid: 100m, transactionId: 888223);
+
+        var order = await OrderBusiness.GetByIdAsync(orderId);
+        Assert.Equal(OrderStatus.Cancelled, order!.Status);
+        Assert.Equal("Staff: chef_test", order.CancelledBy); // untouched
+        Assert.NotNull(order.RefundedAt);
+        Assert.Equal(1, fake.CallCount);
+    }
+
     [Fact]
     public async Task LateSuccessfulPayment_RefundsTheActualReportedAmount_NotTheOrderTotal()
     {

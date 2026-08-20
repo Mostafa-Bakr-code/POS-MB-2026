@@ -344,6 +344,36 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         return rowsAffected > 0;
     }
 
+    // Resurrects an order back to a normal paid order, for the one narrow
+    // case where that's actually safe - see
+    // clsOrderBusiness.HandleLateOrDuplicatePaymentAsync for the full
+    // reasoning (an order cancelled for an explicit payment failure was
+    // never Placed, so the kitchen never saw it - there's nothing to
+    // surprise by resurrecting it once a retry turns out to have
+    // succeeded). The Status/CancelledBy guards in the WHERE clause mean
+    // this is a safe no-op (returns false) if the order moved on to
+    // anything else in the meantime. Clears CancelledBy too - the order
+    // isn't cancelled anymore, so it shouldn't still claim to be.
+    public async Task<bool> ResurrectAfterPaymentFailureAsync(int id, long transactionId, string paymentFailedCancelReason)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Orders
+            SET Status = @PlacedStatus, PaymobTransactionId = @TransactionId, CancelledBy = NULL, UpdatedAt = SYSUTCDATETIME()
+            WHERE OrderId = @Id AND Status = @CancelledStatus AND CancelledBy = @CancelledBy";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new
+        {
+            Id = id,
+            PlacedStatus = OrderStatus.Placed,
+            TransactionId = transactionId,
+            CancelledStatus = OrderStatus.Cancelled,
+            CancelledBy = paymentFailedCancelReason
+        });
+        return rowsAffected > 0;
+    }
+
     // The RefundedAt IS NULL guard makes this safely idempotent - the same
     // protection as MarkKitchenTicketPrintedAsync, but here it's guarding
     // against ever attempting to refund real money twice.

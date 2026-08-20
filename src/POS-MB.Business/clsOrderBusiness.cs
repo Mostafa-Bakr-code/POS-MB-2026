@@ -408,6 +408,27 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
 
         if (order.PaymobTransactionId is null)
         {
+            // One narrow, deliberate exception to "never resurrect a
+            // cancelled order" (see below): an order cancelled specifically
+            // because Paymob reported an explicit payment failure was
+            // cancelled while still AwaitingPayment - never Placed, never
+            // seen by the kitchen, nothing for a resurrection to surprise.
+            // Found live: Paymob's own failure page offers a prominent
+            // "Try Again" button, and a student retrying immediately is the
+            // common case, not a rare one - if that retry then succeeds
+            // (its own separate transaction/reference), the student should
+            // end up with their order, not a refund and nothing to show
+            // for it. Every other cancellation reason below (student,
+            // staff, kitchen-didn't-accept, abandoned) keeps the old,
+            // safer refund-only behavior, since those all carry a real
+            // chance the kitchen already acted on the order.
+            if (order.Status == OrderStatus.Cancelled
+                && order.CancelledBy == PaymentFailedCancelReason
+                && await dataAccess.ResurrectAfterPaymentFailureAsync(order.OrderId, transactionId.Value, PaymentFailedCancelReason))
+            {
+                return;
+            }
+
             // First time we're hearing about ANY charge for this order, and
             // it's no longer AwaitingPayment - most commonly, it's already
             // Cancelled and the charge landed just after (a student self-
