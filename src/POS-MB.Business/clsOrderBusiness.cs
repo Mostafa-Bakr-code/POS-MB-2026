@@ -583,27 +583,33 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         return cancelledCount;
     }
 
-    // A second, one-time check for orders CancelAbandonedPaymentsAsync
+    // A second, bounded follow-up for orders CancelAbandonedPaymentsAsync
     // already gave up on - closes a real residual gap found live: a
     // student's payment attempt (the bank's own 3D Secure step) can resolve
     // AFTER the 10-minute auto-cancel sweep already ran and gave up on it.
     // Every Paymob checkout session this app creates has a hard
     // PaymentExpirationSeconds (10-minute) expiration, so by 15 minutes
     // after cancellation, every attempt tied to the order has necessarily
-    // reached a final outcome one way or the other - one more check here is
-    // enough, no need to poll indefinitely. The 15-20 minute window (not
-    // "15 minutes and later") is what makes this a one-time check per order
-    // without needing a separate "already re-checked" flag - see
-    // GetRecentlyAbandonedUnpaidOrdersAsync.
+    // reached a final outcome one way or the other - no need to poll
+    // indefinitely. The 15-25 minute window (not "15 minutes and later") is
+    // what bounds this to a handful of tries per order without needing a
+    // separate "already re-checked" flag - see GetRecentlyAbandonedUnpaidOrdersAsync.
     //
     // Reuses WasActuallyPaidAsync/MarkOrderPaymentResultAsync exactly as-is
     // - for an order that's Cancelled (not AwaitingPayment), that path
     // already does the right thing on its own: record the transaction and
     // auto-refund it, never resurrect the order (the kitchen's already
     // moved on - see HandleLateOrDuplicatePaymentAsync).
+    //
+    // Window is 10 minutes wide (not 5) specifically so a single transient
+    // failure can't eat an order's only chance - found live: a genuine
+    // one-off network error hit right near the tail end of an earlier,
+    // narrower 5-minute window, with no time left in it for the next
+    // per-minute tick to retry before the window closed. Ten minutes gives
+    // roughly ten tries instead of five before giving up for good.
     public async Task<int> RecheckRecentlyAbandonedPaymentsAsync()
     {
-        var windowStartUtc = DateTime.UtcNow.AddMinutes(-20);
+        var windowStartUtc = DateTime.UtcNow.AddMinutes(-25);
         var windowEndUtc = DateTime.UtcNow.AddMinutes(-15);
         var candidates = await dataAccess.GetRecentlyAbandonedUnpaidOrdersAsync(AbandonedPaymentCancelReason, windowStartUtc, windowEndUtc);
 
