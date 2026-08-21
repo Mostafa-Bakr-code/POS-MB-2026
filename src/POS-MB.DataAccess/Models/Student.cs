@@ -14,6 +14,11 @@ public class Student
     public string? SavedCardMaskedPan { get; set; }
     public string? SavedCardSubtype { get; set; }
 
+    // Forgot-password flow - both null whenever no reset is in progress.
+    // See clsStudentBusiness.RequestPasswordResetAsync/ResetPasswordAsync.
+    public string? PasswordResetCodeHash { get; set; }
+    public DateTime? PasswordResetCodeExpiresAt { get; set; }
+
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

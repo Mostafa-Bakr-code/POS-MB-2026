@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using POS_MB.API;
 using POS_MB.API.Auth;
 using POS_MB.Business;
+using POS_MB.Business.Email;
 using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 using Serilog;
@@ -84,6 +85,14 @@ builder.Services.AddHttpClient<PaymobClient>(client =>
     // real order that was actually about to succeed.
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+
+// Credentials come from configuration (user secrets locally) - same
+// reasoning as PaymobOptions above. Currently a Gmail account's SMTP with
+// an App Password (smtp.gmail.com:587) - see EmailOptions.
+var emailOptions = builder.Configuration.GetSection("Email").Get<EmailOptions>()
+    ?? throw new InvalidOperationException("Email configuration is missing.");
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();

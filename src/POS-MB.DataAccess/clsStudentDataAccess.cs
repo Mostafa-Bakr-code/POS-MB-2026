@@ -9,7 +9,8 @@ public class clsStudentDataAccess(ISqlConnectionFactory connectionFactory)
     // is honest about the fact that it's never plaintext - same convention as
     // clsUserDataAccess.
     private const string SelectColumns =
-        "StudentId, Email, Password AS PasswordHash, SavedCardToken, SavedCardMaskedPan, SavedCardSubtype, IsActive, CreatedAt, UpdatedAt";
+        "StudentId, Email, Password AS PasswordHash, SavedCardToken, SavedCardMaskedPan, SavedCardSubtype, " +
+        "PasswordResetCodeHash, PasswordResetCodeExpiresAt, IsActive, CreatedAt, UpdatedAt";
 
     public async Task<Student?> GetByIdAsync(int id)
     {
@@ -66,5 +67,37 @@ public class clsStudentDataAccess(ISqlConnectionFactory connectionFactory)
             WHERE StudentId = @StudentId";
 
         await connection.ExecuteAsync(query, new { StudentId = studentId });
+    }
+
+    // Overwrites any previous code - a student requesting a new one makes
+    // any earlier, still-unexpired code invalid, since only the latest
+    // request is ever something the student could actually be holding.
+    public async Task SetPasswordResetCodeAsync(int studentId, string codeHash, DateTime expiresAtUtc)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Students
+            SET PasswordResetCodeHash = @CodeHash, PasswordResetCodeExpiresAt = @ExpiresAtUtc, UpdatedAt = SYSUTCDATETIME()
+            WHERE StudentId = @StudentId";
+
+        await connection.ExecuteAsync(query, new { StudentId = studentId, CodeHash = codeHash, ExpiresAtUtc = expiresAtUtc });
+    }
+
+    // Used by both the forgot-password reset and the logged-in change-
+    // password flow - always clears any pending reset code too, whether or
+    // not one was actually in progress (a harmless no-op if it wasn't), so
+    // a used-or-abandoned code can never be replayed after the password it
+    // was issued for has already changed some other way.
+    public async Task UpdatePasswordAsync(int studentId, string passwordHash)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Students
+            SET Password = @PasswordHash, PasswordResetCodeHash = NULL, PasswordResetCodeExpiresAt = NULL, UpdatedAt = SYSUTCDATETIME()
+            WHERE StudentId = @StudentId";
+
+        await connection.ExecuteAsync(query, new { StudentId = studentId, PasswordHash = passwordHash });
     }
 }

@@ -99,6 +99,39 @@ public class StudentsController(
         return NoContent();
     }
 
+    // Always returns 204 regardless of whether the email matched an
+    // account - see clsStudentBusiness.RequestPasswordResetAsync. Same
+    // "login" rate-limit policy as signup/login: without it, this endpoint
+    // could be used to mail-bomb an arbitrary inbox with reset codes.
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        await studentBusiness.RequestPasswordResetAsync(request.Email);
+        logger.LogInformation("Password reset requested for {Email} from {RemoteIp}",
+            request.Email, HttpContext.Connection.RemoteIpAddress);
+        return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("login")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        await studentBusiness.ResetPasswordAsync(request.Email, request.Code, request.NewPassword);
+        logger.LogInformation("Password reset completed for {Email}", request.Email);
+        return NoContent();
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        await studentBusiness.ChangePasswordAsync(User.GetUserId(), request.CurrentPassword, request.NewPassword);
+        logger.LogInformation("Student {Email} changed their password", User.GetUserName());
+        return NoContent();
+    }
+
     private static StudentResponse ToResponse(Student student) =>
         new(student.StudentId, student.Email, student.IsActive, student.SavedCardMaskedPan, student.SavedCardSubtype, student.CreatedAt, student.UpdatedAt);
 }
@@ -120,3 +153,12 @@ public record StudentLoginRequest(
 
 public record StudentResponse(int StudentId, string Email, bool IsActive, string? SavedCardMaskedPan, string? SavedCardSubtype, DateTime CreatedAt, DateTime UpdatedAt);
 public record StudentLoginResponse(string Token, string RefreshToken, StudentResponse Student);
+
+public record ForgotPasswordRequest([Required, EmailAddress, StringLength(256)] string Email);
+public record ResetPasswordRequest(
+    [Required, EmailAddress, StringLength(256)] string Email,
+    [Required, StringLength(6, MinimumLength = 6)] string Code,
+    [Required, StringLength(200, MinimumLength = 8)] string NewPassword);
+public record ChangePasswordRequest(
+    [Required, StringLength(200)] string CurrentPassword,
+    [Required, StringLength(200, MinimumLength = 8)] string NewPassword);

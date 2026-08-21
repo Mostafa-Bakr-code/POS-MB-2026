@@ -55,8 +55,13 @@ public partial class LoginPage : ContentPage
         ModeLabel.Text = _isSignUpMode ? "Create a new account" : "Log in to your account";
         PrimaryButton.Text = _isSignUpMode ? "Sign Up" : "Log In";
         ToggleModeButton.Text = _isSignUpMode ? "Already have an account? Log in" : "Don't have an account? Sign up";
+        // Resetting a password you don't have yet makes no sense mid-signup.
+        ForgotPasswordButton.IsVisible = !_isSignUpMode;
         ErrorLabel.IsVisible = false;
     }
+
+    private async void OnForgotPasswordClicked(object? sender, EventArgs e) =>
+        await Navigation.PushAsync(new ForgotPasswordPage(EmailEntry.Text?.Trim()));
 
     private async void OnPrimaryButtonClicked(object? sender, EventArgs e)
     {

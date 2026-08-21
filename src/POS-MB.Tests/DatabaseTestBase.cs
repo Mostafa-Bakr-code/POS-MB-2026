@@ -4,6 +4,7 @@ using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using POS_MB.Business;
+using POS_MB.Business.Email;
 using POS_MB.Business.Payments;
 using POS_MB.DataAccess;
 
@@ -37,6 +38,16 @@ public abstract class DatabaseTestBase : IDisposable
     protected clsOrderBusiness OrderBusiness { get; }
     protected clsReportingBusiness ReportingBusiness { get; }
     protected clsSettingsBusiness SettingsBusiness { get; }
+    protected clsRefreshTokenBusiness RefreshTokenBusiness { get; }
+
+    // Never actually sends anything - satisfies clsStudentBusiness's
+    // constructor for every test that doesn't specifically exercise the
+    // password-reset email itself (see PasswordResetTests, which builds
+    // its own clsStudentBusiness with a capturing fake instead).
+    private class NoOpEmailSender : IEmailSender
+    {
+        public Task SendAsync(string toEmail, string subject, string body) => Task.CompletedTask;
+    }
 
     protected DatabaseTestBase()
     {
@@ -45,13 +56,13 @@ public abstract class DatabaseTestBase : IDisposable
         var settingsDataAccess = new clsSettingsDataAccess(ConnectionFactory);
         SettingsBusiness = new clsSettingsBusiness(settingsDataAccess);
 
-        var refreshTokenBusiness = new clsRefreshTokenBusiness(
+        RefreshTokenBusiness = new clsRefreshTokenBusiness(
             new clsRefreshTokenDataAccess(ConnectionFactory), NullLogger<clsRefreshTokenBusiness>.Instance);
 
         CategoryBusiness = new clsCategoryBusiness(new clsCategoryDataAccess(ConnectionFactory));
         ItemBusiness = new clsItemBusiness(new clsItemDataAccess(ConnectionFactory), SettingsBusiness);
-        UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory), refreshTokenBusiness);
-        StudentBusiness = new clsStudentBusiness(new clsStudentDataAccess(ConnectionFactory));
+        UserBusiness = new clsUserBusiness(new clsUserDataAccess(ConnectionFactory), RefreshTokenBusiness);
+        StudentBusiness = new clsStudentBusiness(new clsStudentDataAccess(ConnectionFactory), RefreshTokenBusiness, new NoOpEmailSender());
 
         // No test here actually calls the Paymob-integrated CreateStudentOrderAsync
         // overload (that's covered separately, without hitting Paymob's real API -

@@ -55,6 +55,12 @@ CREATE TABLE dbo.Students
     SavedCardToken     NVARCHAR(255) NULL,
     SavedCardMaskedPan NVARCHAR(32)  NULL,
     SavedCardSubtype   NVARCHAR(32)  NULL,
+    -- Forgot-password flow: a 6-digit code, hashed (never stored plaintext,
+    -- same reasoning as the password itself) with a short expiration - see
+    -- clsStudentBusiness.RequestPasswordResetAsync/ResetPasswordAsync. Both
+    -- NULL whenever there's no reset in progress.
+    PasswordResetCodeHash      NVARCHAR(255) NULL,
+    PasswordResetCodeExpiresAt DATETIME2     NULL,
     IsActive     BIT               NOT NULL CONSTRAINT DF_Students_IsActive DEFAULT (1),
     CreatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Students_UpdatedAt DEFAULT (SYSUTCDATETIME()),

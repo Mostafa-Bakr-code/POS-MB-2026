@@ -44,6 +44,16 @@
                     Placeholder="Password"
                     IsPassword="True" />
 
+                <Button
+                    x:Name="ForgotPasswordButton"
+                    Text="Forgot password?"
+                    Clicked="OnForgotPasswordClicked"
+                    BackgroundColor="Transparent"
+                    TextColor="{StaticResource Primary}"
+                    FontSize="13"
+                    HorizontalOptions="End"
+                    Padding="0" />
+
                 <Label
                     x:Name="ErrorLabel"
                     TextColor="Red"

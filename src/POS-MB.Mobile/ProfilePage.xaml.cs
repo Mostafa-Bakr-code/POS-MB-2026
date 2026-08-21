@@ -67,6 +67,63 @@ public partial class ProfilePage : ContentPage
         Refresh();
     }
 
+    private async void OnChangePasswordClicked(object? sender, EventArgs e)
+    {
+        PasswordErrorLabel.IsVisible = false;
+        var currentPassword = CurrentPasswordEntry.Text ?? "";
+        var newPassword = NewPasswordEntry.Text ?? "";
+        var confirmPassword = ConfirmPasswordEntry.Text ?? "";
+
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            ShowPasswordError("Enter your current password and a new one.");
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            ShowPasswordError("New passwords don't match.");
+            return;
+        }
+
+        ChangePasswordButton.IsEnabled = false;
+        PasswordLoadingIndicator.IsRunning = true;
+        PasswordLoadingIndicator.IsVisible = true;
+
+        var (success, error) = await _apiClient.ChangePasswordAsync(currentPassword, newPassword);
+
+        PasswordLoadingIndicator.IsRunning = false;
+        PasswordLoadingIndicator.IsVisible = false;
+        ChangePasswordButton.IsEnabled = true;
+
+        if (!success)
+        {
+            ShowPasswordError(error ?? "Something went wrong.");
+            return;
+        }
+
+        // A successful change revokes every session, including this one
+        // (see clsStudentBusiness.ChangePasswordAsync) - the app must not
+        // keep acting as if it's still logged in, so this signs the
+        // student out locally too, same as the normal logout button.
+        await DisplayAlert("Password Changed", "Your password has been changed. Please log in again.", "OK");
+
+        if (AppSession.RefreshToken is not null)
+            await _apiClient.LogoutAsync(AppSession.RefreshToken);
+
+        AppSession.Clear();
+        AppSession.ClearPersisted();
+        Cart.Clear();
+
+        await Navigation.PopToRootAsync();
+    }
+
+    private void ShowPasswordError(string message)
+    {
+        PasswordErrorLabel.Text = message;
+        PasswordErrorLabel.IsVisible = true;
+    }
+
     private async void OnHomeClicked(object? sender, EventArgs e) =>
         await NavigationHelper.GoHomeAsync(Navigation);
 }

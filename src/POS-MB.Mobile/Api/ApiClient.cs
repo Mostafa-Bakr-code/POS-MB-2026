@@ -148,6 +148,56 @@ public class ApiClient
         return (result?.CheckoutUrl, result?.AlreadyPaid ?? false, null);
     }
 
+    // AllowAnonymous on the server - this is how a locked-out student
+    // (can't log in, no bearer token to attach) proves it's really them
+    // before setting a new password.
+    public async Task<(bool Success, string? Error)> ForgotPasswordAsync(string email)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("api/students/forgot-password", new { Email = email });
+        }
+        catch (Exception)
+        {
+            return (false, "Could not reach the server. Check your connection and try again.");
+        }
+
+        return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+    }
+
+    public async Task<(bool Success, string? Error)> ResetPasswordAsync(string email, string code, string newPassword)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("api/students/reset-password", new { Email = email, Code = code, NewPassword = newPassword });
+        }
+        catch (Exception)
+        {
+            return (false, "Could not reach the server. Check your connection and try again.");
+        }
+
+        return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+    }
+
+    // Authenticated (unlike the two above) - a student who already knows
+    // their current password and is logged in, simply wants a new one.
+    public async Task<(bool Success, string? Error)> ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("api/students/change-password", new { CurrentPassword = currentPassword, NewPassword = newPassword });
+        }
+        catch (Exception)
+        {
+            return (false, "Could not reach the server. Check your connection and try again.");
+        }
+
+        return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+    }
+
     public async Task<(bool Success, string? Error)> RemoveSavedCardAsync()
     {
         HttpResponseMessage response;
