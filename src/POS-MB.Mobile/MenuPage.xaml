@@ -76,9 +76,40 @@
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:ItemDto">
                             <Grid Padding="0,10" ColumnDefinitions="*,Auto,Auto">
-                                <Label Grid.Column="0" Text="{Binding ItemName}" FontSize="16" VerticalOptions="Center" />
-                                <Label Grid.Column="1" Text="{Binding Price, StringFormat='{0:0.00}'}" FontSize="16" VerticalOptions="Center" Margin="0,0,12,0" />
-                                <Button Grid.Column="2" Text="+" WidthRequest="44" Clicked="OnAddToCartClicked" />
+                                <Label
+                                    Grid.Column="0"
+                                    Text="{Binding ItemName}"
+                                    FontSize="16"
+                                    VerticalOptions="Center"
+                                    TextColor="{Binding NameTextColor}" />
+
+                                <!-- Available: normal price + add button. -->
+                                <Label
+                                    Grid.Column="1"
+                                    Text="{Binding Price, StringFormat='{0:0.00}'}"
+                                    FontSize="16"
+                                    VerticalOptions="Center"
+                                    Margin="0,0,12,0"
+                                    IsVisible="{Binding IsAvailable}" />
+                                <Button
+                                    Grid.Column="2"
+                                    Text="+"
+                                    WidthRequest="44"
+                                    Clicked="OnAddToCartClicked"
+                                    IsVisible="{Binding IsAvailable}" />
+
+                                <!-- Unavailable: stays on the menu (so a student knows
+                                     it exists) instead of disappearing, but can't be
+                                     added to the cart. -->
+                                <Label
+                                    Grid.Column="1"
+                                    Grid.ColumnSpan="2"
+                                    Text="Currently Unavailable"
+                                    FontSize="13"
+                                    TextColor="Gray"
+                                    VerticalOptions="Center"
+                                    HorizontalOptions="End"
+                                    IsVisible="{Binding IsUnavailable}" />
                             </Grid>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>

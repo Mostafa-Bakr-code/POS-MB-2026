@@ -96,6 +96,10 @@ public partial class MenuPage : ContentPage
     private void OnAddToCartClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.BindingContext is not ItemDto item) return;
+        // Defensive - the button itself is already hidden for an
+        // unavailable item (see MenuPage.xaml), this just guards against
+        // ever adding one some other way.
+        if (!item.IsAvailable) return;
 
         Cart.Add(item);
         RefreshCartButton();
@@ -166,7 +170,14 @@ public partial class MenuPage : ContentPage
         }
 
         PlaceholderLabel.IsVisible = false;
-        var items = await _apiClient.GetItemsAsync(selected.CategoryId);
+        // availableOnly: false - an out-of-stock item now stays visible
+        // (greyed out, "Currently Unavailable") instead of disappearing
+        // from the menu entirely, so a student knows it exists rather than
+        // wondering if it was ever offered at all. includeInactive stays
+        // at its default (false) - a genuinely retired item is a different
+        // thing from a temporarily out-of-stock one, and should still
+        // disappear.
+        var items = await _apiClient.GetItemsAsync(selected.CategoryId, availableOnly: false);
         ItemsView.ItemsSource = items;
     }
 
