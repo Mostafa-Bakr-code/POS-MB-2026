@@ -28,5 +28,25 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<!-- iOS blocks plain HTTP by default (App Transport Security) - this app
+	     talks to a local dev API over plain HTTP on the LAN (see
+	     ApiConfig.BaseUrl), not a real deployed server. A per-IP exception
+	     domain is unreliable in practice (ATS exception matching is built
+	     around real domain names, not raw IP addresses), so this disables
+	     ATS outright instead - acceptable for local dev/testing only, never
+	     for a real released build. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<!-- iOS 14+ separately blocks apps from talking to devices on the local
+	     WiFi network (the actual root cause found live: NSURLErrorDomain
+	     -1009 "Local network prohibited") unless this key is present -
+	     without it, iOS silently refuses local-network connections rather
+	     than ever prompting the user for permission. Needed for this app to
+	     reach the dev API on the LAN (see ApiConfig.BaseUrl). -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>POS-MB needs to connect to the kiosk's local server to place and track orders.</string>
 </dict>
 </plist>

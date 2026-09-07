@@ -482,3 +482,8 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Uploaded item/category photos - runtime content, not source; see
+# ItemsController/CategoriesController's image upload endpoints
+src/POS-MB.API/wwwroot/item-images/
+src/POS-MB.API/wwwroot/category-images/

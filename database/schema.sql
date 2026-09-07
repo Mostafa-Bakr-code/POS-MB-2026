@@ -17,6 +17,7 @@ CREATE TABLE dbo.Categories
     CategoryId   INT IDENTITY(1,1) NOT NULL,
     CategoryName NVARCHAR(20)      NOT NULL,
     IsActive     BIT               NOT NULL CONSTRAINT DF_Categories_IsActive DEFAULT (1),
+    ImageUrl     NVARCHAR(255)     NULL, -- relative path under wwwroot (e.g. "/category-images/3.jpg?v=..."), set via POST /api/categories/{id}/image; NULL means no photo uploaded yet
     CreatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Categories_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt    DATETIME2(3)      NOT NULL CONSTRAINT DF_Categories_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Categories PRIMARY KEY CLUSTERED (CategoryId)
@@ -78,6 +79,8 @@ CREATE TABLE dbo.Items
     TaxRate   DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Items_TaxRate DEFAULT (14.00),
     IsActive  BIT               NOT NULL CONSTRAINT DF_Items_IsActive DEFAULT (1), -- permanent retirement (admin action)
     IsAvailable BIT             NOT NULL CONSTRAINT DF_Items_IsAvailable DEFAULT (1), -- temporary "out of stock right now" toggle, independent of IsActive
+    ImageUrl  NVARCHAR(255)     NULL, -- relative path under wwwroot (e.g. "/item-images/12.jpg?v=..."), set via POST /api/items/{id}/image; NULL means no photo uploaded yet
+    Description NVARCHAR(500)  NULL, -- optional menu blurb ("grilled chicken, garlic sauce, pickles"); purely for display, unrelated to OrderItems.Comment (a per-order customer note)
     CreatedAt DATETIME2(3)      NOT NULL CONSTRAINT DF_Items_CreatedAt DEFAULT (SYSUTCDATETIME()),
     UpdatedAt DATETIME2(3)      NOT NULL CONSTRAINT DF_Items_UpdatedAt DEFAULT (SYSUTCDATETIME()),
     CONSTRAINT PK_Items PRIMARY KEY CLUSTERED (ItemId),
@@ -92,6 +95,7 @@ CREATE TABLE dbo.Orders
     Total           DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Orders_Total DEFAULT (0),
     SerialNumber    INT               NULL,
     OrderDate AS (CAST(Date AS DATE)) PERSISTED,
+    LocalOrderDate  DATE              NOT NULL, -- the shop's LOCAL calendar day (TimeZoneOffsetHours-shifted) at creation time, stamped explicitly in C# rather than SQL-computed since the offset is a runtime Settings value, not something a computed column can reference. Backs SerialNumber's daily uniqueness and the Paymob-facing order reference (PaymobOrderReference) - see UQ_Orders_Date_SerialNumber. OrderDate (above) stays UTC-day only, unused for either of those now.
     UserId          INT               NULL, -- staff cashier; set for Cashier orders, always NULL for Mobile orders
     StudentId       INT               NULL, -- student who placed it; set for Mobile orders, always NULL for Cashier orders
     OrderSource     TINYINT           NOT NULL CONSTRAINT DF_Orders_OrderSource DEFAULT (0), -- 0=Cashier,1=Mobile
@@ -167,8 +171,13 @@ GO
 
 -- Helps enforce/guard SerialNumber uniqueness per day at the DB level as a backstop
 -- (generation logic itself is fixed at the business-logic stage, not here).
+-- Keyed by LocalOrderDate, not OrderDate (the UTC day) - two different local
+-- days can share a UTC calendar date near the shop's local midnight, and a
+-- UTC-keyed constraint would then wrongly reject two legitimately different
+-- "day #1" orders. Found live: cashier order creation started failing with a
+-- duplicate-key error the moment local time crossed midnight while UTC hadn't.
 CREATE UNIQUE INDEX UQ_Orders_Date_SerialNumber
-    ON dbo.Orders (OrderDate, SerialNumber)
+    ON dbo.Orders (LocalOrderDate, SerialNumber)
     WHERE SerialNumber IS NOT NULL;
 GO
 

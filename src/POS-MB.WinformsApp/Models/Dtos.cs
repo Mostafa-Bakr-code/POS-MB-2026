@@ -5,6 +5,7 @@ public class CategoryDto
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public bool IsActive { get; set; }
+    public string? ImageUrl { get; set; }
 }
 
 public class ItemDto
@@ -16,6 +17,8 @@ public class ItemDto
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
     public bool IsAvailable { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? Description { get; set; }
 }
 
 public class ItemPriceHistoryDto

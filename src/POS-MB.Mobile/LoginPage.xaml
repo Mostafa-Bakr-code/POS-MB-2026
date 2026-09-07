@@ -5,17 +5,25 @@
              Title="POS-MB">
 
     <ScrollView>
-        <VerticalStackLayout Padding="30,60,30,30" Spacing="16">
+        <VerticalStackLayout Padding="30,70,30,30" Spacing="16">
 
             <Label
                 Text="POS-MB"
-                FontSize="32"
+                FontSize="36"
                 FontAttributes="Bold"
+                TextColor="{StaticResource Yellow}"
                 HorizontalOptions="Center" />
 
             <Label
+                Text="Dimashk Street"
+                FontSize="14"
+                TextColor="{StaticResource TextOnDarkMuted}"
+                HorizontalOptions="Center"
+                Margin="0,-10,0,0" />
+
+            <Label
                 x:Name="StatusLabel"
-                TextColor="Gray"
+                TextColor="{StaticResource TextOnDarkMuted}"
                 HorizontalOptions="Center"
                 IsVisible="False" />
 
@@ -24,45 +32,52 @@
                 IsRunning="False"
                 IsVisible="False" />
 
-            <VerticalStackLayout x:Name="FormLayout" Spacing="16">
+            <VerticalStackLayout x:Name="FormLayout" Spacing="16" Margin="0,20,0,0">
 
                 <Label
                     x:Name="ModeLabel"
                     Text="Log in to your account"
                     FontSize="16"
-                    TextColor="Gray"
+                    TextColor="{StaticResource TextOnDarkMuted}"
                     HorizontalOptions="Center"
-                    Margin="0,0,0,20" />
+                    Margin="0,0,0,10" />
 
-                <Entry
-                    x:Name="EmailEntry"
-                    Placeholder="Email"
-                    Keyboard="Email" />
+                <Border StrokeShape="RoundRectangle 16" Stroke="Transparent" Padding="4">
+                    <Entry
+                        x:Name="EmailEntry"
+                        Placeholder="Email"
+                        Keyboard="Email" />
+                </Border>
 
-                <Entry
-                    x:Name="PasswordEntry"
-                    Placeholder="Password"
-                    IsPassword="True" />
+                <Border StrokeShape="RoundRectangle 16" Stroke="Transparent" Padding="4">
+                    <Entry
+                        x:Name="PasswordEntry"
+                        Placeholder="Password"
+                        IsPassword="True" />
+                </Border>
 
                 <Button
                     x:Name="ForgotPasswordButton"
                     Text="Forgot password?"
                     Clicked="OnForgotPasswordClicked"
                     BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}"
+                    TextColor="{StaticResource Yellow}"
                     FontSize="13"
                     HorizontalOptions="End"
-                    Padding="0" />
+                    Padding="0"
+                    MinimumHeightRequest="0" />
 
                 <Label
                     x:Name="ErrorLabel"
-                    TextColor="Red"
+                    TextColor="{StaticResource ErrorRed}"
                     IsVisible="False" />
 
                 <Button
                     x:Name="PrimaryButton"
                     Text="Log In"
                     Clicked="OnPrimaryButtonClicked"
+                    HeightRequest="52"
+                    FontSize="16"
                     Margin="0,10,0,0" />
 
                 <Button
@@ -70,7 +85,7 @@
                     Text="Don't have an account? Sign up"
                     Clicked="OnToggleModeClicked"
                     BackgroundColor="Transparent"
-                    TextColor="{StaticResource Primary}" />
+                    TextColor="{StaticResource TextOnDark}" />
 
             </VerticalStackLayout>
 

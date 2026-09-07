@@ -33,6 +33,9 @@ public class clsCategoryBusiness(clsCategoryDataAccess dataAccess)
         return await dataAccess.UpdateAsync(id, name);
     }
 
+    public Task<bool> SetImageUrlAsync(int id, string? imageUrl) =>
+        dataAccess.SetImageUrlAsync(id, imageUrl);
+
     public Task<bool> DeactivateAsync(int id) =>
         dataAccess.DeactivateAsync(id);
 

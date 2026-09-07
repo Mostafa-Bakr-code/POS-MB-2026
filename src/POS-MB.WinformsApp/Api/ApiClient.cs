@@ -67,15 +67,35 @@ public class ApiClient
         return result ?? [];
     }
 
-    public async Task CreateCategoryAsync(string name)
+    public async Task<int> CreateCategoryAsync(string name)
     {
         var response = await _httpClient.PostAsJsonAsync("api/categories", new { Name = name });
         response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<CategoryDto>();
+        return created!.CategoryId;
     }
 
     public async Task UpdateCategoryAsync(int categoryId, string name)
     {
         var response = await _httpClient.PutAsJsonAsync($"api/categories/{categoryId}", new { Name = name });
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<CategoryDto?> UploadCategoryImageAsync(int categoryId, string filePath)
+    {
+        using var content = new MultipartFormDataContent();
+        var fileBytes = await File.ReadAllBytesAsync(filePath);
+        var fileContent = new ByteArrayContent(fileBytes);
+        content.Add(fileContent, "file", Path.GetFileName(filePath));
+
+        var response = await _httpClient.PostAsync($"api/categories/{categoryId}/image", content);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CategoryDto>();
+    }
+
+    public async Task RemoveCategoryImageAsync(int categoryId)
+    {
+        var response = await _httpClient.DeleteAsync($"api/categories/{categoryId}/image");
         response.EnsureSuccessStatusCode();
     }
 
@@ -99,19 +119,49 @@ public class ApiClient
         return result ?? [];
     }
 
-    public async Task CreateItemAsync(string name, int categoryId, decimal price)
+    public async Task<int> CreateItemAsync(string name, int categoryId, decimal price, string? description = null)
     {
         var response = await _httpClient.PostAsJsonAsync(
-            "api/items", new { Name = name, CategoryId = categoryId, Price = price });
+            "api/items", new { Name = name, CategoryId = categoryId, Price = price, Description = description });
+        response.EnsureSuccessStatusCode();
+        var created = await response.Content.ReadFromJsonAsync<ItemDto>();
+        return created!.ItemId;
+    }
+
+    // Multipart, not JSON - the file itself is the payload. Uploaded right
+    // after Create/Update rather than bundled into either call, since those
+    // already work as simple JSON bodies and a picked-but-not-yet-uploaded
+    // file only exists client-side until the item itself has an id to attach it to.
+    public async Task<ItemDto?> UploadItemImageAsync(int itemId, string filePath)
+    {
+        using var content = new MultipartFormDataContent();
+        var fileBytes = await File.ReadAllBytesAsync(filePath);
+        var fileContent = new ByteArrayContent(fileBytes);
+        content.Add(fileContent, "file", Path.GetFileName(filePath));
+
+        var response = await _httpClient.PostAsync($"api/items/{itemId}/image", content);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<ItemDto>();
+    }
+
+    public async Task RemoveItemImageAsync(int itemId)
+    {
+        var response = await _httpClient.DeleteAsync($"api/items/{itemId}/image");
         response.EnsureSuccessStatusCode();
     }
 
+    // Lets the edit dialog resolve a stored relative ImageUrl (e.g.
+    // "/item-images/12.jpg?v=...") into a full URL for previewing - the API
+    // only ever stores/returns the relative path since it doesn't know its
+    // own externally-reachable host.
+    public string ResolveImageUrl(string relativeUrl) => new Uri(_httpClient.BaseAddress!, relativeUrl).ToString();
+
     // Who made the change is derived server-side from the caller's own token,
     // not sent from here - the API used to trust a client-supplied id for this.
-    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price)
+    public async Task UpdateItemAsync(int itemId, string name, int categoryId, decimal price, string? description = null)
     {
         var response = await _httpClient.PutAsJsonAsync(
-            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price });
+            $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price, Description = description });
         response.EnsureSuccessStatusCode();
     }
 

@@ -7,8 +7,13 @@ namespace POS_MB.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
+public class ItemsController(clsItemBusiness itemBusiness, IWebHostEnvironment webHostEnvironment) : ControllerBase
 {
+    // Only these - a menu photo has no reason to be anything else, and
+    // restricting the extension list avoids ever writing something an
+    // uploader didn't intend to serve as a static file under wwwroot.
+    private static readonly HashSet<string> AllowedImageExtensions = new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png" };
+    private const long MaxImageSizeBytes = 5 * 1024 * 1024; // 5MB - a menu photo, not a print-quality asset
     // Read-only endpoints stay open to any authenticated user - order-taking
     // needs the item catalog for every cashier, not just ones with the Items
     // management permission.
@@ -30,7 +35,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
     [RequirePermission(Permission.Items)]
     public async Task<IActionResult> Create([FromBody] CreateItemRequest request)
     {
-        var id = await itemBusiness.CreateAsync(request.Name, request.CategoryId, request.Price, request.TaxRate);
+        var id = await itemBusiness.CreateAsync(request.Name, request.CategoryId, request.Price, request.TaxRate, request.Description);
         var item = await itemBusiness.GetByIdAsync(id);
         return CreatedAtAction(nameof(GetById), new { id }, item);
     }
@@ -45,7 +50,7 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
         // employee in the price-history audit trail (GET .../price-history is
         // open to any authenticated user). Same class of bug as order attribution
         // in OrdersController.Create.
-        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, User.GetUserId());
+        var updated = await itemBusiness.UpdateAsync(id, request.Name, request.CategoryId, request.Price, request.TaxRate, User.GetUserId(), request.Description);
         return updated ? NoContent() : NotFound();
     }
 
@@ -79,6 +84,56 @@ public class ItemsController(clsItemBusiness itemBusiness) : ControllerBase
         var updated = await itemBusiness.SetAvailabilityAsync(id, request.IsAvailable);
         return updated ? NoContent() : NotFound();
     }
+
+    [HttpPost("{id:int}/image")]
+    [RequirePermission(Permission.Items)]
+    public async Task<IActionResult> UploadImage(int id, IFormFile file)
+    {
+        if (!await itemBusiness.ExistsAsync(id)) return NotFound();
+
+        if (file.Length == 0) return BadRequest("No file was uploaded.");
+        if (file.Length > MaxImageSizeBytes) return BadRequest("Image must be 5MB or smaller.");
+
+        var extension = Path.GetExtension(file.FileName);
+        if (!AllowedImageExtensions.Contains(extension)) return BadRequest("Only .jpg and .png images are allowed.");
+
+        var imagesDirectory = Path.Combine(webHostEnvironment.WebRootPath, "item-images");
+        Directory.CreateDirectory(imagesDirectory);
+
+        // Named by ItemId, not a generated filename - a re-upload for the same
+        // item just overwrites its one photo, so there's never a stale file
+        // left behind under a different name for this item.
+        var filePath = Path.Combine(imagesDirectory, $"{id}{extension}");
+        await using (var stream = System.IO.File.Create(filePath))
+            await file.CopyToAsync(stream);
+
+        // ?v={ticks} busts the mobile app's image cache on re-upload - without
+        // it, the URL (keyed by ItemId) never changes, so a client that already
+        // cached the old photo would keep showing it after a re-upload.
+        var imageUrl = $"/item-images/{id}{extension}?v={DateTime.UtcNow.Ticks}";
+        await itemBusiness.SetImageUrlAsync(id, imageUrl);
+
+        var item = await itemBusiness.GetByIdAsync(id);
+        return Ok(item);
+    }
+
+    [HttpDelete("{id:int}/image")]
+    [RequirePermission(Permission.Items)]
+    public async Task<IActionResult> RemoveImage(int id)
+    {
+        var item = await itemBusiness.GetByIdAsync(id);
+        if (item is null) return NotFound();
+
+        if (item.ImageUrl is not null)
+        {
+            var fileName = item.ImageUrl.Split('?')[0].TrimStart('/');
+            var filePath = Path.Combine(webHostEnvironment.WebRootPath, fileName.Replace('/', Path.DirectorySeparatorChar));
+            if (System.IO.File.Exists(filePath)) System.IO.File.Delete(filePath);
+        }
+
+        await itemBusiness.SetImageUrlAsync(id, null);
+        return NoContent();
+    }
 }
 
 // Name length matches Items.ItemName NVARCHAR(50). Price/TaxRate ranges are
@@ -88,12 +143,14 @@ public record CreateItemRequest(
     [Required, StringLength(50)] string Name,
     int CategoryId,
     [Range(typeof(decimal), "0", "100000")] decimal Price,
-    [Range(typeof(decimal), "0", "100")] decimal? TaxRate);
+    [Range(typeof(decimal), "0", "100")] decimal? TaxRate,
+    [StringLength(500)] string? Description = null);
 
 public record UpdateItemRequest(
     [Required, StringLength(50)] string Name,
     int CategoryId,
     [Range(typeof(decimal), "0", "100000")] decimal Price,
-    [Range(typeof(decimal), "0", "100")] decimal? TaxRate);
+    [Range(typeof(decimal), "0", "100")] decimal? TaxRate,
+    [StringLength(500)] string? Description = null);
 
 public record SetItemAvailabilityRequest(bool IsAvailable);

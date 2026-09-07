@@ -5,33 +5,39 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
     <Style TargetType="ActivityIndicator">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="Color" Value="{StaticResource Yellow}" />
     </Style>
 
     <Style TargetType="IndicatorView">
-        <Setter Property="IndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}"/>
-        <Setter Property="SelectedIndicatorColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray100}}"/>
+        <Setter Property="IndicatorColor" Value="{StaticResource ChipInactive}"/>
+        <Setter Property="SelectedIndicatorColor" Value="{StaticResource Yellow}"/>
     </Style>
 
     <Style TargetType="Border">
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="Stroke" Value="{StaticResource ChipInactive}" />
         <Setter Property="StrokeShape" Value="Rectangle"/>
         <Setter Property="StrokeThickness" Value="1"/>
     </Style>
 
     <Style TargetType="BoxView">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource ChipInactive}" />
     </Style>
 
+    <!-- Bold, fully-rounded, coral by default - this is the "primary CTA"
+         look (Place Order, Log In, Reset Password...). Pages that need a
+         quieter/secondary button (nav links, "Remove", icon-only "+")
+         already override BackgroundColor/TextColor explicitly in their own
+         XAML - this default is deliberately the loud one, not the quiet one. -->
     <Style TargetType="Button">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="TextColor" Value="{StaticResource TextOnDark}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource Coral}" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontAttributes" Value="Bold"/>
         <Setter Property="BorderWidth" Value="0"/>
-        <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Padding" Value="14,10"/>
-        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="CornerRadius" Value="26"/>
+        <Setter Property="Padding" Value="20,12"/>
+        <Setter Property="MinimumHeightRequest" Value="48"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -39,8 +45,8 @@
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
-                            <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{StaticResource TextOnDarkMuted}" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource ChipInactive}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="PointerOver" />
@@ -50,7 +56,7 @@
     </Style>
 
     <Style TargetType="CheckBox">
-        <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource White}}" />
+        <Setter Property="Color" Value="{StaticResource Yellow}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -59,7 +65,7 @@
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="Color" Value="{StaticResource TextOnDarkMuted}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -89,11 +95,11 @@
     </Style>
 
     <Style TargetType="Editor">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource TextOnCard}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource CardSurface}" />
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextOnCardMuted}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
@@ -102,7 +108,7 @@
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{StaticResource TextOnCardMuted}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -110,13 +116,17 @@
         </Setter>
     </Style>
 
+    <!-- White "pill" input field on the navy canvas, not a transparent
+         underline - without an explicit background here, default-white
+         text on a transparent field would be nearly invisible against the
+         new navy page background, not just less polished. -->
     <Style TargetType="Entry">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="BackgroundColor" Value="Transparent" />
+        <Setter Property="TextColor" Value="{StaticResource TextOnCard}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource CardSurface}" />
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="PlaceholderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextOnCardMuted}" />
+        <Setter Property="MinimumHeightRequest" Value="48"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -124,7 +134,7 @@
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{StaticResource TextOnCardMuted}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -154,8 +164,13 @@
         </Setter>
     </Style>
 
+    <!-- White by default - matches sitting directly on the navy page
+         background, which is where most labels in this app live. A label
+         inside a white card (an item row, an Entry's own text) needs an
+         explicit TextOnCard override in its own XAML - same convention
+         already used for ItemDto.NameTextColor/CartLine.CommentTextColor. -->
     <Style TargetType="Label">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
+        <Setter Property="TextColor" Value="{StaticResource TextOnDark}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
         <Setter Property="FontSize" Value="14" />
@@ -165,7 +180,7 @@
                     <VisualState x:Name="Normal" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
-                            <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray300}, Dark={StaticResource Gray600}}" />
+                            <Setter Property="TextColor" Value="{StaticResource TextOnDarkMuted}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -174,14 +189,15 @@
     </Style>
 
     <Style TargetType="Label" x:Key="Headline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+        <Setter Property="TextColor" Value="{StaticResource TextOnDark}" />
+        <Setter Property="FontAttributes" Value="Bold" />
         <Setter Property="FontSize" Value="32" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
     </Style>
 
     <Style TargetType="Label" x:Key="SubHeadline">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource MidnightBlue}, Dark={StaticResource White}}" />
+        <Setter Property="TextColor" Value="{StaticResource TextOnDark}" />
         <Setter Property="FontSize" Value="24" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
@@ -406,35 +422,37 @@
     </Style>
     -->
 
+    <!-- Navy canvas always - a deliberate single identity (see Colors.xaml),
+         so Light and Dark both bind the same value rather than adapting. -->
     <Style TargetType="Page" ApplyToDerivedTypes="True">
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
+        <Setter Property="BackgroundColor" Value="{StaticResource AppBackground}" />
     </Style>
 
     <Style TargetType="Shell" ApplyToDerivedTypes="True">
-        <Setter Property="Shell.BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="Shell.ForegroundColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.TitleColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource SecondaryDarkText}}" />
-        <Setter Property="Shell.DisabledColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="Shell.UnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.BackgroundColor" Value="{StaticResource AppBackgroundDeep}" />
+        <Setter Property="Shell.ForegroundColor" Value="{StaticResource TextOnDark}" />
+        <Setter Property="Shell.TitleColor" Value="{StaticResource TextOnDark}" />
+        <Setter Property="Shell.DisabledColor" Value="{StaticResource TextOnDarkMuted}" />
+        <Setter Property="Shell.UnselectedColor" Value="{StaticResource TextOnDarkMuted}" />
         <Setter Property="Shell.NavBarHasShadow" Value="False" />
-        <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
-        <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="Shell.TabBarUnselectedColor" Value="{AppThemeBinding Light={StaticResource Gray900}, Dark={StaticResource Gray200}}" />
+        <Setter Property="Shell.TabBarBackgroundColor" Value="{StaticResource AppBackgroundDeep}" />
+        <Setter Property="Shell.TabBarForegroundColor" Value="{StaticResource Yellow}" />
+        <Setter Property="Shell.TabBarTitleColor" Value="{StaticResource Yellow}" />
+        <Setter Property="Shell.TabBarUnselectedColor" Value="{StaticResource TextOnDarkMuted}" />
     </Style>
 
     <Style TargetType="NavigationPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource OffBlack}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
-        <Setter Property="IconColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource White}}" />
+        <Setter Property="BarBackgroundColor" Value="{StaticResource AppBackgroundDeep}" />
+        <Setter Property="BarTextColor" Value="{StaticResource TextOnDark}" />
+        <Setter Property="IconColor" Value="{StaticResource TextOnDark}" />
     </Style>
 
     <Style TargetType="TabbedPage">
-        <Setter Property="BarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray950}}" />
-        <Setter Property="BarTextColor" Value="{AppThemeBinding Light={StaticResource Magenta}, Dark={StaticResource White}}" />
-        <Setter Property="UnselectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray950}}" />
-        <Setter Property="SelectedTabColor" Value="{AppThemeBinding Light={StaticResource Gray950}, Dark={StaticResource Gray200}}" />
+        <Setter Property="BarBackgroundColor" Value="{StaticResource AppBackgroundDeep}" />
+        <Setter Property="BarTextColor" Value="{StaticResource Yellow}" />
+        <Setter Property="UnselectedTabColor" Value="{StaticResource TextOnDarkMuted}" />
+        <Setter Property="SelectedTabColor" Value="{StaticResource Yellow}" />
     </Style>
 
 </ResourceDictionary>

@@ -118,10 +118,15 @@ public class CategoriesControl : UserControl
 
         if (columnName == "Edit")
         {
-            using var dialog = new FormTextInputDialog("Edit Category", "Category Name", category.CategoryName, maxLength: 20);
-            if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Value.Length > 0)
+            var previewUrl = category.ImageUrl is not null ? _apiClient.ResolveImageUrl(category.ImageUrl) : null;
+            using var dialog = new FormCategoryEditDialog("Edit Category", category.CategoryName, previewUrl);
+            if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
             {
-                await _apiClient.UpdateCategoryAsync(category.CategoryId, dialog.Value);
+                await _apiClient.UpdateCategoryAsync(category.CategoryId, dialog.CategoryName);
+                if (dialog.SelectedImagePath is not null)
+                    await _apiClient.UploadCategoryImageAsync(category.CategoryId, dialog.SelectedImagePath);
+                else if (dialog.RemoveImageRequested)
+                    await _apiClient.RemoveCategoryImageAsync(category.CategoryId);
                 await LoadAsync();
             }
         }
@@ -147,10 +152,12 @@ public class CategoriesControl : UserControl
 
     private async Task AddCategoryAsync()
     {
-        using var dialog = new FormTextInputDialog("Add Category", "Category Name", maxLength: 20);
-        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.Value.Length > 0)
+        using var dialog = new FormCategoryEditDialog("Add Category");
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
         {
-            await _apiClient.CreateCategoryAsync(dialog.Value);
+            var categoryId = await _apiClient.CreateCategoryAsync(dialog.CategoryName);
+            if (dialog.SelectedImagePath is not null)
+                await _apiClient.UploadCategoryImageAsync(categoryId, dialog.SelectedImagePath);
             await LoadAsync();
         }
     }

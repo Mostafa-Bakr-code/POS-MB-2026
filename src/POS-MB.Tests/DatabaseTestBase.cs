@@ -106,10 +106,17 @@ public abstract class DatabaseTestBase : IDisposable
     // notes on why), which makes "an order placed right after local midnight" only
     // reproducible at whatever moment the test happens to run. Backdating it directly
     // lets the timezone-boundary tests be deterministic regardless of when they run.
+    // LocalOrderDate is a real stored column now (not SQL-computed from
+    // Date), since it depends on the runtime TimeZoneOffsetHours setting -
+    // so backdating Date alone would leave it stale. Every test in this
+    // suite that backdates an order does so under the +3 offset (set via
+    // SettingsBusiness.SetAsync("TimeZoneOffsetHours", "3")), so that's
+    // hardcoded here to keep the two columns consistent with each other.
     protected async Task SetOrderDateAsync(int orderId, DateTime utcDate)
     {
         using var connection = ConnectionFactory.CreateConnection();
-        await connection.ExecuteAsync("UPDATE Orders SET [Date] = @Date WHERE OrderId = @OrderId",
+        await connection.ExecuteAsync(
+            "UPDATE Orders SET [Date] = @Date, LocalOrderDate = CAST(DATEADD(HOUR, 3, @Date) AS DATE) WHERE OrderId = @OrderId",
             new { Date = utcDate, OrderId = orderId });
     }
 

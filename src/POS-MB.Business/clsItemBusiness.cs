@@ -18,7 +18,7 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
     public Task<bool> ExistsAsync(int id) =>
         dataAccess.ExistsAsync(id);
 
-    public async Task<int> CreateAsync(string name, int categoryId, decimal price, decimal? taxRate = null)
+    public async Task<int> CreateAsync(string name, int categoryId, decimal price, decimal? taxRate = null, string? description = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Item name is required.", nameof(name));
@@ -27,10 +27,10 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
 
         var resolvedTaxRate = taxRate ?? await GetDefaultTaxRateAsync();
 
-        return await dataAccess.AddAsync(name, categoryId, price, resolvedTaxRate);
+        return await dataAccess.AddAsync(name, categoryId, price, resolvedTaxRate, description);
     }
 
-    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal? taxRate = null, int? changedByUserId = null)
+    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal? taxRate = null, int? changedByUserId = null, string? description = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Item name is required.", nameof(name));
@@ -42,7 +42,7 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
         var existing = await dataAccess.GetByIdAsync(id);
         if (existing is null) return false;
 
-        var updated = await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate);
+        var updated = await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate, description);
 
         if (updated && (existing.Price != price || existing.TaxRate != resolvedTaxRate))
         {
@@ -60,6 +60,9 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
 
     public Task<bool> SetAvailabilityAsync(int id, bool isAvailable) =>
         dataAccess.SetAvailabilityAsync(id, isAvailable);
+
+    public Task<bool> SetImageUrlAsync(int id, string? imageUrl) =>
+        dataAccess.SetImageUrlAsync(id, imageUrl);
 
     public Task<IEnumerable<ItemPriceHistory>> GetPriceHistoryAsync(int id) =>
         dataAccess.GetPriceHistoryAsync(id);

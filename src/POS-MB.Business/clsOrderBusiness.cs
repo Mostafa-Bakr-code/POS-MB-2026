@@ -83,7 +83,13 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
                 throw new ArgumentException(reason, nameof(orderSource));
         }
 
-        return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items);
+        // Same offset Order History/Reports already use to resolve "today" -
+        // the serial number reset boundary needs to be the shop's actual
+        // local midnight, not UTC midnight, or an order placed in the first
+        // few hours after local midnight gets numbered as part of the
+        // previous local day's sequence instead of the new one.
+        var offsetHours = await TimeZoneHelper.GetOffsetHoursAsync(settingsBusiness);
+        return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items, offsetHours);
     }
 
     // Single source of truth for "can a mobile order be placed right now" -
@@ -225,8 +231,8 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         var serialNumber = order.SerialNumber
             ?? throw new InvalidOperationException($"Order {order.OrderId} has no SerialNumber - cannot start a Paymob checkout for it.");
         var reference = isRetry
-            ? PaymobOrderReference.BuildRetry(order.Date, serialNumber)
-            : PaymobOrderReference.Build(order.Date, serialNumber);
+            ? PaymobOrderReference.BuildRetry(order.LocalOrderDate, serialNumber)
+            : PaymobOrderReference.Build(order.LocalOrderDate, serialNumber);
 
         var orderItems = await dataAccess.GetItemsWithNamesByOrderIdAsync(order.OrderId);
         // Per-unit price, not the line total - verified live against
@@ -304,8 +310,8 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         return cancelled;
     }
 
-    public Task<Order?> GetByDateAndSerialNumberAsync(DateTime orderDateUtc, int serialNumber) =>
-        dataAccess.GetByDateAndSerialNumberAsync(orderDateUtc, serialNumber);
+    public Task<Order?> GetByDateAndSerialNumberAsync(DateTime localOrderDate, int serialNumber) =>
+        dataAccess.GetByDateAndSerialNumberAsync(localOrderDate, serialNumber);
 
     public Task<Order?> GetByIdAsync(int id) =>
         dataAccess.GetByIdAsync(id);

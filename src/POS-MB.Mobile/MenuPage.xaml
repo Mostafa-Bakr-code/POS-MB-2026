@@ -5,58 +5,128 @@
              x:Class="POS_MB.Mobile.MenuPage"
              Title="Menu">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="16" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="20,16,20,16" RowSpacing="14">
 
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
             <Label
                 Grid.Column="0"
                 x:Name="WelcomeLabel"
-                FontSize="18"
+                FontSize="19"
                 FontAttributes="Bold"
-                VerticalOptions="Center" />
+                VerticalOptions="Center"
+                LineBreakMode="TailTruncation" />
             <Button
                 Grid.Column="1"
                 Text="Account"
                 Clicked="OnAccountClicked"
-                BackgroundColor="Transparent"
-                TextColor="{StaticResource Primary}" />
+                BackgroundColor="{StaticResource ChipInactive}"
+                TextColor="{StaticResource TextOnDark}"
+                FontSize="12"
+                CornerRadius="18"
+                Padding="12,8"
+                MinimumHeightRequest="36" />
             <Button
                 Grid.Column="2"
-                Text="My Orders"
+                Text="Orders"
                 Clicked="OnMyOrdersClicked"
-                BackgroundColor="Transparent"
-                TextColor="{StaticResource Primary}" />
+                BackgroundColor="{StaticResource ChipInactive}"
+                TextColor="{StaticResource TextOnDark}"
+                FontSize="12"
+                CornerRadius="18"
+                Padding="12,8"
+                MinimumHeightRequest="36" />
             <Button
                 Grid.Column="3"
                 Text="Log Out"
                 Clicked="OnLogoutClicked"
-                BackgroundColor="Transparent"
-                TextColor="Red" />
+                BackgroundColor="{StaticResource ChipInactive}"
+                TextColor="{StaticResource Coral}"
+                FontSize="12"
+                CornerRadius="18"
+                Padding="12,8"
+                MinimumHeightRequest="36" />
         </Grid>
 
         <Label
             Grid.Row="1"
             x:Name="NotAcceptingOrdersBanner"
             Text="Not accepting online orders right now - please check back later."
-            TextColor="White"
-            BackgroundColor="Crimson"
-            Padding="12,8"
+            TextColor="{StaticResource TextOnDark}"
+            BackgroundColor="{StaticResource CoralDeep}"
+            Padding="14,10"
             FontAttributes="Bold"
-            IsVisible="False" />
+            FontSize="13"
+            IsVisible="False">
+            <Label.Shadow>
+                <Shadow Brush="Black" Opacity="0.25" Radius="12" Offset="0,4" />
+            </Label.Shadow>
+        </Label>
 
         <CollectionView
             Grid.Row="2"
             x:Name="CategoriesView"
             SelectionMode="Single"
             SelectionChanged="OnCategorySelected"
-            HeightRequest="50">
+            HeightRequest="64">
             <CollectionView.ItemsLayout>
-                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="8" />
+                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="10" />
             </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:CategoryDto">
-                    <Frame Padding="14,8" CornerRadius="18" BackgroundColor="{StaticResource Primary}">
-                        <Label Text="{Binding CategoryName}" TextColor="White" />
+                    <Frame
+                        Padding="8,0,16,0"
+                        CornerRadius="28"
+                        HeightRequest="56"
+                        HasShadow="False"
+                        BackgroundColor="{StaticResource ChipInactive}"
+                        BorderColor="Transparent">
+                        <Frame.VisualStateManager.VisualStateGroups>
+                            <VisualStateGroupList>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="Selected">
+                                        <VisualState.Setters>
+                                            <Setter Property="BackgroundColor" Value="{StaticResource Yellow}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateGroupList>
+                        </Frame.VisualStateManager.VisualStateGroups>
+                        <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                            <Frame
+                                WidthRequest="42"
+                                HeightRequest="42"
+                                Padding="0"
+                                CornerRadius="21"
+                                HasShadow="False"
+                                BackgroundColor="Transparent"
+                                BorderColor="Transparent"
+                                IsClippedToBounds="True"
+                                VerticalOptions="Center"
+                                IsVisible="{Binding HasImage}">
+                                <Image Source="{Binding FullImageUrl}" Aspect="AspectFill" />
+                            </Frame>
+                            <Label
+                                Text="{Binding CategoryName}"
+                                TextColor="{StaticResource TextOnDark}"
+                                FontAttributes="Bold"
+                                FontSize="13"
+                                VerticalOptions="Center"
+                                VerticalTextAlignment="Center">
+                                <Label.VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroupList>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="Selected">
+                                                <VisualState.Setters>
+                                                    <Setter Property="TextColor" Value="{StaticResource TextOnCard}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateGroupList>
+                                </Label.VisualStateManager.VisualStateGroups>
+                            </Label>
+                        </HorizontalStackLayout>
                     </Frame>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
@@ -66,51 +136,99 @@
             <Label
                 x:Name="PlaceholderLabel"
                 Text="Pick a category above to see its items"
-                TextColor="Gray"
+                TextColor="{StaticResource TextOnDarkMuted}"
                 HorizontalOptions="Center"
                 VerticalOptions="Start"
                 Margin="0,30,0,0" />
 
             <RefreshView x:Name="ItemsRefreshView" Refreshing="OnRefreshing">
                 <CollectionView x:Name="ItemsView">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+                    </CollectionView.ItemsLayout>
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:ItemDto">
-                            <Grid Padding="0,10" ColumnDefinitions="*,Auto,Auto">
-                                <Label
-                                    Grid.Column="0"
-                                    Text="{Binding ItemName}"
-                                    FontSize="16"
-                                    VerticalOptions="Center"
-                                    TextColor="{Binding NameTextColor}" />
+                            <Frame
+                                Padding="10"
+                                CornerRadius="20"
+                                HasShadow="False"
+                                BackgroundColor="{StaticResource CardSurface}"
+                                BorderColor="Transparent">
+                                <Grid ColumnDefinitions="56,*,Auto" ColumnSpacing="12">
 
-                                <!-- Available: normal price + add button. -->
-                                <Label
-                                    Grid.Column="1"
-                                    Text="{Binding Price, StringFormat='{0:0.00}'}"
-                                    FontSize="16"
-                                    VerticalOptions="Center"
-                                    Margin="0,0,12,0"
-                                    IsVisible="{Binding IsAvailable}" />
-                                <Button
-                                    Grid.Column="2"
-                                    Text="+"
-                                    WidthRequest="44"
-                                    Clicked="OnAddToCartClicked"
-                                    IsVisible="{Binding IsAvailable}" />
+                                    <!-- Real photo when the item has one; falls back to an
+                                         initial-letter "avatar" otherwise - reads far
+                                         better than an empty box for items nobody's
+                                         uploaded a picture for yet. -->
+                                    <Frame
+                                        Grid.Column="0"
+                                        WidthRequest="56"
+                                        HeightRequest="56"
+                                        Padding="0"
+                                        CornerRadius="16"
+                                        HasShadow="False"
+                                        BackgroundColor="#FFE7EE"
+                                        BorderColor="Transparent"
+                                        IsClippedToBounds="True"
+                                        VerticalOptions="Center">
+                                        <Grid>
+                                            <Image
+                                                Source="{Binding FullImageUrl}"
+                                                Aspect="AspectFill"
+                                                IsVisible="{Binding HasImage}" />
+                                            <Label
+                                                Text="{Binding ItemName, Converter={StaticResource FirstLetterConverter}}"
+                                                TextColor="{StaticResource Coral}"
+                                                FontAttributes="Bold"
+                                                FontSize="20"
+                                                HorizontalOptions="Center"
+                                                VerticalOptions="Center"
+                                                IsVisible="{Binding HasNoImage}" />
+                                        </Grid>
+                                    </Frame>
 
-                                <!-- Unavailable: stays on the menu (so a student knows
-                                     it exists) instead of disappearing, but can't be
-                                     added to the cart. -->
-                                <Label
-                                    Grid.Column="1"
-                                    Grid.ColumnSpan="2"
-                                    Text="Currently Unavailable"
-                                    FontSize="13"
-                                    TextColor="Gray"
-                                    VerticalOptions="Center"
-                                    HorizontalOptions="End"
-                                    IsVisible="{Binding IsUnavailable}" />
-                            </Grid>
+                                    <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                        <Label
+                                            Text="{Binding ItemName}"
+                                            TextColor="{Binding NameTextColor}"
+                                            FontAttributes="Bold"
+                                            FontSize="15" />
+                                        <Label
+                                            Text="{Binding Description}"
+                                            TextColor="{StaticResource TextOnCardMuted}"
+                                            FontSize="12"
+                                            LineBreakMode="TailTruncation"
+                                            MaxLines="2"
+                                            IsVisible="{Binding HasDescription}" />
+                                        <Label
+                                            Text="Currently Unavailable"
+                                            TextColor="{StaticResource TextOnCardMuted}"
+                                            FontSize="12"
+                                            IsVisible="{Binding IsUnavailable}" />
+                                        <Label
+                                            Text="{Binding Price, StringFormat='EGP {0:0.00}'}"
+                                            TextColor="{StaticResource Coral}"
+                                            FontAttributes="Bold"
+                                            FontSize="13"
+                                            IsVisible="{Binding IsAvailable}" />
+                                    </VerticalStackLayout>
+
+                                    <Button
+                                        Grid.Column="2"
+                                        Text="+"
+                                        WidthRequest="38"
+                                        HeightRequest="38"
+                                        Padding="0"
+                                        CornerRadius="12"
+                                        FontSize="18"
+                                        FontAttributes="Bold"
+                                        BackgroundColor="{StaticResource TextOnCard}"
+                                        TextColor="{StaticResource Yellow}"
+                                        VerticalOptions="Center"
+                                        Clicked="OnAddToCartClicked"
+                                        IsVisible="{Binding IsAvailable}" />
+                                </Grid>
+                            </Frame>
                         </DataTemplate>
                     </CollectionView.ItemTemplate>
                 </CollectionView>
@@ -121,7 +239,9 @@
             Grid.Row="4"
             x:Name="CartButton"
             Clicked="OnCartClicked"
-            IsEnabled="False" />
+            IsEnabled="False"
+            HeightRequest="54"
+            FontSize="16" />
 
     </Grid>
 

@@ -6,7 +6,15 @@ namespace POS_MB.DataAccess;
 
 public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
 {
-    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items)
+    // offsetHours: the same TimeZoneOffsetHours setting Order History/Reports
+    // already use to turn a UTC instant into "which local calendar day was
+    // this" - found live: without this, the serial number reset boundary was
+    // UTC midnight instead of the shop's actual local midnight, so an order
+    // placed in the first few hours after local midnight got silently
+    // numbered as part of the *previous* local day's sequence - e.g. orders
+    // #10/#11 at 2 AM local time, followed by #1 at 10 PM the same local
+    // day, because #10/#11 were still "yesterday" in UTC terms.
+    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items, decimal offsetHours = 0)
     {
         if (items.Count == 0)
             throw new ArgumentException("An order must have at least one item.", nameof(items));
@@ -18,15 +26,23 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
         try
         {
             var date = DateTime.UtcNow;
+            // MINUTE, not HOUR - DATEADD's HOUR unit only accepts a whole
+            // number, and while every real-world offset used here is a
+            // whole number of hours, minutes is the safer unit to shift by.
+            var offsetMinutes = (int)(offsetHours * 60);
+            var localOrderDate = date.AddMinutes(offsetMinutes).Date;
 
-            // Locks the (OrderDate) key range for today until commit, so two concurrent
+            // Locks the local-day key range until commit, so two concurrent
             // orders can never read the same MAX(SerialNumber) and collide.
+            // Compares against the stored LocalOrderDate column directly
+            // (not OrderDate, which reflects the UTC day, not the shop's
+            // local one) - see UQ_Orders_Date_SerialNumber.
             const string serialQuery = @"
                 SELECT ISNULL(MAX(SerialNumber), 0) + 1
                 FROM Orders WITH (UPDLOCK, HOLDLOCK)
-                WHERE OrderDate = CAST(@Date AS DATE)";
+                WHERE LocalOrderDate = @LocalOrderDate";
             var serialNumber = await connection.ExecuteScalarAsync<int>(
-                serialQuery, new { Date = date }, transaction);
+                serialQuery, new { LocalOrderDate = localOrderDate }, transaction);
 
             // IsActive/IsAvailable are checked here, not just relied on client-side -
             // the menu only ever shows available items, but there's a real gap
@@ -67,14 +83,15 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             var initialStatus = orderSource == OrderSource.Cashier ? OrderStatus.Completed : OrderStatus.Placed;
 
             const string insertOrderQuery = @"
-                INSERT INTO Orders (Date, Total, SerialNumber, UserId, StudentId, OrderSource, Status, IsComplimentary)
+                INSERT INTO Orders (Date, Total, SerialNumber, LocalOrderDate, UserId, StudentId, OrderSource, Status, IsComplimentary)
                 OUTPUT INSERTED.OrderId
-                VALUES (@Date, @Total, @SerialNumber, @UserId, @StudentId, @OrderSource, @Status, @IsComplimentary);";
+                VALUES (@Date, @Total, @SerialNumber, @LocalOrderDate, @UserId, @StudentId, @OrderSource, @Status, @IsComplimentary);";
             var orderId = await connection.ExecuteScalarAsync<int>(insertOrderQuery, new
             {
                 Date = date,
                 Total = total,
                 SerialNumber = serialNumber,
+                LocalOrderDate = localOrderDate,
                 UserId = userId,
                 StudentId = studentId,
                 OrderSource = orderSource,
@@ -125,17 +142,17 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     }
 
     // Resolves a Paymob webhook's order reference (see PaymobOrderReference)
-    // back to a real order - OrderDate is the same persisted computed column
-    // (CAST(Date AS DATE)) that already enforces SerialNumber's uniqueness
-    // per day, so this is exactly as reliable a lookup as OrderId itself.
-    public async Task<Order?> GetByDateAndSerialNumberAsync(DateTime orderDateUtc, int serialNumber)
+    // back to a real order - LocalOrderDate is the same stored column that
+    // already enforces SerialNumber's uniqueness per (local) day, so this is
+    // exactly as reliable a lookup as OrderId itself.
+    public async Task<Order?> GetByDateAndSerialNumberAsync(DateTime localOrderDate, int serialNumber)
     {
         using var connection = connectionFactory.CreateConnection();
 
-        const string query = "SELECT * FROM Orders WHERE OrderDate = @OrderDate AND SerialNumber = @SerialNumber";
+        const string query = "SELECT * FROM Orders WHERE LocalOrderDate = @LocalOrderDate AND SerialNumber = @SerialNumber";
 
         return await connection.QuerySingleOrDefaultAsync<Order>(
-            query, new { OrderDate = orderDateUtc.Date, SerialNumber = serialNumber });
+            query, new { LocalOrderDate = localOrderDate.Date, SerialNumber = serialNumber });
     }
 
     public async Task<IEnumerable<OrderItem>> GetItemsByOrderIdAsync(int orderId)

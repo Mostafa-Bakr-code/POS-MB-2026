@@ -239,9 +239,16 @@ else
     // plain text - HttpsRedirection alone still lets that one first request
     // go out unencrypted before the redirect happens.
     app.UseHsts();
-}
 
-app.UseHttpsRedirection();
+    // Also scoped to non-Development - real mobile devices (Android/iOS) are
+    // deliberately configured to talk to the Development server over plain
+    // HTTP during local testing (see ApiConfig.BaseUrl comments), since they
+    // don't trust this PC's self-signed dev certificate. Redirecting them to
+    // HTTPS here would just send them to a port nothing's actually reachable
+    // on from their side (found live: requests silently timed out chasing
+    // the HTTPS redirect instead of ever reaching a real error).
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("Default");
 

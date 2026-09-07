@@ -10,13 +10,13 @@
         <ToolbarItem Text="Home" Clicked="OnHomeClicked" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="Auto,*" Padding="16" RowSpacing="12">
+    <Grid RowDefinitions="Auto,*" Padding="20,14,20,14" RowSpacing="12">
 
         <Label
             Grid.Row="0"
             x:Name="PlaceholderLabel"
             Text="No orders yet"
-            TextColor="Gray"
+            TextColor="{StaticResource TextOnDarkMuted}"
             HorizontalOptions="Center"
             IsVisible="False" />
 
@@ -27,21 +27,23 @@
                         <Label
                             Text="{Binding Label}"
                             FontAttributes="Bold"
-                            FontSize="15"
-                            TextColor="White"
-                            BackgroundColor="{StaticResource Primary}"
-                            Padding="12,6"
-                            Margin="0,8,0,0" />
+                            FontSize="13"
+                            TextColor="{StaticResource Yellow}"
+                            Padding="4,10,4,4" />
                     </DataTemplate>
                 </CollectionView.GroupHeaderTemplate>
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:OrderSummaryDto">
-                        <Grid Padding="0,12" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="12">
-                            <Label Grid.Column="0" Text="{Binding SerialNumber, StringFormat='#{0}'}" FontAttributes="Bold" VerticalOptions="Center" />
-                            <Label Grid.Column="1" Text="{Binding Date, StringFormat='{0:HH:mm}'}" VerticalOptions="Center" />
-                            <Label Grid.Column="2" Text="{Binding Status}" VerticalOptions="Center" />
-                            <Label Grid.Column="3" Text="{Binding Total, StringFormat='{0:0.00}'}" VerticalOptions="Center" />
-                        </Grid>
+                        <Frame Padding="14,12" Margin="0,0,0,10" CornerRadius="16" HasShadow="False" BackgroundColor="{StaticResource CardSurface}" BorderColor="Transparent">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                <Label Grid.Column="0" Text="{Binding SerialNumber, StringFormat='#{0}'}" TextColor="{StaticResource TextOnCard}" FontAttributes="Bold" VerticalOptions="Center" />
+                                <Label Grid.Column="1" Text="{Binding Date, StringFormat='{0:HH:mm}'}" TextColor="{StaticResource TextOnCardMuted}" VerticalOptions="Center" />
+                                <Frame Grid.Column="2" Padding="8,3" CornerRadius="10" HasShadow="False" BackgroundColor="#FFF3D6" BorderColor="Transparent" VerticalOptions="Center">
+                                    <Label Text="{Binding Status}" TextColor="{StaticResource TextOnCard}" FontSize="11" FontAttributes="Bold" />
+                                </Frame>
+                                <Label Grid.Column="3" Text="{Binding Total, StringFormat='{0:0.00}'}" TextColor="{StaticResource Coral}" FontAttributes="Bold" VerticalOptions="Center" />
+                            </Grid>
+                        </Frame>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>

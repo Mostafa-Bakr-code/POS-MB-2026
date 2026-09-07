@@ -6,6 +6,13 @@ public class Order
     public DateTime Date { get; set; }
     public decimal Total { get; set; }
     public int? SerialNumber { get; set; }
+
+    // The shop's LOCAL calendar day at creation time (TimeZoneOffsetHours-
+    // shifted) - stamped explicitly in C# rather than SQL-computed, since the
+    // offset is a runtime Settings value. Backs SerialNumber's daily
+    // uniqueness and the Paymob-facing order reference; see
+    // UQ_Orders_Date_SerialNumber and PaymobOrderReference.
+    public DateTime LocalOrderDate { get; set; }
     public int? UserId { get; set; }
     public int? StudentId { get; set; }
 

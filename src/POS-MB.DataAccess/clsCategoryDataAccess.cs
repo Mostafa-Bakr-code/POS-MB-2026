@@ -70,6 +70,21 @@ public class clsCategoryDataAccess(ISqlConnectionFactory connectionFactory)
         return rowsAffected > 0;
     }
 
+    public async Task<bool> SetImageUrlAsync(int id, string? imageUrl)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Categories
+            SET ImageUrl = @ImageUrl,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE CategoryId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, ImageUrl = imageUrl });
+
+        return rowsAffected > 0;
+    }
+
     public async Task<bool> DeactivateAsync(int id)
     {
         using var connection = connectionFactory.CreateConnection();

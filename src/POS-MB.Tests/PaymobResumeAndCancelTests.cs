@@ -350,7 +350,7 @@ public class PaymobResumeAndCancelTests : DatabaseTestBase
         var (orderId, _) = await CreateAwaitingPaymentOrderAsync();
         var order = await OrderBusiness.GetByIdAsync(orderId);
 
-        var resolved = await OrderBusiness.GetByDateAndSerialNumberAsync(order!.Date, order.SerialNumber!.Value);
+        var resolved = await OrderBusiness.GetByDateAndSerialNumberAsync(order!.LocalOrderDate, order.SerialNumber!.Value);
 
         Assert.NotNull(resolved);
         Assert.Equal(orderId, resolved!.OrderId);

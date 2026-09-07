@@ -9,23 +9,81 @@
         <ToolbarItem Text="Home" Clicked="OnHomeClicked" />
     </ContentPage.ToolbarItems>
 
-    <Grid RowDefinitions="*,Auto,Auto,Auto,Auto" Padding="16" RowSpacing="12">
+    <Grid RowDefinitions="*,Auto,Auto,Auto,Auto" Padding="20,16,20,16" RowSpacing="14">
 
         <CollectionView Grid.Row="0" x:Name="CartView">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="12" />
+            </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="session:CartLine">
-                    <VerticalStackLayout Spacing="2" Padding="0,10">
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                            <Label Grid.Column="0" Text="{Binding ItemName}" FontSize="16" VerticalOptions="Center" />
-                            <Label Grid.Column="1" Text="{Binding Subtotal, StringFormat='{0:0.00}'}" FontSize="16" VerticalOptions="Center" Margin="0,0,12,0" />
-                            <Button Grid.Column="2" Text="+1" WidthRequest="44" Clicked="OnAddAnotherClicked" />
-                            <Button Grid.Column="3" Text="Remove" Clicked="OnRemoveClicked" BackgroundColor="Transparent" TextColor="Red" />
+                    <Frame
+                        Padding="14,12"
+                        CornerRadius="18"
+                        HasShadow="False"
+                        BackgroundColor="{StaticResource CardSurface}"
+                        BorderColor="Transparent">
+                        <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
+                            <Frame
+                                Grid.Column="0"
+                                WidthRequest="48"
+                                HeightRequest="48"
+                                Padding="0"
+                                CornerRadius="14"
+                                HasShadow="False"
+                                BackgroundColor="#FFE7EE"
+                                BorderColor="Transparent"
+                                IsClippedToBounds="True"
+                                VerticalOptions="Center">
+                                <Grid>
+                                    <Image
+                                        Source="{Binding FullImageUrl}"
+                                        Aspect="AspectFill"
+                                        IsVisible="{Binding HasImage}" />
+                                    <Label
+                                        Text="{Binding ItemName, Converter={StaticResource FirstLetterConverter}}"
+                                        TextColor="{StaticResource Coral}"
+                                        FontAttributes="Bold"
+                                        FontSize="17"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center"
+                                        IsVisible="{Binding HasNoImage}" />
+                                </Grid>
+                            </Frame>
+                            <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                    <Label Grid.Column="0" Text="{Binding ItemName}" TextColor="{StaticResource TextOnCard}" FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                                    <Label Grid.Column="1" Text="{Binding Subtotal, StringFormat='{0:0.00}'}" TextColor="{StaticResource Coral}" FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                                    <Button
+                                        Grid.Column="2"
+                                        Text="+1"
+                                        WidthRequest="36"
+                                        HeightRequest="32"
+                                        Padding="0"
+                                        FontSize="12"
+                                        CornerRadius="10"
+                                        BackgroundColor="{StaticResource TextOnCard}"
+                                        TextColor="{StaticResource Yellow}"
+                                        Clicked="OnAddAnotherClicked" />
+                                    <Button
+                                        Grid.Column="3"
+                                        Text="✕"
+                                        WidthRequest="32"
+                                        HeightRequest="32"
+                                        Padding="0"
+                                        FontSize="12"
+                                        CornerRadius="10"
+                                        BackgroundColor="#FFE7EE"
+                                        TextColor="{StaticResource Coral}"
+                                        Clicked="OnRemoveClicked" />
+                                </Grid>
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Label Grid.Column="0" Text="{Binding DisplayComment}" TextColor="{Binding CommentTextColor}" FontSize="12.5" VerticalOptions="Center" />
+                                    <Button Grid.Column="1" Text="{Binding CommentButtonText}" Clicked="OnCommentClicked" BackgroundColor="Transparent" TextColor="{StaticResource Coral}" FontSize="12.5" Padding="0" MinimumHeightRequest="0" />
+                                </Grid>
+                            </VerticalStackLayout>
                         </Grid>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <Label Grid.Column="0" Text="{Binding DisplayComment}" TextColor="{Binding CommentTextColor}" FontSize="13" VerticalOptions="Center" />
-                            <Button Grid.Column="1" Text="{Binding CommentButtonText}" Clicked="OnCommentClicked" BackgroundColor="Transparent" TextColor="{StaticResource Primary}" FontSize="13" />
-                        </Grid>
-                    </VerticalStackLayout>
+                    </Frame>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
@@ -33,33 +91,41 @@
         <Label
             Grid.Row="1"
             x:Name="TotalLabel"
-            FontSize="18"
+            FontSize="19"
             FontAttributes="Bold"
             HorizontalOptions="End" />
 
-        <Grid
+        <Frame
             Grid.Row="2"
             x:Name="SavedCardLayout"
-            ColumnDefinitions="Auto,*"
+            Padding="14,10"
+            CornerRadius="14"
+            HasShadow="False"
+            BackgroundColor="{StaticResource ChipInactive}"
+            BorderColor="Transparent"
             IsVisible="False">
-            <CheckBox Grid.Column="0" x:Name="SavedCardCheckBox" />
-            <Label
-                Grid.Column="1"
-                x:Name="SavedCardLabel"
-                VerticalOptions="Center" />
-        </Grid>
+            <Grid ColumnDefinitions="Auto,*">
+                <CheckBox Grid.Column="0" x:Name="SavedCardCheckBox" />
+                <Label
+                    Grid.Column="1"
+                    x:Name="SavedCardLabel"
+                    VerticalOptions="Center" />
+            </Grid>
+        </Frame>
 
         <Label
             Grid.Row="3"
             x:Name="ErrorLabel"
-            TextColor="Red"
+            TextColor="{StaticResource ErrorRed}"
             IsVisible="False" />
 
         <Button
             Grid.Row="4"
             x:Name="PlaceOrderButton"
             Text="Place Order"
-            Clicked="OnPlaceOrderClicked" />
+            Clicked="OnPlaceOrderClicked"
+            HeightRequest="54"
+            FontSize="16" />
 
     </Grid>
 

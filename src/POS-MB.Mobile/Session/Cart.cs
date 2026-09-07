@@ -10,6 +10,7 @@ public class CartLine
     public decimal Price { get; set; }
     public int Quantity { get; set; }
     public string? Comment { get; set; }
+    public string? ImageUrl { get; set; }
     public decimal Subtotal => Price * Quantity;
 
     // Display-only helpers so CartPage's DataTemplate can bind directly,
@@ -18,6 +19,12 @@ public class CartLine
     public string DisplayComment => string.IsNullOrWhiteSpace(Comment) ? "No comment" : Comment;
     public Color CommentTextColor => string.IsNullOrWhiteSpace(Comment) ? Colors.Gray : Colors.Black;
     public string CommentButtonText => string.IsNullOrWhiteSpace(Comment) ? "Add Comment" : "Edit Comment";
+
+    // Same resolution as ItemDto.FullImageUrl - the API only ever
+    // stores/returns a relative path.
+    public bool HasImage => ImageUrl is not null;
+    public bool HasNoImage => ImageUrl is null;
+    public string? FullImageUrl => ImageUrl is null ? null : $"{Api.ApiConfig.BaseUrl.TrimEnd('/')}{ImageUrl}";
 }
 
 // In-memory only, same as AppSession - lost if the app closes, which is fine
@@ -39,7 +46,7 @@ public static class Cart
     public static void Add(ItemDto item)
     {
         var lastIndex = Lines.FindLastIndex(l => l.ItemId == item.ItemId);
-        var newLine = new CartLine { ItemId = item.ItemId, ItemName = item.ItemName, Price = item.Price, Quantity = 1 };
+        var newLine = new CartLine { ItemId = item.ItemId, ItemName = item.ItemName, Price = item.Price, Quantity = 1, ImageUrl = item.ImageUrl };
 
         if (lastIndex >= 0)
             Lines.Insert(lastIndex + 1, newLine);
@@ -55,7 +62,7 @@ public static class Cart
     public static void AddAnother(CartLine existing)
     {
         var index = Lines.IndexOf(existing);
-        Lines.Insert(index + 1, new CartLine { ItemId = existing.ItemId, ItemName = existing.ItemName, Price = existing.Price, Quantity = 1 });
+        Lines.Insert(index + 1, new CartLine { ItemId = existing.ItemId, ItemName = existing.ItemName, Price = existing.Price, Quantity = 1, ImageUrl = existing.ImageUrl });
     }
 
     public static void Remove(CartLine line) => Lines.Remove(line);

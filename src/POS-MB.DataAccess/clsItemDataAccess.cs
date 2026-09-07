@@ -35,20 +35,20 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.ExecuteScalarAsync<int>(query, new { Id = id }) > 0;
     }
 
-    public async Task<int> AddAsync(string name, int categoryId, decimal price, decimal taxRate)
+    public async Task<int> AddAsync(string name, int categoryId, decimal price, decimal taxRate, string? description = null)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
-            INSERT INTO Items (ItemName, CategoryId, Price, TaxRate)
+            INSERT INTO Items (ItemName, CategoryId, Price, TaxRate, Description)
             OUTPUT INSERTED.ItemId
-            VALUES (@Name, @CategoryId, @Price, @TaxRate);";
+            VALUES (@Name, @CategoryId, @Price, @TaxRate, @Description);";
 
         return await connection.ExecuteScalarAsync<int>(
-            query, new { Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate });
+            query, new { Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate, Description = description });
     }
 
-    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal taxRate)
+    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal taxRate, string? description = null)
     {
         using var connection = connectionFactory.CreateConnection();
 
@@ -58,11 +58,12 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
                 CategoryId = @CategoryId,
                 Price = @Price,
                 TaxRate = @TaxRate,
+                Description = @Description,
                 UpdatedAt = SYSUTCDATETIME()
             WHERE ItemId = @Id";
 
         var rowsAffected = await connection.ExecuteAsync(
-            query, new { Id = id, Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate });
+            query, new { Id = id, Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate, Description = description });
 
         return rowsAffected > 0;
     }
@@ -108,6 +109,21 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
             WHERE ItemId = @Id";
 
         var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, IsAvailable = isAvailable });
+
+        return rowsAffected > 0;
+    }
+
+    public async Task<bool> SetImageUrlAsync(int id, string? imageUrl)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        const string query = @"
+            UPDATE Items
+            SET ImageUrl = @ImageUrl,
+                UpdatedAt = SYSUTCDATETIME()
+            WHERE ItemId = @Id";
+
+        var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, ImageUrl = imageUrl });
 
         return rowsAffected > 0;
     }

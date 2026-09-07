@@ -9,6 +9,15 @@ public class Item
     public decimal TaxRate { get; set; }
     public bool IsActive { get; set; }
     public bool IsAvailable { get; set; }
+
+    // Relative path under wwwroot (e.g. "/item-images/12.jpg?v=...") - set via
+    // POST /api/items/{id}/image. Null means no photo has been uploaded yet.
+    public string? ImageUrl { get; set; }
+
+    // Optional menu blurb ("grilled chicken, garlic sauce, pickles") - purely
+    // display metadata, unrelated to OrderItem.Comment (a per-order customer
+    // note like "no onions").
+    public string? Description { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

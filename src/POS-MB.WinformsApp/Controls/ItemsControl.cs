@@ -196,10 +196,15 @@ public class ItemsControl : UserControl
 
         if (columnName == "Edit")
         {
-            using var dialog = new FormItemEditDialog("Edit Item", CategoryOptionsFor(item.CategoryId), item.ItemName, item.CategoryId, item.Price);
+            var previewUrl = item.ImageUrl is not null ? _apiClient.ResolveImageUrl(item.ImageUrl) : null;
+            using var dialog = new FormItemEditDialog("Edit Item", CategoryOptionsFor(item.CategoryId), item.ItemName, item.CategoryId, item.Price, previewUrl, item.Description);
             if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
             {
-                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price);
+                await _apiClient.UpdateItemAsync(item.ItemId, dialog.ItemName, dialog.CategoryId, dialog.Price, dialog.Description);
+                if (dialog.SelectedImagePath is not null)
+                    await _apiClient.UploadItemImageAsync(item.ItemId, dialog.SelectedImagePath);
+                else if (dialog.RemoveImageRequested)
+                    await _apiClient.RemoveItemImageAsync(item.ItemId);
                 await LoadAsync();
             }
         }
@@ -246,7 +251,9 @@ public class ItemsControl : UserControl
         using var dialog = new FormItemEditDialog("Add Item", activeCategories);
         if (dialog.ShowDialog(this) == DialogResult.OK && dialog.IsValid)
         {
-            await _apiClient.CreateItemAsync(dialog.ItemName, dialog.CategoryId, dialog.Price);
+            var itemId = await _apiClient.CreateItemAsync(dialog.ItemName, dialog.CategoryId, dialog.Price, dialog.Description);
+            if (dialog.SelectedImagePath is not null)
+                await _apiClient.UploadItemImageAsync(itemId, dialog.SelectedImagePath);
             await LoadAsync();
         }
     }

@@ -255,9 +255,11 @@ public class ApiClient
         {
             response = await _httpClient.PostAsJsonAsync(path, new { Email = email, Password = password });
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return (null, "Could not reach the server. Check your connection and try again.");
+            // TEMPORARY diagnostic - shows the real exception instead of the
+            // generic message, to find out what's actually failing on iOS.
+            return (null, $"[DEBUG] {ex.GetType().Name}: {ex.Message} | Inner: {ex.InnerException?.Message ?? "none"}");
         }
 
         if (response.IsSuccessStatusCode)
