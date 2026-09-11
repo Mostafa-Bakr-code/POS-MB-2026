@@ -102,7 +102,12 @@ public class FormLogIn : Form
                 : 0m;
 
             var main = new FormMain();
-            main.FormClosed += (_, _) => Close();
+            // Only ends the application (by closing this original form, which
+            // owns Application.Run's message loop - see Program.cs) when
+            // FormMain closed because the user is genuinely exiting, not on a
+            // plain logout - that path already shows a fresh FormLogIn of its
+            // own, so the app should keep running.
+            main.FormClosed += (_, _) => { if (main.IsExitingApplication) Close(); };
             main.Show();
             Hide();
         }

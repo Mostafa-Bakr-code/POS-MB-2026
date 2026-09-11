@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Data.SqlClient;
 using POS_MB.DataAccess.Models;
 
 namespace POS_MB.DataAccess;
@@ -48,24 +49,63 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
             query, new { Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate, Description = description });
     }
 
-    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal taxRate, string? description = null)
+    // Wraps the Items UPDATE and the (conditional) ItemPriceHistory insert in
+    // one transaction - found live: these previously ran on two separate
+    // connections with no shared transaction, so a transient failure between
+    // them (a dropped connection, a pool reset) could leave the price/tax
+    // rate changed with no matching audit row. GET .../price-history is open
+    // to every authenticated user specifically as that audit trail, so a
+    // silently missing entry there is unrecoverable. oldPrice/oldTaxRate are
+    // null when the caller has nothing to compare against (never happens in
+    // practice - clsItemBusiness always has the existing row - but keeps this
+    // method safely callable without a price-history side effect if that
+    // ever changes).
+    public async Task<bool> UpdateAsync(int id, string name, int categoryId, decimal price, decimal taxRate, string? description, decimal? oldPrice, decimal? oldTaxRate, int? changedByUserId)
     {
-        using var connection = connectionFactory.CreateConnection();
+        using var connection = (SqlConnection)connectionFactory.CreateConnection();
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
 
-        const string query = @"
-            UPDATE Items
-            SET ItemName = @Name,
-                CategoryId = @CategoryId,
-                Price = @Price,
-                TaxRate = @TaxRate,
-                Description = @Description,
-                UpdatedAt = SYSUTCDATETIME()
-            WHERE ItemId = @Id";
+        try
+        {
+            const string updateQuery = @"
+                UPDATE Items
+                SET ItemName = @Name,
+                    CategoryId = @CategoryId,
+                    Price = @Price,
+                    TaxRate = @TaxRate,
+                    Description = @Description,
+                    UpdatedAt = SYSUTCDATETIME()
+                WHERE ItemId = @Id";
 
-        var rowsAffected = await connection.ExecuteAsync(
-            query, new { Id = id, Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate, Description = description });
+            var rowsAffected = await connection.ExecuteAsync(
+                updateQuery, new { Id = id, Name = name, CategoryId = categoryId, Price = price, TaxRate = taxRate, Description = description }, transaction);
 
-        return rowsAffected > 0;
+            if (rowsAffected > 0 && oldPrice is not null && oldTaxRate is not null && (oldPrice != price || oldTaxRate != taxRate))
+            {
+                const string historyQuery = @"
+                    INSERT INTO ItemPriceHistory (ItemId, OldPrice, NewPrice, OldTaxRate, NewTaxRate, ChangedByUserId)
+                    VALUES (@ItemId, @OldPrice, @NewPrice, @OldTaxRate, @NewTaxRate, @ChangedByUserId);";
+
+                await connection.ExecuteAsync(historyQuery, new
+                {
+                    ItemId = id,
+                    OldPrice = oldPrice,
+                    NewPrice = price,
+                    OldTaxRate = oldTaxRate,
+                    NewTaxRate = taxRate,
+                    ChangedByUserId = changedByUserId
+                }, transaction);
+            }
+
+            transaction.Commit();
+            return rowsAffected > 0;
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 
     public async Task<bool> DeactivateAsync(int id)
@@ -126,25 +166,6 @@ public class clsItemDataAccess(ISqlConnectionFactory connectionFactory)
         var rowsAffected = await connection.ExecuteAsync(query, new { Id = id, ImageUrl = imageUrl });
 
         return rowsAffected > 0;
-    }
-
-    public async Task LogPriceChangeAsync(int itemId, decimal oldPrice, decimal newPrice, decimal oldTaxRate, decimal newTaxRate, int? changedByUserId)
-    {
-        using var connection = connectionFactory.CreateConnection();
-
-        const string query = @"
-            INSERT INTO ItemPriceHistory (ItemId, OldPrice, NewPrice, OldTaxRate, NewTaxRate, ChangedByUserId)
-            VALUES (@ItemId, @OldPrice, @NewPrice, @OldTaxRate, @NewTaxRate, @ChangedByUserId);";
-
-        await connection.ExecuteAsync(query, new
-        {
-            ItemId = itemId,
-            OldPrice = oldPrice,
-            NewPrice = newPrice,
-            OldTaxRate = oldTaxRate,
-            NewTaxRate = newTaxRate,
-            ChangedByUserId = changedByUserId
-        });
     }
 
     public async Task<IEnumerable<ItemPriceHistory>> GetPriceHistoryAsync(int itemId)

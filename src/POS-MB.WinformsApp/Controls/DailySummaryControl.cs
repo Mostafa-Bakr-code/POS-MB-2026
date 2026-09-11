@@ -1,4 +1,5 @@
 using POS_MB.WinformsApp.Api;
+using POS_MB.WinformsApp.Session;
 
 namespace POS_MB.WinformsApp.Controls;
 
@@ -20,7 +21,7 @@ public class DailySummaryControl : UserControl
 
         _lblDate = new Label
         {
-            Text = $"Today: {DateTime.Today:yyyy-MM-dd}",
+            Text = $"Today: {AppSession.LocalToday:yyyy-MM-dd}",
             AutoSize = true,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             Margin = new Padding(0, 10, 20, 0)
@@ -60,7 +61,7 @@ public class DailySummaryControl : UserControl
 
     private async Task LoadAsync()
     {
-        var today = DateTime.Today;
+        var today = AppSession.LocalToday;
         var summary = await _apiClient.GetSalesSummaryAsync(today, today);
 
         _grid.Rows.Clear();
@@ -89,7 +90,7 @@ public class DailySummaryControl : UserControl
 
     private async Task ExportAsync()
     {
-        var today = DateTime.Today;
+        var today = AppSession.LocalToday;
         try
         {
             var bytes = await _apiClient.DownloadReportExcelAsync("sales-summary", today, today);

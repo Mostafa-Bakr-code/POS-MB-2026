@@ -76,6 +76,14 @@ public class OrdersController(clsOrderBusiness orderBusiness, ILogger<OrdersCont
     [RequirePermission(Permission.Orders)]
     public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateOrderStatusRequest request)
     {
+        // Cancelling must go through POST .../cancel instead - that's the only
+        // path that records who cancelled it and logs the action. Allowing
+        // Cancelled here too would let anyone with just the Orders permission
+        // (needed for normal order-taking) void a paid order with no audit
+        // trail at all - exactly what that logging exists to catch.
+        if (request.Status == OrderStatus.Cancelled)
+            return BadRequest("Use POST /api/orders/{id}/cancel to cancel an order.");
+
         var updated = await orderBusiness.UpdateStatusAsync(id, request.Status);
         return updated ? NoContent() : NotFound();
     }

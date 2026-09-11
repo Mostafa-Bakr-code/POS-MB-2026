@@ -368,7 +368,26 @@ public class OrderTakingControl : UserControl
     // already placed and the cart already cleared by the time this runs; a
     // printer being offline/out of paper should never block or interrupt the
     // next order, just quietly surface which ticket didn't go out.
+    // Wrapped in a top-level try/catch because this whole method runs
+    // fire-and-forget (see the caller above) - anything thrown before the
+    // first real await (a corrupted printer-settings.json, a disposed
+    // preview dialog) would otherwise be swallowed into a Task nobody
+    // observes, silently skipping the kitchen ticket with no error shown at
+    // all instead of the clear failure status every other print problem here
+    // already surfaces via ShowStatus.
     private async Task PrintOrderAsync(ReceiptOrder order)
+    {
+        try
+        {
+            await PrintOrderCoreAsync(order);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Print failed: {ex.Message}", success: false);
+        }
+    }
+
+    private async Task PrintOrderCoreAsync(ReceiptOrder order)
     {
         var settings = PrinterSettings.Load();
 

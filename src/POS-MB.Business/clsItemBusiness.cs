@@ -37,19 +37,20 @@ public class clsItemBusiness(clsItemDataAccess dataAccess, clsSettingsBusiness s
         if (price < 0)
             throw new ArgumentException("Price cannot be negative.", nameof(price));
 
-        var resolvedTaxRate = taxRate ?? await GetDefaultTaxRateAsync();
-
         var existing = await dataAccess.GetByIdAsync(id);
         if (existing is null) return false;
 
-        var updated = await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate, description);
+        // Unlike CreateAsync (a genuinely new item with no rate to preserve),
+        // "not specified" here must mean "keep this item's own current rate",
+        // not "use the shop default" - found live: the WinForms edit dialog
+        // doesn't expose a tax-rate field at all, so every plain name/price
+        // edit was silently resetting any item with a non-default rate (e.g.
+        // a 0%-rated item) back to the default.
+        var resolvedTaxRate = taxRate ?? existing.TaxRate;
 
-        if (updated && (existing.Price != price || existing.TaxRate != resolvedTaxRate))
-        {
-            await dataAccess.LogPriceChangeAsync(id, existing.Price, price, existing.TaxRate, resolvedTaxRate, changedByUserId);
-        }
-
-        return updated;
+        // The price-history insert happens inside dataAccess.UpdateAsync itself,
+        // in the same transaction as the UPDATE - see its comment for why.
+        return await dataAccess.UpdateAsync(id, name, categoryId, price, resolvedTaxRate, description, existing.Price, existing.TaxRate, changedByUserId);
     }
 
     public Task<bool> DeactivateAsync(int id) =>

@@ -21,6 +21,15 @@ public class FormMain : Form
     // OrderStatusControl once a browser-only client could also accept orders.
     private static readonly TimeSpan KitchenTicketPollInterval = TimeSpan.FromSeconds(5);
 
+    // Lets FormLogIn's FormClosed handler tell a genuine app-exit apart from a
+    // plain logout (both close this form the same way) - only the former
+    // should also close the original, still-running FormLogIn instance that
+    // owns the application's message loop. Found live: closing it on every
+    // logout too was terminating the entire process instead of returning to
+    // the login screen, since that original form is the one Application.Run
+    // was given in Program.cs.
+    public bool IsExitingApplication { get; private set; }
+
     private readonly ApiClient _apiClient = new();
     private readonly KitchenTicketPrintService _kitchenTicketPrintService;
     private TokenRefreshTimer? _refreshTimer;
@@ -281,6 +290,7 @@ public class FormMain : Form
     {
         if (_loggedOut) return;
         _loggedOut = true;
+        IsExitingApplication = closingApp;
 
         _refreshTimer?.Dispose();
         _heartbeatTimer?.Stop();

@@ -70,13 +70,24 @@ public class clsRefreshTokenDataAccess(ISqlConnectionFactory connectionFactory)
     // StudentId can be the same number (separate identity columns, separate
     // tables), so UserId alone would be ambiguous and could revoke the wrong
     // account's tokens.
+    //
+    // RevokedViaLogout is set here too, despite this not being a logout -
+    // found live: leaving it false made an admin-triggered revocation (a
+    // password change, deactivate/reactivate) indistinguishable from theft
+    // to ValidateAndRotateAsync's reuse-detection. A stale terminal's next
+    // refresh attempt after one of these got logged as "reuse detected" and
+    // triggered ANOTHER mass revoke - one that also killed the brand-new
+    // token from whatever fresh login just happened, forcing an unwanted
+    // second logout on a terminal that did nothing wrong. The flag's real
+    // meaning is "this revocation was intentional, not a rotation/theft
+    // signal" - true for both a logout and an admin-triggered revoke.
     public async Task RevokeAllForUserAsync(int userId, AccountType accountType)
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             UPDATE RefreshTokens
-            SET RevokedAt = SYSUTCDATETIME()
+            SET RevokedAt = SYSUTCDATETIME(), RevokedViaLogout = 1
             WHERE UserId = @UserId AND AccountType = @AccountType AND RevokedAt IS NULL";
 
         await connection.ExecuteAsync(query, new { UserId = userId, AccountType = accountType });

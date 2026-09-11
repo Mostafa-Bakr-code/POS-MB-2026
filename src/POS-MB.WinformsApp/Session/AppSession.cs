@@ -23,6 +23,13 @@ public static class AppSession
     public static DateTime ToLocalDisplay(DateTime utc) =>
         utc.AddHours((double)TimeZoneOffsetHours);
 
+    // "Today" per the shop's configured offset, not the terminal's own OS
+    // clock/timezone - found live: DailySummaryControl used DateTime.Today
+    // directly, so a terminal whose Windows timezone didn't match
+    // TimeZoneOffsetHours could show yesterday's (or an empty) summary,
+    // contradicting the whole reason this setting exists (see comment above).
+    public static DateTime LocalToday => ToLocalDisplay(DateTime.UtcNow).Date;
+
     public static void Clear()
     {
         CurrentUser = null;
