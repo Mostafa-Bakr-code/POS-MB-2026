@@ -15,12 +15,26 @@ public class EscPosDocument
 {
     private const int Width = 32; // standard for an 80mm thermal roll at normal font size
 
-    // .NET no longer ships legacy codepages (like 437) built in - this package +
-    // registration call makes Encoding.GetEncoding(437) work. Registering a
-    // provider twice throws, so this only ever runs once per process.
-    private static readonly Encoding Pc437 = GetPc437Encoding();
+    // .NET no longer ships legacy codepages (like 437/1256) built in - this
+    // package + registration call makes Encoding.GetEncoding(...) work for
+    // them. Registering a provider twice throws, so this only ever runs once
+    // per process.
+    private static readonly Encoding Pc437 = GetLegacyEncoding(437);
 
-    private static Encoding GetPc437Encoding()
+    // Windows-1256 (Arabic) - found live: a comment containing Arabic text
+    // printed as a row of "?" characters, since PC437 has no Arabic glyphs at
+    // all and .NET's default encoder fallback silently replaces anything it
+    // can't represent. Switched to per-call instead of a single fixed
+    // encoding so an English-only receipt (the common case) keeps using the
+    // printer's normal startup codepage unchanged.
+    private static readonly Encoding Windows1256 = GetLegacyEncoding(1256);
+
+    // Tracks which codepage the printer was last told to use, so consecutive
+    // calls in the same script (or same language) don't re-emit the
+    // codepage-switch command for every single line.
+    private int? _activeCodePage;
+
+    private static Encoding GetLegacyEncoding(int codePage)
     {
         try
         {
@@ -30,7 +44,7 @@ public class EscPosDocument
         {
             // Already registered elsewhere in this process - fine, ignore.
         }
-        return Encoding.GetEncoding(437);
+        return Encoding.GetEncoding(codePage);
     }
 
     private readonly List<byte> _bytes = [];
@@ -49,13 +63,39 @@ public class EscPosDocument
 
     public EscPosDocument Text(string text)
     {
-        // PC437 is the classic default codepage nearly every ESC/POS printer
-        // starts up in - safe for plain English receipt text. Non-ASCII
-        // characters (Arabic, etc.) would need a codepage-switch command first;
-        // out of scope until it's actually needed.
-        _bytes.AddRange(Pc437.GetBytes(text));
+        // PC437 (the classic default codepage nearly every ESC/POS printer
+        // starts up in) has no Arabic glyphs at all - anything outside plain
+        // ASCII switches the printer to WPC1256 (Arabic) instead. This is a
+        // per-call check rather than a whole-document setting since a single
+        // receipt can freely mix English (item names, prices) with an
+        // Arabic customer comment.
+        var needsArabic = RequiresArabicCodePage(text);
+        SelectCodePage(needsArabic ? 50 : 0);
+
+        var encoding = needsArabic ? Windows1256 : Pc437;
+        _bytes.AddRange(encoding.GetBytes(text));
         _currentLine.Append(text);
         return this;
+    }
+
+    private static bool RequiresArabicCodePage(string text)
+    {
+        foreach (var c in text)
+        {
+            if (c > 0x7F) return true;
+        }
+        return false;
+    }
+
+    // ESC t n - selects the printer's active character code table. 0 is
+    // PC437, 50 is WPC1256 (Arabic) - both standard Epson-compatible table
+    // indices that Xprinter (and virtually every ESC/POS clone) follows.
+    private void SelectCodePage(int codePage)
+    {
+        if (_activeCodePage == codePage) return;
+
+        _bytes.AddRange([0x1B, 0x74, (byte)codePage]);
+        _activeCodePage = codePage;
     }
 
     public EscPosDocument Line(string text = "") => Text(text).NewLine();
