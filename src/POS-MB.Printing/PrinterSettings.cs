@@ -36,8 +36,10 @@ public class PrinterSettings
 
     // Which Arabic character table the printer switches to for non-ASCII
     // text - see ArabicCodePage for why this is a per-printer setting
-    // instead of a single hardcoded choice.
-    public ArabicCodePage ArabicVariant { get; set; } = ArabicCodePage.Pc864;
+    // instead of a single hardcoded choice. Pc720 is the default - verified
+    // to round-trip shaped Arabic text with zero unmapped characters,
+    // unlike Pc864 (see EscPosDocument's ArabicVariants comment).
+    public ArabicCodePage ArabicVariant { get; set; } = ArabicCodePage.Pc720;
 
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "POS-MB", "printer-settings.json");

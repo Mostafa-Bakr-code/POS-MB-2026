@@ -12,15 +12,55 @@ public static class ReceiptBuilder
     // correctly regardless, just optionally hidden/summarized on the customer's
     // own copy. Comments are never shown to the customer at all (no toggle) -
     // they're kitchen-only information (see KitchenTicketDocument).
-    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc720) =>
         CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize, arabicCodePage).ToBytes();
-    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc720) =>
         CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize, arabicCodePage).ToPreviewText();
 
-    public static byte[] BuildKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+    public static byte[] BuildKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc720) =>
         KitchenTicketDocument(order, fontSize, arabicCodePage).ToBytes();
-    public static string PreviewKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+    public static string PreviewKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc720) =>
         KitchenTicketDocument(order, fontSize, arabicCodePage).ToPreviewText();
+
+    // Prints a fixed English/Arabic/numbers sample plus a plain-text report of
+    // exactly which ESC/POS table index, .NET codepage, and shaping method
+    // were used - lets a specific ArabicCodePage candidate be judged against
+    // the real printer hardware without guessing from garbled receipts.
+    public static byte[] BuildDiagnosticTest(ArabicCodePage arabicCodePage) =>
+        DiagnosticTestDocument(arabicCodePage).ToBytes();
+    public static string PreviewDiagnosticTest(ArabicCodePage arabicCodePage) =>
+        DiagnosticTestDocument(arabicCodePage).ToPreviewText();
+
+    private static EscPosDocument DiagnosticTestDocument(ArabicCodePage arabicCodePage)
+    {
+        var (tableIndex, dotnetCodePage) = arabicCodePage switch
+        {
+            ArabicCodePage.Pc720 => (32, 720),
+            ArabicCodePage.Wpc1256 => (50, 1256),
+            ArabicCodePage.Pc864 => (37, 864),
+            _ => throw new ArgumentOutOfRangeException(nameof(arabicCodePage))
+        };
+
+        var doc = new EscPosDocument(arabicCodePage)
+            .Center().Bold(true)
+            .Line("ARABIC PRINT TEST")
+            .Bold(false).Left().Divider();
+
+        doc.Line("English: TEST ABC 123")
+            .Line("Arabic: اختبار عربي")
+            .Line("Numbers: 123456789")
+            .Divider();
+
+        doc.Line($"ESC/POS table: {tableIndex} (ESC t {tableIndex})")
+            .Line($".NET encoding: codepage {dotnetCodePage}")
+            .Line("Shaping: BidiReshapeSharp")
+            .Line("(contextual shaping + RTL reorder)")
+            .Divider()
+            .Feed(6)
+            .Cut();
+
+        return doc;
+    }
 
     private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize, ArabicCodePage arabicCodePage)
     {

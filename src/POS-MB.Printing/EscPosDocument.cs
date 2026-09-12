@@ -1,4 +1,5 @@
 using System.Text;
+using BidiReshapeSharp;
 
 namespace POS_MB.Printing;
 
@@ -22,19 +23,19 @@ public class EscPosDocument
     private static readonly Encoding Pc437 = GetLegacyEncoding(437);
 
     // Different ESC/POS clones implement different Arabic tables under the
-    // same nominal Epson table indices - found live: this printer's table 50
-    // isn't actually Windows-1256 (printed garbled, not "?"), and table 37
-    // (PC864) fell back to plain "?" again, suggesting that specific index
-    // isn't a valid table on this hardware at all. Rather than keep guessing
-    // and rebuilding, the exact (dotnet encoding, ESC/POS table index) pair
-    // is now chosen per-document from PrinterSettings.ArabicVariant, so a
-    // different candidate can be tried from the Settings screen with just a
-    // Test Print - no rebuild needed.
+    // same nominal Epson table indices, so the exact (dotnet encoding,
+    // ESC/POS table index) pair is chosen per-document from
+    // PrinterSettings.ArabicVariant - a different candidate can be tried
+    // from the Settings screen with just a Test Print, no rebuild needed.
+    // Pc720 is the default: verified live (see arabictest scratch project)
+    // that .NET's own codepage-720 table round-trips shaped Arabic text with
+    // zero unmapped characters, unlike codepage 864 (which drops several
+    // even after shaping - its .NET table is incomplete for this text).
     private static readonly Dictionary<ArabicCodePage, (Encoding Encoding, int TableIndex)> ArabicVariants = new()
     {
-        [ArabicCodePage.Pc864] = (GetLegacyEncoding(864), 37),
+        [ArabicCodePage.Pc720] = (GetLegacyEncoding(720), 32),
         [ArabicCodePage.Wpc1256] = (GetLegacyEncoding(1256), 50),
-        [ArabicCodePage.Pc720] = (GetLegacyEncoding(720), 32)
+        [ArabicCodePage.Pc864] = (GetLegacyEncoding(864), 37)
     };
 
     // Tracks which codepage the printer was last told to use, so consecutive
@@ -64,7 +65,7 @@ public class EscPosDocument
     private bool _centered;
     private int _sizeMultiplier = 1;
 
-    public EscPosDocument(ArabicCodePage arabicCodePage = ArabicCodePage.Pc864)
+    public EscPosDocument(ArabicCodePage arabicCodePage = ArabicCodePage.Pc720)
     {
         (_arabicEncoding, _arabicTableIndex) = ArabicVariants[arabicCodePage];
 
@@ -84,8 +85,23 @@ public class EscPosDocument
         var needsArabic = RequiresArabicCodePage(text);
         SelectCodePage(needsArabic ? _arabicTableIndex : 0);
 
+        // This printer's Arabic table has no built-in shaping or right-to-left
+        // support at all - it just prints whatever byte it's given, left to
+        // right, one fixed glyph per byte. Arabic typed into the app is
+        // stored in logical (typing) order and uses generic, unshaped letter
+        // forms - printed as-is, that's exactly what "garbled Arabic" looks
+        // like: correct letters, wrong order, wrong (unjoined) shapes.
+        // BidiReshape.ProcessString does what a proper Arabic-aware renderer
+        // would normally do at display time - determines each letter's
+        // correct contextual form (isolated/initial/medial/final) and
+        // reorders right-to-left runs into the correct visual sequence -
+        // producing text a "dumb" byte-per-glyph device can print correctly
+        // simply by dumping it in the order given. Left untouched for
+        // ASCII-only text, which needs neither.
+        var textToEncode = needsArabic ? BidiReshape.ProcessString(text) : text;
+
         var encoding = needsArabic ? _arabicEncoding : Pc437;
-        _bytes.AddRange(encoding.GetBytes(text));
+        _bytes.AddRange(encoding.GetBytes(textToEncode));
         _currentLine.Append(text);
         return this;
     }

@@ -9,7 +9,11 @@ namespace POS_MB.Printing;
 // Egypt specifically.
 public enum ArabicCodePage
 {
-    Pc864,   // Arabic (DOS) - Epson table index 37
+    // Default and recommended - verified live that .NET's own codepage-720
+    // table round-trips properly shaped Arabic text (see EscPosDocument's
+    // BidiReshape usage) with zero unmapped characters.
+    Pc720,   // Arabic (DOS, alternate) - Epson table index 32
     Wpc1256, // Arabic (Windows) - Epson table index 50
-    Pc720    // Arabic (DOS, alternate) - Epson table index 32
+    Pc864    // Arabic (DOS) - Epson table index 37; .NET's table for this
+             // one is incomplete and drops several shaped characters
 }

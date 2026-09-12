@@ -251,8 +251,20 @@ public class SettingsControl : UserControl
         };
         // Order matches the ArabicCodePage enum values so SelectedIndex can
         // be cast directly to the enum.
-        _cboArabicVariant.Items.AddRange(["PC864 (Arabic DOS)", "WPC1256 (Arabic Windows)", "PC720 (Arabic DOS alt)"]);
-        _cboArabicVariant.SelectedIndex = (int)ArabicCodePage.Pc864;
+        _cboArabicVariant.Items.AddRange(["PC720 (recommended)", "WPC1256 (Arabic Windows)", "PC864 (Arabic DOS)"]);
+        _cboArabicVariant.SelectedIndex = (int)ArabicCodePage.Pc720;
+
+        // Prints a fixed English/Arabic/numbers sample plus which table/encoding/
+        // shaping was used, straight to the kitchen printer - lets each Arabic
+        // variant be judged against the real hardware without a full receipt.
+        var btnDiagnosticTest = new Button
+        {
+            Text = "Print Diagnostic Test (Kitchen)",
+            Location = new Point(300, 1090),
+            Size = new Size(260, 36),
+            Font = new Font("Segoe UI", 11F)
+        };
+        btnDiagnosticTest.Click += async (_, _) => await DiagnosticTestAsync();
 
         // Same reasoning as the shared-settings Save button above - on its own
         // row below both printer fields, not beside either one.
@@ -308,6 +320,7 @@ public class SettingsControl : UserControl
         Controls.Add(_numKitchenFontSize);
         Controls.Add(lblArabicVariant);
         Controls.Add(_cboArabicVariant);
+        Controls.Add(btnDiagnosticTest);
         Controls.Add(_btnSavePrinters);
         Controls.Add(_lblPrinterStatus);
 
@@ -413,6 +426,34 @@ public class SettingsControl : UserControl
 
             _lblPrinterStatus.ForeColor = Color.Green;
             _lblPrinterStatus.Text = "Test print sent successfully.";
+        }
+        catch (Exception ex)
+        {
+            _lblPrinterStatus.ForeColor = Color.Red;
+            _lblPrinterStatus.Text = $"Could not reach printer: {ex.Message}";
+        }
+    }
+
+    private async Task DiagnosticTestAsync()
+    {
+        var ip = _txtKitchenIp.Text;
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            _lblPrinterStatus.ForeColor = Color.Red;
+            _lblPrinterStatus.Text = "Enter the kitchen printer's IP address first.";
+            return;
+        }
+
+        _lblPrinterStatus.ForeColor = Color.Black;
+        _lblPrinterStatus.Text = "Printing diagnostic test...";
+
+        try
+        {
+            var bytes = ReceiptBuilder.BuildDiagnosticTest((ArabicCodePage)_cboArabicVariant.SelectedIndex);
+            await new NetworkReceiptPrinter(ip, (int)_numKitchenPort.Value).PrintAsync(bytes);
+
+            _lblPrinterStatus.ForeColor = Color.Green;
+            _lblPrinterStatus.Text = "Diagnostic test sent successfully.";
         }
         catch (Exception ex)
         {
