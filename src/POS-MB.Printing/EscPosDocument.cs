@@ -1,5 +1,6 @@
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Text;
-using BidiReshapeSharp;
 
 namespace POS_MB.Printing;
 
@@ -16,34 +17,13 @@ public class EscPosDocument
 {
     private const int Width = 32; // standard for an 80mm thermal roll at normal font size
 
-    // .NET no longer ships legacy codepages built in - this package +
-    // registration call makes Encoding.GetEncoding(...) work for them.
-    // Registering a provider twice throws, so this only ever runs once per
-    // process.
+    // Matches Width=32 chars/line at Font A (12x24 dots) on this printer's
+    // 58mm roll. Arabic lines are rendered as an image at this pixel width
+    // instead of as text (see Text()), so it has to line up with the same
+    // physical paper width the plain-text lines already print at.
+    private const int RasterWidthDots = 384;
+
     private static readonly Encoding Pc437 = GetLegacyEncoding(437);
-
-    // Different ESC/POS clones implement different Arabic tables under the
-    // same nominal Epson table indices, so the exact (dotnet encoding,
-    // ESC/POS table index) pair is chosen per-document from
-    // PrinterSettings.ArabicVariant - a different candidate can be tried
-    // from the Settings screen with just a Test Print, no rebuild needed.
-    // Pc720 is the default: verified live (see arabictest scratch project)
-    // that .NET's own codepage-720 table round-trips shaped Arabic text with
-    // zero unmapped characters, unlike codepage 864 (which drops several
-    // even after shaping - its .NET table is incomplete for this text).
-    private static readonly Dictionary<ArabicCodePage, (Encoding Encoding, int TableIndex)> ArabicVariants = new()
-    {
-        [ArabicCodePage.Pc720] = (GetLegacyEncoding(720), 32),
-        [ArabicCodePage.Wpc1256] = (GetLegacyEncoding(1256), 50),
-        [ArabicCodePage.Pc864] = (GetLegacyEncoding(864), 37)
-    };
-
-    // Tracks which codepage the printer was last told to use, so consecutive
-    // calls in the same script (or same language) don't re-emit the
-    // codepage-switch command for every single line.
-    private int? _activeCodePage;
-    private readonly Encoding _arabicEncoding;
-    private readonly int _arabicTableIndex;
 
     private static Encoding GetLegacyEncoding(int codePage)
     {
@@ -65,10 +45,8 @@ public class EscPosDocument
     private bool _centered;
     private int _sizeMultiplier = 1;
 
-    public EscPosDocument(ArabicCodePage arabicCodePage = ArabicCodePage.Pc720)
+    public EscPosDocument()
     {
-        (_arabicEncoding, _arabicTableIndex) = ArabicVariants[arabicCodePage];
-
         // ESC @ - reset the printer to its default state, so leftover formatting
         // from a previous receipt can never bleed into this one.
         _bytes.AddRange([0x1B, 0x40]);
@@ -76,37 +54,37 @@ public class EscPosDocument
 
     public EscPosDocument Text(string text)
     {
-        // PC437 (the classic default codepage nearly every ESC/POS printer
-        // starts up in) has no Arabic glyphs at all - anything outside plain
-        // ASCII switches the printer to the configured Arabic table instead.
-        // This is a per-call check rather than a whole-document setting
-        // since a single receipt can freely mix English (item names,
-        // prices) with an Arabic customer comment.
-        var needsArabic = RequiresArabicCodePage(text);
-        SelectCodePage(needsArabic ? _arabicTableIndex : 0);
+        // Live testing (see PC720/WPC1256/PC864 diagnostic prints) proved this
+        // printer's firmware has no real Arabic character ROM at all: every
+        // "Arabic code page" it claims to support just displays extra bytes
+        // through its one built-in Latin/CP437-style table, producing
+        // different garbage per encoding rather than Arabic glyphs. No
+        // ESC/POS codepage or .NET encoding can ever fix that - the printer
+        // itself cannot draw those glyphs from character codes.
+        //
+        // The old POS avoided this entirely by never sending Arabic as
+        // character codes: it used Windows GDI (Graphics.DrawString) to
+        // rasterize the text into a bitmap and printed that as a picture.
+        // Reproducing that here: any line containing non-ASCII text is
+        // rendered as a small image (GDI shapes/reorders Arabic correctly on
+        // its own, same as it did for the old POS) and sent using the
+        // standard ESC/POS raster-image command, which every thermal printer
+        // understands regardless of what fonts its firmware has built in.
+        // Plain ASCII text keeps using the fast, tiny text path below.
+        if (RequiresImageRendering(text))
+        {
+            _bytes.AddRange(RenderTextAsRaster(text));
+        }
+        else
+        {
+            _bytes.AddRange(Pc437.GetBytes(text));
+        }
 
-        // This printer's Arabic table has no built-in shaping or right-to-left
-        // support at all - it just prints whatever byte it's given, left to
-        // right, one fixed glyph per byte. Arabic typed into the app is
-        // stored in logical (typing) order and uses generic, unshaped letter
-        // forms - printed as-is, that's exactly what "garbled Arabic" looks
-        // like: correct letters, wrong order, wrong (unjoined) shapes.
-        // BidiReshape.ProcessString does what a proper Arabic-aware renderer
-        // would normally do at display time - determines each letter's
-        // correct contextual form (isolated/initial/medial/final) and
-        // reorders right-to-left runs into the correct visual sequence -
-        // producing text a "dumb" byte-per-glyph device can print correctly
-        // simply by dumping it in the order given. Left untouched for
-        // ASCII-only text, which needs neither.
-        var textToEncode = needsArabic ? BidiReshape.ProcessString(text) : text;
-
-        var encoding = needsArabic ? _arabicEncoding : Pc437;
-        _bytes.AddRange(encoding.GetBytes(textToEncode));
         _currentLine.Append(text);
         return this;
     }
 
-    private static bool RequiresArabicCodePage(string text)
+    private static bool RequiresImageRendering(string text)
     {
         foreach (var c in text)
         {
@@ -115,15 +93,81 @@ public class EscPosDocument
         return false;
     }
 
-    // ESC t n - selects the printer's active character code table. 0 is
-    // PC437; the Arabic table index depends on which variant this document
-    // was constructed with (see ArabicVariants above).
-    private void SelectCodePage(int codePage)
+    private byte[] RenderTextAsRaster(string text)
     {
-        if (_activeCodePage == codePage) return;
+        // Font size in pixels, scaled the same way plain-text lines scale
+        // with Size()/DoubleHeight() (see FlushPreviewLine's own use of
+        // _sizeMultiplier), so an Arabic line looks the same size as an
+        // English line at the same point in the receipt.
+        var fontSize = 20f * _sizeMultiplier;
+        var height = (int)Math.Ceiling(fontSize * 1.5);
 
-        _bytes.AddRange([0x1B, 0x74, (byte)codePage]);
-        _activeCodePage = codePage;
+        using var bitmap = new Bitmap(RasterWidthDots, height);
+        using (var graphics = Graphics.FromImage(bitmap))
+        {
+            graphics.Clear(Color.White);
+            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+            // Arial, same as the old POS - Windows' own font-linking fills in
+            // the actual Arabic glyphs, and GDI+ shapes/reorders them
+            // automatically (contextual letter forms + right-to-left) since
+            // that's what a Windows renderer always does for a Unicode
+            // string, without needing any manual shaping in this code.
+            using var font = new Font("Arial", fontSize, _bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+            using var format = new StringFormat
+            {
+                Alignment = _centered ? StringAlignment.Center : StringAlignment.Near,
+                LineAlignment = StringAlignment.Center
+            };
+
+            graphics.DrawString(text, font, Brushes.Black, new RectangleF(0, 0, RasterWidthDots, height), format);
+        }
+
+        return BuildRasterCommand(bitmap);
+    }
+
+    // GS v 0 m xL xH yL yH d1...dk - prints a monochrome bitmap directly,
+    // one bit per pixel (1 = black), packed 8 pixels per byte, row by row.
+    // This is the one ESC/POS command that doesn't depend on the printer's
+    // built-in character set at all - it's just pixels.
+    private static byte[] BuildRasterCommand(Bitmap bitmap)
+    {
+        var widthBytes = (bitmap.Width + 7) / 8;
+        var data = new byte[widthBytes * bitmap.Height];
+
+        var bits = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            unsafe
+            {
+                for (var y = 0; y < bitmap.Height; y++)
+                {
+                    var row = (byte*)bits.Scan0 + y * bits.Stride;
+                    for (var x = 0; x < bitmap.Width; x++)
+                    {
+                        var pixel = row + x * 4; // B, G, R, A
+                        var luminance = (pixel[2] * 299 + pixel[1] * 587 + pixel[0] * 114) / 1000;
+                        if (luminance < 128)
+                        {
+                            data[y * widthBytes + x / 8] |= (byte)(0x80 >> (x % 8));
+                        }
+                    }
+                }
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(bits);
+        }
+
+        List<byte> command =
+        [
+            0x1D, 0x76, 0x30, 0x00,
+            (byte)(widthBytes & 0xFF), (byte)((widthBytes >> 8) & 0xFF),
+            (byte)(bitmap.Height & 0xFF), (byte)((bitmap.Height >> 8) & 0xFF)
+        ];
+        command.AddRange(data);
+        return [.. command];
     }
 
     public EscPosDocument Line(string text = "") => Text(text).NewLine();

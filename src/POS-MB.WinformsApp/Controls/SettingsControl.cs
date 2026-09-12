@@ -37,7 +37,6 @@ public class SettingsControl : UserControl
     private readonly ComboBox _cboTaxDisplayMode;
     private readonly NumericUpDown _numClientFontSize;
     private readonly NumericUpDown _numKitchenFontSize;
-    private readonly ComboBox _cboArabicVariant;
     private readonly Button _btnSavePrinters;
     private readonly Label _lblPrinterStatus;
 
@@ -237,30 +236,15 @@ public class SettingsControl : UserControl
             Value = 2
         };
 
-        // Found live: different ESC/POS clones need different Arabic tables
-        // under the same nominal names - made pickable here instead of a
-        // single hardcoded choice, so a new candidate can be tried with just
-        // a Test Print rather than a code change/rebuild.
-        var lblArabicVariant = new Label { Text = "Arabic character table (try each if Arabic prints wrong)", Location = new Point(20, 1058), Size = new Size(420, 28) };
-        _cboArabicVariant = new ComboBox
-        {
-            Location = new Point(20, 1090),
-            Size = new Size(260, 36),
-            Font = new Font("Segoe UI", 12F),
-            DropDownStyle = ComboBoxStyle.DropDownList
-        };
-        // Order matches the ArabicCodePage enum values so SelectedIndex can
-        // be cast directly to the enum.
-        _cboArabicVariant.Items.AddRange(["PC720 (recommended)", "WPC1256 (Arabic Windows)", "PC864 (Arabic DOS)"]);
-        _cboArabicVariant.SelectedIndex = (int)ArabicCodePage.Pc720;
-
-        // Prints a fixed English/Arabic/numbers sample plus which table/encoding/
-        // shaping was used, straight to the kitchen printer - lets each Arabic
-        // variant be judged against the real hardware without a full receipt.
+        // Arabic lines print as a small rendered image rather than as ESC/POS
+        // text - live testing proved this printer has no real Arabic
+        // character ROM at all (every "Arabic code page" it claimed to
+        // support just showed different Latin/CP437-style garbage). No
+        // dropdown needed any more - see EscPosDocument.RenderTextAsRaster.
         var btnDiagnosticTest = new Button
         {
             Text = "Print Diagnostic Test (Kitchen)",
-            Location = new Point(300, 1090),
+            Location = new Point(20, 1058),
             Size = new Size(260, 36),
             Font = new Font("Segoe UI", 11F)
         };
@@ -318,8 +302,6 @@ public class SettingsControl : UserControl
         Controls.Add(_numClientFontSize);
         Controls.Add(lblKitchenFontSize);
         Controls.Add(_numKitchenFontSize);
-        Controls.Add(lblArabicVariant);
-        Controls.Add(_cboArabicVariant);
         Controls.Add(btnDiagnosticTest);
         Controls.Add(_btnSavePrinters);
         Controls.Add(_lblPrinterStatus);
@@ -357,7 +339,6 @@ public class SettingsControl : UserControl
         _cboTaxDisplayMode.SelectedIndex = (int)printerSettings.TaxDisplayMode;
         _numClientFontSize.Value = printerSettings.ClientReceiptFontSize;
         _numKitchenFontSize.Value = printerSettings.KitchenTicketFontSize;
-        _cboArabicVariant.SelectedIndex = (int)printerSettings.ArabicVariant;
     }
 
     private async Task SaveSharedAsync()
@@ -395,8 +376,7 @@ public class SettingsControl : UserControl
             ShowOrderTimeOnReceipt = _chkShowOrderTime.Checked,
             TaxDisplayMode = (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex,
             ClientReceiptFontSize = (int)_numClientFontSize.Value,
-            KitchenTicketFontSize = (int)_numKitchenFontSize.Value,
-            ArabicVariant = (ArabicCodePage)_cboArabicVariant.SelectedIndex
+            KitchenTicketFontSize = (int)_numKitchenFontSize.Value
         };
         settings.Save();
 
@@ -419,8 +399,8 @@ public class SettingsControl : UserControl
         try
         {
             var bytes = isClient
-                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex)
-                : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex);
+                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
+                : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
 
             await new NetworkReceiptPrinter(ip, port).PrintAsync(bytes);
 
@@ -449,7 +429,7 @@ public class SettingsControl : UserControl
 
         try
         {
-            var bytes = ReceiptBuilder.BuildDiagnosticTest((ArabicCodePage)_cboArabicVariant.SelectedIndex);
+            var bytes = ReceiptBuilder.BuildDiagnosticTest();
             await new NetworkReceiptPrinter(ip, (int)_numKitchenPort.Value).PrintAsync(bytes);
 
             _lblPrinterStatus.ForeColor = Color.Green;
@@ -469,8 +449,8 @@ public class SettingsControl : UserControl
     private void ShowPreview(bool isClient)
     {
         var text = isClient
-            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex)
-            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex);
+            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
+            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
 
         using var dialog = new FormReceiptPreviewDialog(
             isClient ? "Client Receipt Preview" : "Kitchen Ticket Preview", text);
@@ -481,8 +461,8 @@ public class SettingsControl : UserControl
     // tax, same convention as the automated test suite) plus two separately
     // placed Hotdogs with different comments, to prove same-name items never get
     // merged - each keeps its own line and its own comment. One comment is
-    // Arabic specifically so Test Print/Preview can be used to try different
-    // ArabicCodePage variants directly, without needing a real order first.
+    // Arabic specifically so Test Print/Preview exercises the image-rendering
+    // path (see EscPosDocument.RenderTextAsRaster) without a real order first.
     private static ReceiptOrder SampleOrder() => new(
         1234, DateTime.Now,
         [
