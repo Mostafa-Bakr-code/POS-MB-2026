@@ -21,13 +21,17 @@ public class EscPosDocument
     // per process.
     private static readonly Encoding Pc437 = GetLegacyEncoding(437);
 
-    // Windows-1256 (Arabic) - found live: a comment containing Arabic text
-    // printed as a row of "?" characters, since PC437 has no Arabic glyphs at
-    // all and .NET's default encoder fallback silently replaces anything it
-    // can't represent. Switched to per-call instead of a single fixed
-    // encoding so an English-only receipt (the common case) keeps using the
-    // printer's normal startup codepage unchanged.
-    private static readonly Encoding Windows1256 = GetLegacyEncoding(1256);
+    // PC864 (Arabic DOS), not Windows-1256 - found live: a comment containing
+    // Arabic text first printed as a row of "?" (PC437 has no Arabic glyphs
+    // at all), then as garbled/wrong characters once switched to codepage 50
+    // (WPC1256) - this printer's actual codepage 50 table isn't
+    // Windows-1256. PC864 (Epson-standard table index 37) is the older
+    // DOS-era Arabic encoding most ESC/POS clones - including this one -
+    // actually implement, and is the standard used in Egypt specifically.
+    // Switched to per-call instead of a single fixed encoding so an
+    // English-only receipt (the common case) keeps using the printer's
+    // normal startup codepage unchanged.
+    private static readonly Encoding Pc864 = GetLegacyEncoding(864);
 
     // Tracks which codepage the printer was last told to use, so consecutive
     // calls in the same script (or same language) don't re-emit the
@@ -65,14 +69,14 @@ public class EscPosDocument
     {
         // PC437 (the classic default codepage nearly every ESC/POS printer
         // starts up in) has no Arabic glyphs at all - anything outside plain
-        // ASCII switches the printer to WPC1256 (Arabic) instead. This is a
+        // ASCII switches the printer to PC864 (Arabic) instead. This is a
         // per-call check rather than a whole-document setting since a single
         // receipt can freely mix English (item names, prices) with an
         // Arabic customer comment.
         var needsArabic = RequiresArabicCodePage(text);
-        SelectCodePage(needsArabic ? 50 : 0);
+        SelectCodePage(needsArabic ? 37 : 0);
 
-        var encoding = needsArabic ? Windows1256 : Pc437;
+        var encoding = needsArabic ? Pc864 : Pc437;
         _bytes.AddRange(encoding.GetBytes(text));
         _currentLine.Append(text);
         return this;
@@ -88,7 +92,7 @@ public class EscPosDocument
     }
 
     // ESC t n - selects the printer's active character code table. 0 is
-    // PC437, 50 is WPC1256 (Arabic) - both standard Epson-compatible table
+    // PC437, 37 is PC864 (Arabic) - both standard Epson-compatible table
     // indices that Xprinter (and virtually every ESC/POS clone) follows.
     private void SelectCodePage(int codePage)
     {
