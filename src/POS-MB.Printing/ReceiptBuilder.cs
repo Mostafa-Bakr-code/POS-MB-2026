@@ -24,7 +24,7 @@ public static class ReceiptBuilder
     {
         var doc = new EscPosDocument()
             .Center().DoubleHeight(true).Bold(true)
-            .Line("Dimashk Street")
+            .Line("From Dimashk")
             .DoubleHeight(false)
             .Size(fontSize, fontSize)
             .Line($"Order #{order.SerialNumber}")
@@ -82,7 +82,10 @@ public static class ReceiptBuilder
         doc.Bold(true)
             .Line($"Total:    {order.Total,8:0.00}")
             .Bold(false)
-            .Feed()
+            // Found live: the default 3-line feed wasn't enough clearance
+            // for this printer's cutter, which sliced through the Total
+            // line itself instead of the blank space below it.
+            .Feed(6)
             .Cut();
 
         return doc;
@@ -92,7 +95,7 @@ public static class ReceiptBuilder
     {
         var doc = new EscPosDocument()
             .Center().Size(fontSize, fontSize).Bold(true)
-            .Line($"KITCHEN - Order #{order.SerialNumber}")
+            .Line($"{order.SourceLabel} - Order #{order.SerialNumber}")
             .Size(1, 1)
             .Line(order.LocalDate.ToString("yyyy-MM-dd HH:mm"))
             .Bold(false).Left()
@@ -113,7 +116,7 @@ public static class ReceiptBuilder
             doc.NewLine();
         }
 
-        doc.Feed().Cut();
+        doc.Feed(6).Cut();
 
         return doc;
     }

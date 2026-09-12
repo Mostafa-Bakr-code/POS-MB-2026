@@ -341,7 +341,8 @@ public class OrderTakingControl : UserControl
                     itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
                     oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
                 order.Total,
-                order.IsComplimentary);
+                order.IsComplimentary,
+                order.OrderSource == OrderSource.Cashier ? "CASHIER" : "MOBILE");
 
             ShowStatus($"Order #{receiptOrder.SerialNumber} placed - Total {order.Total:0.00}", success: true);
             _cart.Clear();

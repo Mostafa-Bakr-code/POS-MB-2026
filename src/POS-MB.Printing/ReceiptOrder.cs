@@ -15,4 +15,10 @@ public record ReceiptOrder(
     DateTime LocalDate,
     IReadOnlyList<ReceiptItem> Items,
     decimal Total,
-    bool IsComplimentary);
+    bool IsComplimentary,
+    // A plain display label ("CASHIER"/"MOBILE"), not the WinForms
+    // OrderSource enum itself - same reasoning as this whole model being
+    // separate from OrderDto (see the file-level comment above): this
+    // project stays decoupled from the rest of the app's types, so the
+    // caller resolves the enum to text before constructing this.
+    string SourceLabel);

@@ -58,7 +58,8 @@ public class KitchenTicketPrintService(ApiClient apiClient)
                 itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
                 oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
             order.Total,
-            order.IsComplimentary);
+            order.IsComplimentary,
+            order.OrderSource == OrderSource.Cashier ? "CASHIER" : "MOBILE");
 
         var settings = PrinterSettings.Load();
 

@@ -426,5 +426,5 @@ public class SettingsControl : UserControl
             new ReceiptItem("Marghreta Pizza", 2, 171m, 14m, "extra cheese"),
             new ReceiptItem("Shawerma", 3, 57m, 14m, "no garlic sauce")
         ],
-        114m + 114m + 2 * 171m + 3 * 57m, false);
+        114m + 114m + 2 * 171m + 3 * 57m, false, "CASHIER");
 }
