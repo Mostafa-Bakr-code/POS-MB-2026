@@ -34,6 +34,11 @@ public class PrinterSettings
     // real number as-is.
     public int ReceiptOrderNumberWrapAt { get; set; } = 100;
 
+    // Which Arabic character table the printer switches to for non-ASCII
+    // text - see ArabicCodePage for why this is a per-printer setting
+    // instead of a single hardcoded choice.
+    public ArabicCodePage ArabicVariant { get; set; } = ArabicCodePage.Pc864;
+
     private static string FilePath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "POS-MB", "printer-settings.json");
 

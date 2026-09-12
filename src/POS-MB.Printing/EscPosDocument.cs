@@ -15,28 +15,34 @@ public class EscPosDocument
 {
     private const int Width = 32; // standard for an 80mm thermal roll at normal font size
 
-    // .NET no longer ships legacy codepages (like 437/1256) built in - this
-    // package + registration call makes Encoding.GetEncoding(...) work for
-    // them. Registering a provider twice throws, so this only ever runs once
-    // per process.
+    // .NET no longer ships legacy codepages built in - this package +
+    // registration call makes Encoding.GetEncoding(...) work for them.
+    // Registering a provider twice throws, so this only ever runs once per
+    // process.
     private static readonly Encoding Pc437 = GetLegacyEncoding(437);
 
-    // PC864 (Arabic DOS), not Windows-1256 - found live: a comment containing
-    // Arabic text first printed as a row of "?" (PC437 has no Arabic glyphs
-    // at all), then as garbled/wrong characters once switched to codepage 50
-    // (WPC1256) - this printer's actual codepage 50 table isn't
-    // Windows-1256. PC864 (Epson-standard table index 37) is the older
-    // DOS-era Arabic encoding most ESC/POS clones - including this one -
-    // actually implement, and is the standard used in Egypt specifically.
-    // Switched to per-call instead of a single fixed encoding so an
-    // English-only receipt (the common case) keeps using the printer's
-    // normal startup codepage unchanged.
-    private static readonly Encoding Pc864 = GetLegacyEncoding(864);
+    // Different ESC/POS clones implement different Arabic tables under the
+    // same nominal Epson table indices - found live: this printer's table 50
+    // isn't actually Windows-1256 (printed garbled, not "?"), and table 37
+    // (PC864) fell back to plain "?" again, suggesting that specific index
+    // isn't a valid table on this hardware at all. Rather than keep guessing
+    // and rebuilding, the exact (dotnet encoding, ESC/POS table index) pair
+    // is now chosen per-document from PrinterSettings.ArabicVariant, so a
+    // different candidate can be tried from the Settings screen with just a
+    // Test Print - no rebuild needed.
+    private static readonly Dictionary<ArabicCodePage, (Encoding Encoding, int TableIndex)> ArabicVariants = new()
+    {
+        [ArabicCodePage.Pc864] = (GetLegacyEncoding(864), 37),
+        [ArabicCodePage.Wpc1256] = (GetLegacyEncoding(1256), 50),
+        [ArabicCodePage.Pc720] = (GetLegacyEncoding(720), 32)
+    };
 
     // Tracks which codepage the printer was last told to use, so consecutive
     // calls in the same script (or same language) don't re-emit the
     // codepage-switch command for every single line.
     private int? _activeCodePage;
+    private readonly Encoding _arabicEncoding;
+    private readonly int _arabicTableIndex;
 
     private static Encoding GetLegacyEncoding(int codePage)
     {
@@ -58,8 +64,10 @@ public class EscPosDocument
     private bool _centered;
     private int _sizeMultiplier = 1;
 
-    public EscPosDocument()
+    public EscPosDocument(ArabicCodePage arabicCodePage = ArabicCodePage.Pc864)
     {
+        (_arabicEncoding, _arabicTableIndex) = ArabicVariants[arabicCodePage];
+
         // ESC @ - reset the printer to its default state, so leftover formatting
         // from a previous receipt can never bleed into this one.
         _bytes.AddRange([0x1B, 0x40]);
@@ -69,14 +77,14 @@ public class EscPosDocument
     {
         // PC437 (the classic default codepage nearly every ESC/POS printer
         // starts up in) has no Arabic glyphs at all - anything outside plain
-        // ASCII switches the printer to PC864 (Arabic) instead. This is a
-        // per-call check rather than a whole-document setting since a single
-        // receipt can freely mix English (item names, prices) with an
-        // Arabic customer comment.
+        // ASCII switches the printer to the configured Arabic table instead.
+        // This is a per-call check rather than a whole-document setting
+        // since a single receipt can freely mix English (item names,
+        // prices) with an Arabic customer comment.
         var needsArabic = RequiresArabicCodePage(text);
-        SelectCodePage(needsArabic ? 37 : 0);
+        SelectCodePage(needsArabic ? _arabicTableIndex : 0);
 
-        var encoding = needsArabic ? Pc864 : Pc437;
+        var encoding = needsArabic ? _arabicEncoding : Pc437;
         _bytes.AddRange(encoding.GetBytes(text));
         _currentLine.Append(text);
         return this;
@@ -92,8 +100,8 @@ public class EscPosDocument
     }
 
     // ESC t n - selects the printer's active character code table. 0 is
-    // PC437, 37 is PC864 (Arabic) - both standard Epson-compatible table
-    // indices that Xprinter (and virtually every ESC/POS clone) follows.
+    // PC437; the Arabic table index depends on which variant this document
+    // was constructed with (see ArabicVariants above).
     private void SelectCodePage(int codePage)
     {
         if (_activeCodePage == codePage) return;

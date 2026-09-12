@@ -12,17 +12,19 @@ public static class ReceiptBuilder
     // correctly regardless, just optionally hidden/summarized on the customer's
     // own copy. Comments are never shown to the customer at all (no toggle) -
     // they're kitchen-only information (see KitchenTicketDocument).
-    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1) =>
-        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToBytes();
-    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1) =>
-        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToPreviewText();
+    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize, arabicCodePage).ToBytes();
+    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize, arabicCodePage).ToPreviewText();
 
-    public static byte[] BuildKitchenTicket(ReceiptOrder order, int fontSize = 2) => KitchenTicketDocument(order, fontSize).ToBytes();
-    public static string PreviewKitchenTicket(ReceiptOrder order, int fontSize = 2) => KitchenTicketDocument(order, fontSize).ToPreviewText();
+    public static byte[] BuildKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+        KitchenTicketDocument(order, fontSize, arabicCodePage).ToBytes();
+    public static string PreviewKitchenTicket(ReceiptOrder order, int fontSize = 2, ArabicCodePage arabicCodePage = ArabicCodePage.Pc864) =>
+        KitchenTicketDocument(order, fontSize, arabicCodePage).ToPreviewText();
 
-    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize)
+    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize, ArabicCodePage arabicCodePage)
     {
-        var doc = new EscPosDocument()
+        var doc = new EscPosDocument(arabicCodePage)
             .Center().DoubleHeight(true).Bold(true)
             .Line("From Dimashk")
             .DoubleHeight(false)
@@ -91,9 +93,9 @@ public static class ReceiptBuilder
         return doc;
     }
 
-    private static EscPosDocument KitchenTicketDocument(ReceiptOrder order, int fontSize)
+    private static EscPosDocument KitchenTicketDocument(ReceiptOrder order, int fontSize, ArabicCodePage arabicCodePage)
     {
-        var doc = new EscPosDocument()
+        var doc = new EscPosDocument(arabicCodePage)
             .Center().Size(fontSize, fontSize).Bold(true)
             .Line($"{order.SourceLabel} - Order #{order.SerialNumber}")
             .Size(1, 1)

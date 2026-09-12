@@ -37,6 +37,7 @@ public class SettingsControl : UserControl
     private readonly ComboBox _cboTaxDisplayMode;
     private readonly NumericUpDown _numClientFontSize;
     private readonly NumericUpDown _numKitchenFontSize;
+    private readonly ComboBox _cboArabicVariant;
     private readonly Button _btnSavePrinters;
     private readonly Label _lblPrinterStatus;
 
@@ -236,12 +237,29 @@ public class SettingsControl : UserControl
             Value = 2
         };
 
+        // Found live: different ESC/POS clones need different Arabic tables
+        // under the same nominal names - made pickable here instead of a
+        // single hardcoded choice, so a new candidate can be tried with just
+        // a Test Print rather than a code change/rebuild.
+        var lblArabicVariant = new Label { Text = "Arabic character table (try each if Arabic prints wrong)", Location = new Point(20, 1058), Size = new Size(420, 28) };
+        _cboArabicVariant = new ComboBox
+        {
+            Location = new Point(20, 1090),
+            Size = new Size(260, 36),
+            Font = new Font("Segoe UI", 12F),
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+        // Order matches the ArabicCodePage enum values so SelectedIndex can
+        // be cast directly to the enum.
+        _cboArabicVariant.Items.AddRange(["PC864 (Arabic DOS)", "WPC1256 (Arabic Windows)", "PC720 (Arabic DOS alt)"]);
+        _cboArabicVariant.SelectedIndex = (int)ArabicCodePage.Pc864;
+
         // Same reasoning as the shared-settings Save button above - on its own
         // row below both printer fields, not beside either one.
         _btnSavePrinters = new Button
         {
             Text = "Save Printer Settings",
-            Location = new Point(20, 1058),
+            Location = new Point(20, 1138),
             Size = new Size(220, 40),
             Font = new Font("Segoe UI", 12F, FontStyle.Bold)
         };
@@ -249,7 +267,7 @@ public class SettingsControl : UserControl
 
         _lblPrinterStatus = new Label
         {
-            Location = new Point(20, 1106),
+            Location = new Point(20, 1186),
             Size = new Size(500, 28),
             ForeColor = Color.Green
         };
@@ -288,6 +306,8 @@ public class SettingsControl : UserControl
         Controls.Add(_numClientFontSize);
         Controls.Add(lblKitchenFontSize);
         Controls.Add(_numKitchenFontSize);
+        Controls.Add(lblArabicVariant);
+        Controls.Add(_cboArabicVariant);
         Controls.Add(_btnSavePrinters);
         Controls.Add(_lblPrinterStatus);
 
@@ -324,6 +344,7 @@ public class SettingsControl : UserControl
         _cboTaxDisplayMode.SelectedIndex = (int)printerSettings.TaxDisplayMode;
         _numClientFontSize.Value = printerSettings.ClientReceiptFontSize;
         _numKitchenFontSize.Value = printerSettings.KitchenTicketFontSize;
+        _cboArabicVariant.SelectedIndex = (int)printerSettings.ArabicVariant;
     }
 
     private async Task SaveSharedAsync()
@@ -361,7 +382,8 @@ public class SettingsControl : UserControl
             ShowOrderTimeOnReceipt = _chkShowOrderTime.Checked,
             TaxDisplayMode = (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex,
             ClientReceiptFontSize = (int)_numClientFontSize.Value,
-            KitchenTicketFontSize = (int)_numKitchenFontSize.Value
+            KitchenTicketFontSize = (int)_numKitchenFontSize.Value,
+            ArabicVariant = (ArabicCodePage)_cboArabicVariant.SelectedIndex
         };
         settings.Save();
 
@@ -384,8 +406,8 @@ public class SettingsControl : UserControl
         try
         {
             var bytes = isClient
-                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
-                : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
+                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex)
+                : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex);
 
             await new NetworkReceiptPrinter(ip, port).PrintAsync(bytes);
 
@@ -406,8 +428,8 @@ public class SettingsControl : UserControl
     private void ShowPreview(bool isClient)
     {
         var text = isClient
-            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value)
-            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value);
+            ? ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), _chkShowOrderTime.Checked, (TaxDisplayMode)_cboTaxDisplayMode.SelectedIndex, (int)_numClientFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex)
+            : ReceiptBuilder.PreviewKitchenTicket(SampleOrder(), (int)_numKitchenFontSize.Value, (ArabicCodePage)_cboArabicVariant.SelectedIndex);
 
         using var dialog = new FormReceiptPreviewDialog(
             isClient ? "Client Receipt Preview" : "Kitchen Ticket Preview", text);
@@ -417,11 +439,13 @@ public class SettingsControl : UserControl
     // Hand-verifiable round numbers (114 @ 14% tax = exactly 100 excl. tax + 14
     // tax, same convention as the automated test suite) plus two separately
     // placed Hotdogs with different comments, to prove same-name items never get
-    // merged - each keeps its own line and its own comment.
+    // merged - each keeps its own line and its own comment. One comment is
+    // Arabic specifically so Test Print/Preview can be used to try different
+    // ArabicCodePage variants directly, without needing a real order first.
     private static ReceiptOrder SampleOrder() => new(
         1234, DateTime.Now,
         [
-            new ReceiptItem("Hotdog", 1, 114m, 14m, "no ketchup"),
+            new ReceiptItem("Hotdog", 1, 114m, 14m, "بدون كاتشب"),
             new ReceiptItem("Hotdog", 1, 114m, 14m, "extra mustard"),
             new ReceiptItem("Marghreta Pizza", 2, 171m, 14m, "extra cheese"),
             new ReceiptItem("Shawerma", 3, 57m, 14m, "no garlic sauce")

@@ -68,7 +68,7 @@ public class KitchenTicketPrintService(ApiClient apiClient)
             : receiptOrder.SerialNumber;
         var printOrder = receiptOrder with { SerialNumber = printSerial };
 
-        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize);
+        var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize, settings.ArabicVariant);
 
         if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
         {
