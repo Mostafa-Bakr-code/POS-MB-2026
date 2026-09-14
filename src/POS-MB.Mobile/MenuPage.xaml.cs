@@ -12,6 +12,12 @@ public partial class MenuPage : ContentPage
     private CancellationTokenSource? _pollCts;
     private string? _lastKnownReason = "not yet loaded"; // forces the very first check to always apply
 
+    // The currently-selected category chip, tracked manually since these are
+    // built by hand (see BuildCategoryChips) rather than through a
+    // CollectionView, which would otherwise give this for free.
+    private Frame? _selectedCategoryFrame;
+    private Label? _selectedCategoryLabel;
+
     public MenuPage()
     {
         InitializeComponent();
@@ -149,25 +155,96 @@ public partial class MenuPage : ContentPage
     private async Task LoadAsync()
     {
         var categories = await _apiClient.GetCategoriesAsync();
-        CategoriesView.ItemsSource = categories;
+        BuildCategoryChips(categories);
 
-        // Items only load once a category is picked (see OnCategorySelected) -
+        // Items only load once a category is picked (see OnCategoryChipTapped) -
         // reloading (e.g. pull-to-refresh) drops back to the same empty,
         // no-category-selected state rather than guessing which one to keep.
-        CategoriesView.SelectedItem = null;
         ItemsView.ItemsSource = null;
         PlaceholderLabel.IsVisible = true;
     }
 
-    private async void OnCategorySelected(object? sender, SelectionChangedEventArgs e)
+    // Built by hand instead of bound to a CollectionView so every chip can
+    // always be on screen at once (see the FlexLayout comment in
+    // MenuPage.xaml) - CollectionView, even in a wrapping grid layout, still
+    // scrolls internally past its own height, which is exactly what this was
+    // changed to avoid.
+    private void BuildCategoryChips(List<CategoryDto> categories)
     {
-        var selected = e.CurrentSelection.FirstOrDefault() as CategoryDto;
-        if (selected is null)
+        CategoriesLayout.Children.Clear();
+        _selectedCategoryFrame = null;
+        _selectedCategoryLabel = null;
+
+        foreach (var category in categories)
         {
-            ItemsView.ItemsSource = null;
-            PlaceholderLabel.IsVisible = true;
-            return;
+            CategoriesLayout.Children.Add(CreateCategoryChip(category));
         }
+    }
+
+    private Frame CreateCategoryChip(CategoryDto category)
+    {
+        var label = new Label
+        {
+            Text = category.CategoryName,
+            TextColor = (Color)Application.Current!.Resources["TextOnDark"],
+            FontAttributes = FontAttributes.Bold,
+            FontSize = 13,
+            VerticalOptions = LayoutOptions.Center,
+            VerticalTextAlignment = TextAlignment.Center
+        };
+
+        var content = new HorizontalStackLayout { Spacing = 8, VerticalOptions = LayoutOptions.Center };
+
+        if (category.HasImage)
+        {
+            content.Children.Add(new Frame
+            {
+                WidthRequest = 42,
+                HeightRequest = 42,
+                Padding = 0,
+                CornerRadius = 21,
+                HasShadow = false,
+                BackgroundColor = Colors.Transparent,
+                BorderColor = Colors.Transparent,
+                IsClippedToBounds = true,
+                VerticalOptions = LayoutOptions.Center,
+                Content = new Image { Source = category.FullImageUrl, Aspect = Aspect.AspectFill }
+            });
+        }
+
+        content.Children.Add(label);
+
+        var frame = new Frame
+        {
+            Padding = new Thickness(8, 0, 16, 0),
+            CornerRadius = 28,
+            HeightRequest = 56,
+            HasShadow = false,
+            BackgroundColor = (Color)Application.Current!.Resources["ChipInactive"],
+            BorderColor = Colors.Transparent,
+            Margin = new Thickness(0, 0, 10, 10),
+            Content = content
+        };
+
+        frame.GestureRecognizers.Add(new TapGestureRecognizer
+        {
+            Command = new Command(async () => await OnCategoryChipTapped(category, frame, label))
+        });
+
+        return frame;
+    }
+
+    private async Task OnCategoryChipTapped(CategoryDto category, Frame frame, Label label)
+    {
+        if (_selectedCategoryFrame is not null)
+            _selectedCategoryFrame.BackgroundColor = (Color)Application.Current!.Resources["ChipInactive"];
+        if (_selectedCategoryLabel is not null)
+            _selectedCategoryLabel.TextColor = (Color)Application.Current!.Resources["TextOnDark"];
+
+        frame.BackgroundColor = (Color)Application.Current!.Resources["Yellow"];
+        label.TextColor = (Color)Application.Current!.Resources["TextOnCard"];
+        _selectedCategoryFrame = frame;
+        _selectedCategoryLabel = label;
 
         PlaceholderLabel.IsVisible = false;
         // availableOnly: false - an out-of-stock item now stays visible
@@ -177,7 +254,7 @@ public partial class MenuPage : ContentPage
         // at its default (false) - a genuinely retired item is a different
         // thing from a temporarily out-of-stock one, and should still
         // disappear.
-        var items = await _apiClient.GetItemsAsync(selected.CategoryId, availableOnly: false);
+        var items = await _apiClient.GetItemsAsync(category.CategoryId, availableOnly: false);
         ItemsView.ItemsSource = items;
     }
 
