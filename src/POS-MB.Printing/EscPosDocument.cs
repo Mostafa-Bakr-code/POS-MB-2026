@@ -43,7 +43,12 @@ public class EscPosDocument
     private readonly StringBuilder _currentLine = new();
     private bool _bold;
     private bool _centered;
-    private int _sizeMultiplier = 1;
+    // Float, not int: found live that jumping straight from 1x to 2x felt
+    // like too big a step for the kitchen ticket, so Size() now accepts
+    // half-steps (1.5x etc.) for the raster (Arabic) rendering path, even
+    // though the printer's own hardware text scaling (GS ! n) is still
+    // integer-only and gets rounded/clamped separately in Size().
+    private float _sizeMultiplier = 1;
 
     public EscPosDocument()
     {
@@ -227,7 +232,9 @@ public class EscPosDocument
         // finished, slicing off its bottom. This printer doesn't auto-adjust
         // its line pitch to the tallest character on the line the way real
         // Epson firmware does, so the extra height is fed manually here.
-        for (var i = 0; i < _sizeMultiplier; i++) _bytes.Add(0x0A);
+        // Rounded up, since even a 1.5x line needs the full extra line feed.
+        var feedLines = (int)Math.Ceiling(_sizeMultiplier);
+        for (var i = 0; i < feedLines; i++) _bytes.Add(0x0A);
         FlushPreviewLine();
         return this;
     }
@@ -243,14 +250,19 @@ public class EscPosDocument
     public EscPosDocument DoubleHeight(bool on) => Size(1, on ? 2 : 1);
 
     // GS ! n - n packs width (bits 0-2) and height (bits 4-6) magnification, each
-    // as (multiplier - 1), so 1 = normal size, up to 8 = 8x. Used for the
-    // configurable kitchen-ticket font size, and internally by DoubleHeight.
-    public EscPosDocument Size(int width, int height)
+    // as (multiplier - 1), so 1 = normal size, up to 8 = 8x. This is the
+    // printer's own hardware text scaling and only understands whole steps,
+    // so a fractional size (e.g. 1.5x, for finer control - see
+    // _sizeMultiplier) is rounded to the nearest whole step for the plain-
+    // ASCII text path; the exact fractional value still drives the Arabic
+    // raster image's font size, which has no such hardware limitation.
+    public EscPosDocument Size(float width, float height)
     {
-        width = Math.Clamp(width, 1, 8);
-        height = Math.Clamp(height, 1, 8);
-        _bytes.AddRange([0x1D, 0x21, (byte)(((height - 1) << 4) | (width - 1))]);
         _sizeMultiplier = Math.Max(width, height);
+
+        var hardwareWidth = Math.Clamp((int)Math.Round(width), 1, 8);
+        var hardwareHeight = Math.Clamp((int)Math.Round(height), 1, 8);
+        _bytes.AddRange([0x1D, 0x21, (byte)(((hardwareHeight - 1) << 4) | (hardwareWidth - 1))]);
         return this;
     }
 
@@ -297,7 +309,7 @@ public class EscPosDocument
         _currentLine.Clear();
 
         if (_bold) text = $"**{text}**";
-        if (_sizeMultiplier > 1) text = $"[{_sizeMultiplier}x] {text}";
+        if (_sizeMultiplier > 1) text = $"[{_sizeMultiplier:0.#}x] {text}";
         if (_centered && text.Length < Width)
         {
             var padding = (Width - text.Length) / 2;

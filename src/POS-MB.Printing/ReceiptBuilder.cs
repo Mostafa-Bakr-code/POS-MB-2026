@@ -12,14 +12,14 @@ public static class ReceiptBuilder
     // correctly regardless, just optionally hidden/summarized on the customer's
     // own copy. Comments are never shown to the customer at all (no toggle) -
     // they're kitchen-only information (see KitchenTicketDocument).
-    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1) =>
+    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
         CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToBytes();
-    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize = 1) =>
+    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
         CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToPreviewText();
 
-    public static byte[] BuildKitchenTicket(ReceiptOrder order, int fontSize = 2) =>
+    public static byte[] BuildKitchenTicket(ReceiptOrder order, decimal fontSize = 2m) =>
         KitchenTicketDocument(order, fontSize).ToBytes();
-    public static string PreviewKitchenTicket(ReceiptOrder order, int fontSize = 2) =>
+    public static string PreviewKitchenTicket(ReceiptOrder order, decimal fontSize = 2m) =>
         KitchenTicketDocument(order, fontSize).ToPreviewText();
 
     // Prints a fixed English/Arabic/numbers sample plus a plain-text note on
@@ -50,13 +50,13 @@ public static class ReceiptBuilder
         return doc;
     }
 
-    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, int fontSize)
+    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize)
     {
         var doc = new EscPosDocument()
             .Center().DoubleHeight(true).Bold(true)
             .Line("From Dimashk")
             .DoubleHeight(false)
-            .Size(fontSize, fontSize)
+            .Size((float)fontSize, (float)fontSize)
             .Line($"Order #{order.SerialNumber}")
             .Size(1, 1).Bold(false);
 
@@ -78,7 +78,7 @@ public static class ReceiptBuilder
         foreach (var item in order.Items)
         {
             var lineTotalInclTax = item.Price * item.Quantity;
-            doc.Bold(true).Size(fontSize, fontSize)
+            doc.Bold(true).Size((float)fontSize, (float)fontSize)
                 .Line($"{item.Quantity} x {item.Name}")
                 .Size(1, 1).Bold(false);
 
@@ -121,10 +121,10 @@ public static class ReceiptBuilder
         return doc;
     }
 
-    private static EscPosDocument KitchenTicketDocument(ReceiptOrder order, int fontSize)
+    private static EscPosDocument KitchenTicketDocument(ReceiptOrder order, decimal fontSize)
     {
         var doc = new EscPosDocument()
-            .Center().Size(fontSize, fontSize).Bold(true)
+            .Center().Size((float)fontSize, (float)fontSize).Bold(true)
             .Line($"{order.SourceLabel} - Order #{order.SerialNumber}")
             .Size(1, 1)
             .Line(order.LocalDate.ToString("yyyy-MM-dd HH:mm"))
@@ -136,12 +136,12 @@ public static class ReceiptBuilder
 
         foreach (var item in order.Items)
         {
-            doc.Bold(true).Size(fontSize, fontSize)
+            doc.Bold(true).Size((float)fontSize, (float)fontSize)
                 .Line($"{item.Quantity} x {item.Name}")
                 .Size(1, 1).Bold(false);
 
             if (!string.IsNullOrWhiteSpace(item.Comment))
-                doc.Bold(true).Size(fontSize, fontSize).Line($">> {item.Comment}").Size(1, 1).Bold(false);
+                doc.Bold(true).Size((float)fontSize, (float)fontSize).Line($">> {item.Comment}").Size(1, 1).Bold(false);
 
             doc.Divider();
         }

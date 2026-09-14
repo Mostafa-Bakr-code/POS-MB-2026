@@ -20,12 +20,16 @@ public class PrinterSettings
     public bool ShowOrderTimeOnReceipt { get; set; }
     public TaxDisplayMode TaxDisplayMode { get; set; } = TaxDisplayMode.PerItem;
 
-    // 1 = normal size, 2 = double, up to 8 (ESC/POS's own limit). The kitchen
-    // ticket defaults larger than normal so it's easy to read at a glance while
-    // cooking; the client receipt defaults to normal since nothing prompted a
-    // bigger default there, but it's independently adjustable the same way.
-    public int KitchenTicketFontSize { get; set; } = 2;
-    public int ClientReceiptFontSize { get; set; } = 1;
+    // 1 = normal size, 2 = double, up to 8 (ESC/POS's own limit for plain
+    // text - see EscPosDocument.Size). Half-steps (1.5, 2.5, ...) are
+    // allowed too - found live that jumping straight from 1x to 2x felt
+    // like too big a size difference on the kitchen ticket. The kitchen
+    // ticket defaults larger than normal so it's easy to read at a glance
+    // while cooking; the client receipt defaults to normal since nothing
+    // prompted a bigger default there, but it's independently adjustable
+    // the same way.
+    public decimal KitchenTicketFontSize { get; set; } = 2m;
+    public decimal ClientReceiptFontSize { get; set; } = 1m;
 
     // The real, unique order number always stays in the database untouched (Order
     // History, reports, etc. are unaffected) - this only changes what number gets
