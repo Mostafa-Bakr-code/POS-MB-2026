@@ -141,7 +141,7 @@ public static class ReceiptBuilder
                 .Size(1, 1).Bold(false);
 
             if (!string.IsNullOrWhiteSpace(item.Comment))
-                doc.Bold(true).Line($">> {item.Comment}").Bold(false);
+                doc.Bold(true).Size(fontSize, fontSize).Line($">> {item.Comment}").Size(1, 1).Bold(false);
 
             doc.NewLine();
         }
