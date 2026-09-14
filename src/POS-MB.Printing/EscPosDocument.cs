@@ -102,28 +102,27 @@ public class EscPosDocument
         var fontSize = 20f * _sizeMultiplier;
 
         using var font = new Font("Arial", fontSize, _bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-        using var format = new StringFormat
+        using var format = new StringFormat(StringFormatFlags.NoWrap)
         {
             Alignment = _centered ? StringAlignment.Center : StringAlignment.Near,
             LineAlignment = StringAlignment.Near
         };
 
-        // Found live: a long item name/comment at a bigger font size doesn't
-        // fit on one line at this printer's fixed pixel width, so GDI+ wraps
-        // it onto a second line by default - but the bitmap was only ever
-        // sized for one line, so the wrapped part overlapped the first
-        // instead of appearing cleanly below it. Measuring first (against a
-        // throwaway 1x1 bitmap, since Graphics needs *some* device context
-        // to measure against) tells us how tall the real bitmap needs to be
-        // to hold every wrapped line before anything is actually drawn.
-        float measuredHeight;
-        using (var measureBitmap = new Bitmap(1, 1))
-        using (var measureGraphics = Graphics.FromImage(measureBitmap))
-        {
-            measuredHeight = measureGraphics.MeasureString(text, font, RasterWidthDots, format).Height;
-        }
+        using var measureBitmap = new Bitmap(1, 1);
+        using var measureGraphics = Graphics.FromImage(measureBitmap);
 
-        var height = Math.Max(1, (int)Math.Ceiling(measuredHeight));
+        // Found live: a long item name/comment that needs to wrap onto a
+        // second line came out with glyphs overlapping garbage instead of
+        // stacking cleanly - GDI+'s own automatic word-wrap treats the whole
+        // string as one paragraph and reshapes/reorders wrapped lines
+        // together, which doesn't play well with right-to-left Arabic text.
+        // Wrapping manually - measuring and drawing one already-complete
+        // line at a time, each its own self-contained bidi paragraph - keeps
+        // every line's Arabic shaping independent and correct, the same way
+        // a normal multi-line RTL label wraps in a real UI.
+        var lines = WrapToLines(text, font, measureGraphics, RasterWidthDots);
+        var lineHeight = font.GetHeight(measureGraphics);
+        var height = Math.Max(1, (int)Math.Ceiling(lineHeight * lines.Count));
 
         using var bitmap = new Bitmap(RasterWidthDots, height);
         using (var graphics = Graphics.FromImage(bitmap))
@@ -136,10 +135,42 @@ public class EscPosDocument
             // automatically (contextual letter forms + right-to-left) since
             // that's what a Windows renderer always does for a Unicode
             // string, without needing any manual shaping in this code.
-            graphics.DrawString(text, font, Brushes.Black, new RectangleF(0, 0, RasterWidthDots, height), format);
+            for (var i = 0; i < lines.Count; i++)
+            {
+                graphics.DrawString(lines[i], font, Brushes.Black, new RectangleF(0, i * lineHeight, RasterWidthDots, lineHeight), format);
+            }
         }
 
         return BuildRasterCommand(bitmap);
+    }
+
+    // Greedily packs space-separated words onto as few lines as fit within
+    // maxWidthPx, measuring each candidate line as a whole (unbounded, single
+    // line) rather than relying on GDI+'s own wrapping - see RenderTextAsRaster.
+    private static List<string> WrapToLines(string text, Font font, Graphics measureGraphics, int maxWidthPx)
+    {
+        var words = text.Split(' ');
+        var lines = new List<string>();
+        var current = "";
+
+        foreach (var word in words)
+        {
+            var candidate = current.Length == 0 ? word : $"{current} {word}";
+            var width = measureGraphics.MeasureString(candidate, font).Width;
+            if (width > maxWidthPx && current.Length > 0)
+            {
+                lines.Add(current);
+                current = word;
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+
+        if (current.Length > 0 || lines.Count == 0) lines.Add(current);
+
+        return lines;
     }
 
     // GS v 0 m xL xH yL yH d1...dk - prints a monochrome bitmap directly,
