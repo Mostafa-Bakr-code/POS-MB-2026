@@ -33,6 +33,14 @@ public class OrderTakingControl : UserControl
             Dock = DockStyle.Top,
             Height = 110,
             AutoScroll = true,
+            // Found live: with WrapContents left at its default (true), too
+            // many categories wrapped onto a second row that this panel's
+            // fixed one-row height clips - the extra categories were only
+            // reachable by scrolling inside that thin 110px strip, which
+            // looked like they'd simply vanished. Scrolling sideways instead
+            // keeps every category tab the same size and reachable, the same
+            // pattern most touch POS category bars use.
+            WrapContents = false,
             Padding = new Padding(10)
         };
 
