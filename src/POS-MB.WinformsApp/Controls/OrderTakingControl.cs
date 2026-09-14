@@ -31,16 +31,17 @@ public class OrderTakingControl : UserControl
         _categoryPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 110,
+            // Found live: with this panel only tall enough for one row, too
+            // many categories wrapped onto a second row (FlowLayoutPanel's
+            // default WrapContents=true) that got clipped below the visible
+            // strip - reachable only by scrolling inside a thin area nobody
+            // would think to scroll, which looked like they'd vanished.
+            // Tall enough for two full rows (each ~86px: an 80px button plus
+            // its default 3px margin) plus this panel's own padding: a third
+            // row, if it ever comes to that, is still reachable via
+            // AutoScroll below.
+            Height = 200,
             AutoScroll = true,
-            // Found live: with WrapContents left at its default (true), too
-            // many categories wrapped onto a second row that this panel's
-            // fixed one-row height clips - the extra categories were only
-            // reachable by scrolling inside that thin 110px strip, which
-            // looked like they'd simply vanished. Scrolling sideways instead
-            // keeps every category tab the same size and reachable, the same
-            // pattern most touch POS category bars use.
-            WrapContents = false,
             Padding = new Padding(10)
         };
 
