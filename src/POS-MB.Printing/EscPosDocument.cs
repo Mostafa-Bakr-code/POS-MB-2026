@@ -174,7 +174,13 @@ public class EscPosDocument
 
     public EscPosDocument NewLine()
     {
-        _bytes.Add(0x0A);
+        // Found live: at 2x+ height (GS ! n), a single line feed doesn't
+        // fully clear the taller glyphs on this printer - the next line (or
+        // a divider right after it) starts before the enlarged text has
+        // finished, slicing off its bottom. This printer doesn't auto-adjust
+        // its line pitch to the tallest character on the line the way real
+        // Epson firmware does, so the extra height is fed manually here.
+        for (var i = 0; i < _sizeMultiplier; i++) _bytes.Add(0x0A);
         FlushPreviewLine();
         return this;
     }
