@@ -100,7 +100,30 @@ public class EscPosDocument
         // _sizeMultiplier), so an Arabic line looks the same size as an
         // English line at the same point in the receipt.
         var fontSize = 20f * _sizeMultiplier;
-        var height = (int)Math.Ceiling(fontSize * 1.5);
+
+        using var font = new Font("Arial", fontSize, _bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
+        using var format = new StringFormat
+        {
+            Alignment = _centered ? StringAlignment.Center : StringAlignment.Near,
+            LineAlignment = StringAlignment.Near
+        };
+
+        // Found live: a long item name/comment at a bigger font size doesn't
+        // fit on one line at this printer's fixed pixel width, so GDI+ wraps
+        // it onto a second line by default - but the bitmap was only ever
+        // sized for one line, so the wrapped part overlapped the first
+        // instead of appearing cleanly below it. Measuring first (against a
+        // throwaway 1x1 bitmap, since Graphics needs *some* device context
+        // to measure against) tells us how tall the real bitmap needs to be
+        // to hold every wrapped line before anything is actually drawn.
+        float measuredHeight;
+        using (var measureBitmap = new Bitmap(1, 1))
+        using (var measureGraphics = Graphics.FromImage(measureBitmap))
+        {
+            measuredHeight = measureGraphics.MeasureString(text, font, RasterWidthDots, format).Height;
+        }
+
+        var height = Math.Max(1, (int)Math.Ceiling(measuredHeight));
 
         using var bitmap = new Bitmap(RasterWidthDots, height);
         using (var graphics = Graphics.FromImage(bitmap))
@@ -113,13 +136,6 @@ public class EscPosDocument
             // automatically (contextual letter forms + right-to-left) since
             // that's what a Windows renderer always does for a Unicode
             // string, without needing any manual shaping in this code.
-            using var font = new Font("Arial", fontSize, _bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-            using var format = new StringFormat
-            {
-                Alignment = _centered ? StringAlignment.Center : StringAlignment.Near,
-                LineAlignment = StringAlignment.Center
-            };
-
             graphics.DrawString(text, font, Brushes.Black, new RectangleF(0, 0, RasterWidthDots, height), format);
         }
 
