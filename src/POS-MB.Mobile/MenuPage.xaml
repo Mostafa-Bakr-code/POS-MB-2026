@@ -62,20 +62,75 @@
             </Label.Shadow>
         </Label>
 
-        <!-- Built up in code-behind (see MenuPage.xaml.cs BuildCategoryChips) rather
-             than a CollectionView, specifically so every category chip is always on
-             screen at once - a CollectionView (even wrapped into a grid) still scrolls
-             internally once its content exceeds its own height, which is exactly the
-             "hidden extra row" behavior this was changed to avoid. FlexLayout has no
-             such height cap: Grid.Row="2" is Auto-sized, so this simply grows to fit
-             however many rows of chips there are. -->
-        <FlexLayout
+        <CollectionView
             Grid.Row="2"
-            x:Name="CategoriesLayout"
-            Direction="Row"
-            Wrap="Wrap"
-            JustifyContent="Start"
-            AlignItems="Start" />
+            x:Name="CategoriesView"
+            SelectionMode="Single"
+            SelectionChanged="OnCategorySelected"
+            HeightRequest="64">
+            <CollectionView.ItemsLayout>
+                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="10" />
+            </CollectionView.ItemsLayout>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="models:CategoryDto">
+                    <Frame
+                        Padding="8,0,16,0"
+                        CornerRadius="28"
+                        HeightRequest="56"
+                        HasShadow="False"
+                        BackgroundColor="{StaticResource ChipInactive}"
+                        BorderColor="Transparent">
+                        <Frame.VisualStateManager.VisualStateGroups>
+                            <VisualStateGroupList>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="Selected">
+                                        <VisualState.Setters>
+                                            <Setter Property="BackgroundColor" Value="{StaticResource Yellow}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateGroupList>
+                        </Frame.VisualStateManager.VisualStateGroups>
+                        <HorizontalStackLayout Spacing="8" VerticalOptions="Center">
+                            <Frame
+                                WidthRequest="42"
+                                HeightRequest="42"
+                                Padding="0"
+                                CornerRadius="21"
+                                HasShadow="False"
+                                BackgroundColor="Transparent"
+                                BorderColor="Transparent"
+                                IsClippedToBounds="True"
+                                VerticalOptions="Center"
+                                IsVisible="{Binding HasImage}">
+                                <Image Source="{Binding FullImageUrl}" Aspect="AspectFill" />
+                            </Frame>
+                            <Label
+                                Text="{Binding CategoryName}"
+                                TextColor="{StaticResource TextOnDark}"
+                                FontAttributes="Bold"
+                                FontSize="13"
+                                VerticalOptions="Center"
+                                VerticalTextAlignment="Center">
+                                <Label.VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroupList>
+                                        <VisualStateGroup x:Name="CommonStates">
+                                            <VisualState x:Name="Normal" />
+                                            <VisualState x:Name="Selected">
+                                                <VisualState.Setters>
+                                                    <Setter Property="TextColor" Value="{StaticResource TextOnCard}" />
+                                                </VisualState.Setters>
+                                            </VisualState>
+                                        </VisualStateGroup>
+                                    </VisualStateGroupList>
+                                </Label.VisualStateManager.VisualStateGroups>
+                            </Label>
+                        </HorizontalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
 
         <Grid Grid.Row="3">
             <Label
