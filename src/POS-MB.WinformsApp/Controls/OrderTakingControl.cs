@@ -141,10 +141,21 @@ public class OrderTakingControl : UserControl
             Padding = new Padding(10)
         };
 
+        // Docking order matters here: WinForms docks controls in reverse
+        // Controls.Add order (the last one added claims its edge first).
+        // Found live: with cartContainer added before the Top-docked
+        // category/quantity panels, those two claimed the FULL width above
+        // it first, pushing the cart's own top edge down whenever the
+        // category panel grew taller (e.g. wrapping to two rows) - making
+        // "Current Order" visually shrink even though nothing about it
+        // changed. Adding cartContainer LAST instead gives its Dock.Right
+        // claim top priority, so it always spans the full height on the
+        // right; the category panel, quantity toolbar and item grid then
+        // only ever share the remaining column to its left.
         Controls.Add(_itemsPanel);
-        Controls.Add(cartContainer);
         Controls.Add(quantityToolbar);
         Controls.Add(_categoryPanel);
+        Controls.Add(cartContainer);
 
         Load += async (_, _) => await LoadCategoriesAsync();
     }
