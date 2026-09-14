@@ -67,9 +67,9 @@
             x:Name="CategoriesView"
             SelectionMode="Single"
             SelectionChanged="OnCategorySelected"
-            HeightRequest="64">
+            HeightRequest="132">
             <CollectionView.ItemsLayout>
-                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="10" />
+                <GridItemsLayout Orientation="Vertical" Span="3" HorizontalItemSpacing="10" VerticalItemSpacing="10" />
             </CollectionView.ItemsLayout>
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:CategoryDto">
