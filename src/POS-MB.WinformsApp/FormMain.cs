@@ -78,8 +78,13 @@ public class FormMain : Form
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleCenter,
-            Dock = DockStyle.Top,
-            Height = 85
+            // Fill (not Top) - swapped with Log Out below so the username
+            // (harmless to sit near) ends up at the bottom of this column,
+            // right against the content area boundary, and Log Out moves up
+            // to the top - away from wherever the current screen's own
+            // controls (e.g. OrderTakingControl's Current Order panel) sit
+            // right below that boundary.
+            Dock = DockStyle.Fill
         };
 
         // Kitchen-ticket print status now shows here (not on OrderStatusControl)
@@ -139,7 +144,8 @@ public class FormMain : Form
         _btnLogout = new Button
         {
             Text = "Log Out",
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            Height = 85,
             Font = new Font("Segoe UI", 12F, FontStyle.Bold),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(176, 42, 55),
@@ -169,9 +175,9 @@ public class FormMain : Form
         navButtonsPanel.Controls.Add(_btnSettings);
         navButtonsPanel.Controls.Add(_btnLogs);
 
-        rightPanel.Controls.Add(_btnLogout);
-        rightPanel.Controls.Add(_lblPrintStatus);
         rightPanel.Controls.Add(_lblActiveUser);
+        rightPanel.Controls.Add(_lblPrintStatus);
+        rightPanel.Controls.Add(_btnLogout);
 
         _navBar.Controls.Add(navButtonsPanel);
         _navBar.Controls.Add(rightPanel);
