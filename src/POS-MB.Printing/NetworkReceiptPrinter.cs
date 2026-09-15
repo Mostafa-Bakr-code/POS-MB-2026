@@ -22,32 +22,62 @@ public class NetworkReceiptPrinter(string ipAddress, int port = 9100) : IReceipt
     // "Order placed" status before anyone saw it.
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
+    // Found live: a printer that just finished cutting the previous job's
+    // paper can briefly refuse new connections on its network module even
+    // though it's completely fine - without a retry, back-to-back orders
+    // could catch it in that instant and wrongly treat it as unreachable,
+    // triggering the cross-printer fallback (or even blocking a new order,
+    // if both happened to be mid-job at once) seconds after it had printed
+    // perfectly fine. One retry after a short pause is enough for it to
+    // finish and start accepting connections again.
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
+
     public async Task PrintAsync(byte[] data)
     {
-        using var client = new TcpClient();
-        using var cts = new CancellationTokenSource(ConnectTimeout);
-        await client.ConnectAsync(ipAddress, port, cts.Token);
-        using var stream = client.GetStream();
-        await stream.WriteAsync(data);
-        await stream.FlushAsync();
+        await ConnectWithRetryAsync(async client =>
+        {
+            using var stream = client.GetStream();
+            await stream.WriteAsync(data);
+            await stream.FlushAsync();
+        });
     }
 
     // A plain connectivity check (no bytes sent) - used to decide whether an
     // order can even be placed at all when both printers are down, before
-    // any receipt content exists yet. Same timeout as an actual print
-    // attempt, so this never itself becomes the slow part of that decision.
+    // any receipt content exists yet. Same timeout/retry as an actual print
+    // attempt, so this never itself becomes the slow or falsely-negative
+    // part of that decision.
     public async Task<bool> IsReachableAsync()
     {
         try
         {
-            using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(ConnectTimeout);
-            await client.ConnectAsync(ipAddress, port, cts.Token);
+            await ConnectWithRetryAsync(_ => Task.CompletedTask);
             return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    private async Task ConnectWithRetryAsync(Func<TcpClient, Task> action)
+    {
+        try
+        {
+            await ConnectAndRunAsync(action);
+        }
+        catch
+        {
+            await Task.Delay(RetryDelay);
+            await ConnectAndRunAsync(action);
+        }
+    }
+
+    private async Task ConnectAndRunAsync(Func<TcpClient, Task> action)
+    {
+        using var client = new TcpClient();
+        using var cts = new CancellationTokenSource(ConnectTimeout);
+        await client.ConnectAsync(ipAddress, port, cts.Token);
+        await action(client);
     }
 }
