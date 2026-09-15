@@ -31,4 +31,23 @@ public class NetworkReceiptPrinter(string ipAddress, int port = 9100) : IReceipt
         await stream.WriteAsync(data);
         await stream.FlushAsync();
     }
+
+    // A plain connectivity check (no bytes sent) - used to decide whether an
+    // order can even be placed at all when both printers are down, before
+    // any receipt content exists yet. Same timeout as an actual print
+    // attempt, so this never itself becomes the slow part of that decision.
+    public async Task<bool> IsReachableAsync()
+    {
+        try
+        {
+            using var client = new TcpClient();
+            using var cts = new CancellationTokenSource(ConnectTimeout);
+            await client.ConnectAsync(ipAddress, port, cts.Token);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

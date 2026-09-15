@@ -335,6 +335,15 @@ public class OrderTakingControl : UserControl
         _btnPlaceOrder.Enabled = false;
         try
         {
+            if (await BothConfiguredPrintersUnreachableAsync())
+            {
+                MessageBox.Show(
+                    "Cannot place this order: both the client and kitchen printers are unreachable. " +
+                    "Check the printers and network connection, then try again.",
+                    "Printers Offline", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
             var request = new CreateOrderRequest(
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
@@ -381,6 +390,36 @@ public class OrderTakingControl : UserControl
         {
             _btnPlaceOrder.Enabled = true;
         }
+    }
+
+    // Checked before an order is even created - if a printer is configured
+    // at all but genuinely unreachable, the kitchen has no way to learn
+    // about the order (paper tickets only, no digital kitchen display), so
+    // placing it anyway would silently lose it. Only blocks when BOTH
+    // printers fail this check - one working printer already covers for the
+    // other via PrintOrderCoreAsync's fallback, so a single printer hiccup
+    // never has to stop the cashier from taking orders. Skips the check
+    // entirely (never blocks) when neither printer is configured yet - that
+    // intentionally falls through to PrintOrderCoreAsync's preview-only mode.
+    private async Task<bool> BothConfiguredPrintersUnreachableAsync()
+    {
+        var settings = PrinterSettings.Load();
+        var clientConfigured = !string.IsNullOrWhiteSpace(settings.ClientPrinterIp);
+        var kitchenConfigured = !string.IsNullOrWhiteSpace(settings.KitchenPrinterIp);
+
+        if (!clientConfigured && !kitchenConfigured) return false;
+
+        var clientReachableTask = clientConfigured
+            ? new NetworkReceiptPrinter(settings.ClientPrinterIp, settings.ClientPrinterPort).IsReachableAsync()
+            : Task.FromResult(false);
+        var kitchenReachableTask = kitchenConfigured
+            ? new NetworkReceiptPrinter(settings.KitchenPrinterIp, settings.KitchenPrinterPort).IsReachableAsync()
+            : Task.FromResult(false);
+
+        var clientReachable = await clientReachableTask;
+        var kitchenReachable = await kitchenReachableTask;
+
+        return !clientReachable && !kitchenReachable;
     }
 
     // Both printers fire at the same time (not one-then-the-other) so the total
@@ -448,27 +487,32 @@ public class OrderTakingControl : UserControl
         var clientFailure = await clientTask;
         var kitchenFailure = await kitchenTask;
 
-        // Kitchen printer down/unreachable - the order still has to reach the
-        // kitchen somehow, so fall back to printing the kitchen ticket on the
-        // client printer too (the cashier can hand it over physically) instead
-        // of the order silently never reaching the kitchen at all.
-        string? fallbackFailure = null;
-        var usedFallback = false;
+        // Either receipt failing on its own printer falls back to the OTHER
+        // printer instead of being lost - the kitchen ticket especially has
+        // to reach the kitchen somehow, but there's no reason the customer
+        // receipt can't do the same. As long as at least one printer is
+        // actually up, both receipts end up printed somewhere.
+        string? kitchenFallbackFailure = null;
         if (kitchenFailure is not null)
-        {
-            usedFallback = true;
-            fallbackFailure = await PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort,
+            kitchenFallbackFailure = await PrintSafelyAsync(settings.ClientPrinterIp, settings.ClientPrinterPort,
                 kitchenTicket, "Kitchen ticket (fallback)");
-        }
 
-        if (clientFailure is not null && kitchenFailure is not null && fallbackFailure is not null)
+        string? clientFallbackFailure = null;
+        if (clientFailure is not null)
+            clientFallbackFailure = await PrintSafelyAsync(settings.KitchenPrinterIp, settings.KitchenPrinterPort,
+                customerReceipt, "Client receipt (fallback)");
+
+        var kitchenOk = kitchenFailure is null || kitchenFallbackFailure is null;
+        var clientOk = clientFailure is null || clientFallbackFailure is null;
+
+        if (!kitchenOk && !clientOk)
             ShowStatus("Print failed: both printers unreachable.", success: false);
-        else if (clientFailure is not null)
-            ShowStatus($"Print failed: {clientFailure}", success: false);
-        else if (usedFallback && fallbackFailure is null)
-            ShowStatus("Kitchen printer unreachable - ticket printed on client printer instead.", success: false);
-        else if (fallbackFailure is not null)
-            ShowStatus($"Print failed: {fallbackFailure}", success: false);
+        else if (!kitchenOk)
+            ShowStatus($"Print failed: {kitchenFallbackFailure}", success: false);
+        else if (!clientOk)
+            ShowStatus($"Print failed: {clientFallbackFailure}", success: false);
+        else if (kitchenFailure is not null || clientFailure is not null)
+            ShowStatus("A printer was unreachable - both receipts printed on the other one.", success: false);
     }
 
     // Returns null on success, or a short failure label on failure - avoids
