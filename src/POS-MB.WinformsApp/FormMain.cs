@@ -39,6 +39,7 @@ public class FormMain : Form
     private readonly Panel _contentArea;
     private readonly Label _lblActiveUser;
     private readonly Label _lblPrintStatus;
+    private readonly Label _lblPendingPrints;
     private readonly Button _btnNewOrder;
     private readonly Button _btnOrderStatus;
     private readonly Button _btnCategories;
@@ -111,6 +112,37 @@ public class FormMain : Form
             if (InvokeRequired) BeginInvoke(Apply); else Apply();
         };
 
+        // Placing an order never blocks on printer state (see
+        // OrderTakingControl.PrintOrderCoreAsync) - a printer outage just
+        // leaves its kitchen ticket in this queue until it comes back. That
+        // makes this persistent counter the only thing standing between a
+        // real outage and nobody noticing: unlike _lblPrintStatus above (a
+        // transient line that the next tick's message, or another screen
+        // entirely, can overwrite before anyone reads it), this always shows
+        // the current backlog and stays visible until it's actually gone.
+        _lblPendingPrints = new Label
+        {
+            ForeColor = Color.FromArgb(255, 140, 140),
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Dock = DockStyle.Top,
+            Height = 24,
+            Visible = false
+        };
+
+        _kitchenTicketPrintService.PendingCountChanged += count =>
+        {
+            void Apply()
+            {
+                _lblPendingPrints.Visible = count > 0;
+                _lblPendingPrints.Text = count == 1
+                    ? "1 order waiting to print"
+                    : $"{count} orders waiting to print";
+            }
+            if (InvokeRequired) BeginInvoke(Apply); else Apply();
+        };
+
         _btnNewOrder = CreateNavButton("New Order");
         _btnNewOrder.Click += (_, _) => ShowOrderTaking();
 
@@ -177,6 +209,7 @@ public class FormMain : Form
 
         rightPanel.Controls.Add(_lblActiveUser);
         rightPanel.Controls.Add(_lblPrintStatus);
+        rightPanel.Controls.Add(_lblPendingPrints);
         rightPanel.Controls.Add(_btnLogout);
 
         _navBar.Controls.Add(navButtonsPanel);

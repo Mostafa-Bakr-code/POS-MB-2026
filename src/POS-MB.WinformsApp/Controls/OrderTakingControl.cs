@@ -335,15 +335,6 @@ public class OrderTakingControl : UserControl
         _btnPlaceOrder.Enabled = false;
         try
         {
-            if (await BothConfiguredPrintersUnreachableAsync())
-            {
-                MessageBox.Show(
-                    "Cannot place this order: both the client and kitchen printers are unreachable. " +
-                    "Check the printers and network connection, then try again.",
-                    "Printers Offline", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
             var request = new CreateOrderRequest(
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
@@ -380,7 +371,10 @@ public class OrderTakingControl : UserControl
 
             // Fired in the background, not awaited here - the cashier moves on to
             // the next order immediately instead of waiting on two printers.
-            _ = PrintOrderAsync(receiptOrder);
+            // Placing the order itself never depends on printer state at all
+            // (see PrintOrderCoreAsync) - a printer outage is the printer's
+            // problem to recover from, never a reason to stop taking orders.
+            _ = PrintOrderAsync(order.OrderId, receiptOrder);
         }
         catch (Exception ex)
         {
@@ -390,36 +384,6 @@ public class OrderTakingControl : UserControl
         {
             _btnPlaceOrder.Enabled = true;
         }
-    }
-
-    // Checked before an order is even created - if a printer is configured
-    // at all but genuinely unreachable, the kitchen has no way to learn
-    // about the order (paper tickets only, no digital kitchen display), so
-    // placing it anyway would silently lose it. Only blocks when BOTH
-    // printers fail this check - one working printer already covers for the
-    // other via PrintOrderCoreAsync's fallback, so a single printer hiccup
-    // never has to stop the cashier from taking orders. Skips the check
-    // entirely (never blocks) when neither printer is configured yet - that
-    // intentionally falls through to PrintOrderCoreAsync's preview-only mode.
-    private async Task<bool> BothConfiguredPrintersUnreachableAsync()
-    {
-        var settings = PrinterSettings.Load();
-        var clientConfigured = !string.IsNullOrWhiteSpace(settings.ClientPrinterIp);
-        var kitchenConfigured = !string.IsNullOrWhiteSpace(settings.KitchenPrinterIp);
-
-        if (!clientConfigured && !kitchenConfigured) return false;
-
-        var clientReachableTask = clientConfigured
-            ? new NetworkReceiptPrinter(settings.ClientPrinterIp, settings.ClientPrinterPort).IsReachableAsync()
-            : Task.FromResult(false);
-        var kitchenReachableTask = kitchenConfigured
-            ? new NetworkReceiptPrinter(settings.KitchenPrinterIp, settings.KitchenPrinterPort).IsReachableAsync()
-            : Task.FromResult(false);
-
-        var clientReachable = await clientReachableTask;
-        var kitchenReachable = await kitchenReachableTask;
-
-        return !clientReachable && !kitchenReachable;
     }
 
     // Both printers fire at the same time (not one-then-the-other) so the total
@@ -435,11 +399,11 @@ public class OrderTakingControl : UserControl
     // observes, silently skipping the kitchen ticket with no error shown at
     // all instead of the clear failure status every other print problem here
     // already surfaces via ShowStatus.
-    private async Task PrintOrderAsync(ReceiptOrder order)
+    private async Task PrintOrderAsync(int orderId, ReceiptOrder order)
     {
         try
         {
-            await PrintOrderCoreAsync(order);
+            await PrintOrderCoreAsync(orderId, order);
         }
         catch (Exception ex)
         {
@@ -447,7 +411,7 @@ public class OrderTakingControl : UserControl
         }
     }
 
-    private async Task PrintOrderCoreAsync(ReceiptOrder order)
+    private async Task PrintOrderCoreAsync(int orderId, ReceiptOrder order)
     {
         var settings = PrinterSettings.Load();
 
@@ -505,10 +469,24 @@ public class OrderTakingControl : UserControl
         var kitchenOk = kitchenFailure is null || kitchenFallbackFailure is null;
         var clientOk = clientFailure is null || clientFallbackFailure is null;
 
+        if (kitchenOk)
+        {
+            // Printed here just now (directly or via fallback) - mark it so
+            // the background poller (KitchenTicketPrintService, which now
+            // covers Cashier orders too) never reprints it on its next tick.
+            await _apiClient.MarkKitchenTicketPrintedAsync(orderId);
+        }
+        // If not kitchenOk, deliberately leave KitchenTicketPrintedAt unset -
+        // that poller keeps retrying automatically until a printer comes
+        // back, so a printer outage right now never means the kitchen never
+        // finds out about this order. The customer receipt has no such
+        // queue (lower stakes - the customer's usually already gone if it
+        // fails) and stays best-effort/immediate-only.
+
         if (!kitchenOk && !clientOk)
-            ShowStatus("Print failed: both printers unreachable.", success: false);
+            ShowStatus("Both printers unreachable - kitchen ticket will print automatically once one is back online.", success: false);
         else if (!kitchenOk)
-            ShowStatus($"Print failed: {kitchenFallbackFailure}", success: false);
+            ShowStatus("Kitchen printer unreachable - ticket will print automatically once a printer is back online.", success: false);
         else if (!clientOk)
             ShowStatus($"Print failed: {clientFallbackFailure}", success: false);
         else if (kitchenFailure is not null || clientFailure is not null)

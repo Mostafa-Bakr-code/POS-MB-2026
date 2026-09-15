@@ -37,16 +37,30 @@ public class KitchenTicketQueueTests : DatabaseTestBase
     }
 
     [Fact]
-    public async Task NeedingKitchenTicket_ExcludesCashierOrders()
+    public async Task NeedingKitchenTicket_IncludesCashierOrder_AsSoonAsPlaced()
+    {
+        var categoryId = await CreateCategoryAsync();
+        var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
+        var userId = await CreateUserAsync();
+        // No status change needed - a Cashier order is created straight
+        // into Completed and must qualify immediately (placing an order
+        // never blocks on printer state), unlike Mobile which waits for
+        // kitchen acceptance (Preparing).
+        var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
+
+        var needing = await OrderBusiness.GetOrdersNeedingKitchenTicketAsync();
+
+        Assert.Contains(needing, o => o.OrderId == orderId);
+    }
+
+    [Fact]
+    public async Task NeedingKitchenTicket_ExcludesCancelledCashierOrder()
     {
         var categoryId = await CreateCategoryAsync();
         var itemId = await CreateItemAsync(categoryId, "Item", price: 100m);
         var userId = await CreateUserAsync();
         var orderId = await OrderBusiness.CreateOrderAsync(OrderSource.Cashier, userId, null, false, [new NewOrderItem(itemId, 1, null)]);
-        // Force it to Preparing even though a real cashier order never
-        // naturally gets there (starts at Completed) - proves the
-        // OrderSource filter itself is what excludes it, not the status.
-        await OrderBusiness.UpdateStatusAsync(orderId, OrderStatus.Preparing);
+        await OrderBusiness.UpdateStatusAsync(orderId, OrderStatus.Cancelled);
 
         var needing = await OrderBusiness.GetOrdersNeedingKitchenTicketAsync();
 
