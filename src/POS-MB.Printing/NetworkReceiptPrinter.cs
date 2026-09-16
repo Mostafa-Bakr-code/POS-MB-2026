@@ -42,6 +42,24 @@ public class NetworkReceiptPrinter(string ipAddress, int port = 9100) : IReceipt
         });
     }
 
+    // A plain connectivity check (no bytes sent) - used to decide whether an
+    // order can even be placed at all when both printers are down, before
+    // any receipt content exists yet. Same timeout/retry as an actual print
+    // attempt, so this never itself becomes the slow or falsely-negative
+    // part of that decision.
+    public async Task<bool> IsReachableAsync()
+    {
+        try
+        {
+            await ConnectWithRetryAsync(_ => Task.CompletedTask);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private async Task ConnectWithRetryAsync(Func<TcpClient, Task> action)
     {
         try

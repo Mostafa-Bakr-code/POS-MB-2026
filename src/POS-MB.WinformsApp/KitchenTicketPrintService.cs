@@ -19,14 +19,6 @@ public class KitchenTicketPrintService(ApiClient apiClient)
 
     public event Action<string, bool>? StatusChanged;
 
-    // A transient StatusChanged line is easy to miss (it can be overwritten
-    // by the next tick's message, or by an order's own "placed" status, well
-    // before anyone reads it) - this is the persistent signal FormMain's own
-    // always-visible counter is built from instead, so a printer outage
-    // shows up as something staff actually have to notice, not something
-    // that can silently scroll past.
-    public event Action<int>? PendingCountChanged;
-
     // Guards against overlapping runs if a poll takes longer than the timer
     // interval (e.g. a slow/unreachable printer) - the next tick just skips
     // instead of starting a second concurrent pass over the same orders.
@@ -37,7 +29,6 @@ public class KitchenTicketPrintService(ApiClient apiClient)
         try
         {
             var orders = await apiClient.GetOrdersNeedingKitchenTicketAsync();
-            PendingCountChanged?.Invoke(orders.Count);
             if (orders.Count == 0) return;
 
             var allItems = await apiClient.GetItemsAsync(includeInactive: true);

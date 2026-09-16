@@ -268,34 +268,17 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     // an order to Preparing no longer prints it inline. Instead this is what
     // the poller checks every few seconds, decoupled from which screen did
     // the accepting.
-    //
-    // Also the safety net for Cashier orders now that placing one never
-    // blocks on printer state (see OrderTakingControl.PrintOrderCoreAsync) -
-    // a Cashier order is created straight into Completed (never Preparing,
-    // that stage only exists for Mobile's kitchen-acceptance flow), so it
-    // qualifies here immediately rather than waiting for a status change
-    // that would never come. Excludes Cancelled so a cashier order voided
-    // before ever printing doesn't get retried forever.
     public async Task<IEnumerable<Order>> GetOrdersNeedingKitchenTicketAsync()
     {
         using var connection = connectionFactory.CreateConnection();
 
         const string query = @"
             SELECT * FROM Orders
-            WHERE KitchenTicketPrintedAt IS NULL
-              AND (
-                    (OrderSource = @Mobile AND Status = @Preparing)
-                 OR (OrderSource = @Cashier AND Status <> @Cancelled)
-                  )
+            WHERE OrderSource = @OrderSource AND Status = @Status AND KitchenTicketPrintedAt IS NULL
             ORDER BY Date";
 
-        return await connection.QueryAsync<Order>(query, new
-        {
-            Mobile = OrderSource.Mobile,
-            Preparing = OrderStatus.Preparing,
-            Cashier = OrderSource.Cashier,
-            Cancelled = OrderStatus.Cancelled
-        });
+        return await connection.QueryAsync<Order>(
+            query, new { OrderSource = OrderSource.Mobile, Status = OrderStatus.Preparing });
     }
 
     // The KitchenTicketPrintedAt IS NULL guard makes this safely idempotent -
