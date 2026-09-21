@@ -1,6 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true"></application>
+	<!-- usesCleartextTraffic - unlike POS-MB.Mobile (one fixed dev address,
+	     narrowly allowlisted via network_security_config.xml), Cashier's
+	     API address is a runtime-configurable setting pointing at whatever
+	     local plain-HTTP server a given restaurant is running (see
+	     ApiConfig.cs) - there's no single domain to allowlist, since the
+	     whole point is that address varies per deployment. Android blocks
+	     all plain HTTP by default from API 28+; this opts back in app-wide. -->
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:usesCleartextTraffic="true"></application>
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.INTERNET" />
 </manifest>
