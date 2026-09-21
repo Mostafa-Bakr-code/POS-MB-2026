@@ -38,8 +38,18 @@ public class PrinterSettings
     // real number as-is.
     public int ReceiptOrderNumberWrapAt { get; set; } = 100;
 
+    // Environment.SpecialFolder.LocalApplicationData doesn't reliably
+    // resolve to a writable path on Android - this stays settable so a MAUI
+    // host (see POS-MB.Cashier's MauiProgram.cs) can point it at
+    // FileSystem.Current.AppDataDirectory instead, once at startup, without
+    // this project ever needing to reference any MAUI package itself.
+    // Defaults to the original Windows behavior so POS-MB.WinformsApp needs
+    // no changes at all.
+    public static Func<string> BaseDirectoryProvider { get; set; } =
+        () => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
     private static string FilePath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "POS-MB", "printer-settings.json");
+        Path.Combine(BaseDirectoryProvider(), "POS-MB", "printer-settings.json");
 
     public static PrinterSettings Load()
     {

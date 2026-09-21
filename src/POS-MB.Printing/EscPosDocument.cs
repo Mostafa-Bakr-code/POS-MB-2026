@@ -1,6 +1,6 @@
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.Text;
+using SkiaSharp;
+using SkiaSharp.HarfBuzz;
 
 namespace POS_MB.Printing;
 
@@ -106,53 +106,80 @@ public class EscPosDocument
         // English line at the same point in the receipt.
         var fontSize = 20f * _sizeMultiplier;
 
-        using var font = new Font("Arial", fontSize, _bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-        using var format = new StringFormat(StringFormatFlags.NoWrap)
-        {
-            Alignment = _centered ? StringAlignment.Center : StringAlignment.Near,
-            LineAlignment = StringAlignment.Near
-        };
+        // Same reasoning as the old GDI+ path relying on Windows' own font
+        // linking: rather than bundling one specific Arabic font and hoping
+        // its glyph coverage is right, MatchCharacter finds whatever font
+        // the OS itself already has that can draw this text's own first
+        // non-ASCII character - Windows resolves this to Tahoma/Arial's
+        // Arabic fallback, Android to its built-in Noto Sans Arabic -
+        // without this code needing to know or bundle either one.
+        using var typeface = ResolveTypeface(text, _bold);
+        using var font = new SKFont(typeface, fontSize);
+        using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
 
-        using var measureBitmap = new Bitmap(1, 1);
-        using var measureGraphics = Graphics.FromImage(measureBitmap);
+        // Skia itself is just a raster library with no complex-script
+        // shaping built in - unlike GDI+, which got Arabic's contextual
+        // letter forms and right-to-left reordering for free from Windows'
+        // own text engine. SKShaper (HarfBuzz) is what actually does that
+        // shaping/reordering here.
+        using var shaper = new SKShaper(typeface);
 
-        // Found live: a long item name/comment that needs to wrap onto a
-        // second line came out with glyphs overlapping garbage instead of
-        // stacking cleanly - GDI+'s own automatic word-wrap treats the whole
-        // string as one paragraph and reshapes/reorders wrapped lines
-        // together, which doesn't play well with right-to-left Arabic text.
         // Wrapping manually - measuring and drawing one already-complete
-        // line at a time, each its own self-contained bidi paragraph - keeps
+        // line at a time, each shaped as its own self-contained run - keeps
         // every line's Arabic shaping independent and correct, the same way
-        // a normal multi-line RTL label wraps in a real UI.
-        var lines = WrapToLines(text, font, measureGraphics, RasterWidthDots);
-        var lineHeight = font.GetHeight(measureGraphics);
+        // a normal multi-line RTL label wraps in a real UI (found live:
+        // letting a whole multi-line string get wrapped/reshaped together
+        // produced overlapping garbage instead of clean stacked lines).
+        var lines = WrapToLines(text, font, RasterWidthDots);
+
+        font.GetFontMetrics(out var metrics);
+        var lineHeight = metrics.Descent - metrics.Ascent;
         var height = Math.Max(1, (int)Math.Ceiling(lineHeight * lines.Count));
 
-        using var bitmap = new Bitmap(RasterWidthDots, height);
-        using (var graphics = Graphics.FromImage(bitmap))
+        using var bitmap = new SKBitmap(new SKImageInfo(RasterWidthDots, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
         {
-            graphics.Clear(Color.White);
-            graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            canvas.Clear(SKColors.White);
 
-            // Arial, same as the old POS - Windows' own font-linking fills in
-            // the actual Arabic glyphs, and GDI+ shapes/reorders them
-            // automatically (contextual letter forms + right-to-left) since
-            // that's what a Windows renderer always does for a Unicode
-            // string, without needing any manual shaping in this code.
             for (var i = 0; i < lines.Count; i++)
             {
-                graphics.DrawString(lines[i], font, Brushes.Black, new RectangleF(0, i * lineHeight, RasterWidthDots, lineHeight), format);
+                var lineWidth = font.MeasureText(lines[i]);
+                var x = _centered ? Math.Max(0, (RasterWidthDots - lineWidth) / 2) : 0;
+                var baselineY = i * lineHeight - metrics.Ascent;
+                canvas.DrawShapedText(shaper, lines[i], x, baselineY, font, paint);
             }
         }
 
         return BuildRasterCommand(bitmap);
     }
 
+    // Finds whatever typeface the OS already has installed that can
+    // actually draw this text's first non-ASCII character - see
+    // RenderTextAsRaster. Falls back to the platform default font if
+    // nothing more specific matches (shouldn't normally happen for Arabic
+    // on either Windows or Android).
+    private static SKTypeface ResolveTypeface(string text, bool bold)
+    {
+        var style = bold ? SKFontStyle.Bold : SKFontStyle.Normal;
+
+        foreach (var c in text)
+        {
+            if (c > 0x7F)
+                return SKFontManager.Default.MatchCharacter(null, style, null, c) ?? SKTypeface.Default;
+        }
+
+        return SKTypeface.Default;
+    }
+
     // Greedily packs space-separated words onto as few lines as fit within
     // maxWidthPx, measuring each candidate line as a whole (unbounded, single
-    // line) rather than relying on GDI+'s own wrapping - see RenderTextAsRaster.
-    private static List<string> WrapToLines(string text, Font font, Graphics measureGraphics, int maxWidthPx)
+    // line) rather than relying on any built-in word-wrap - see
+    // RenderTextAsRaster. Uses the font's own (unshaped) glyph advances for
+    // this width check, not the shaper - shaping affects individual glyph
+    // forms far more than total line width, so this stays a close enough
+    // estimate for deciding where to break, without shaping every candidate
+    // line just to measure it.
+    private static List<string> WrapToLines(string text, SKFont font, int maxWidthPx)
     {
         var words = text.Split(' ');
         var lines = new List<string>();
@@ -161,7 +188,7 @@ public class EscPosDocument
         foreach (var word in words)
         {
             var candidate = current.Length == 0 ? word : $"{current} {word}";
-            var width = measureGraphics.MeasureString(candidate, font).Width;
+            var width = font.MeasureText(candidate);
             if (width > maxWidthPx && current.Length > 0)
             {
                 lines.Add(current);
@@ -182,34 +209,26 @@ public class EscPosDocument
     // one bit per pixel (1 = black), packed 8 pixels per byte, row by row.
     // This is the one ESC/POS command that doesn't depend on the printer's
     // built-in character set at all - it's just pixels.
-    private static byte[] BuildRasterCommand(Bitmap bitmap)
+    private static byte[] BuildRasterCommand(SKBitmap bitmap)
     {
         var widthBytes = (bitmap.Width + 7) / 8;
         var data = new byte[widthBytes * bitmap.Height];
 
-        var bits = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        try
+        var pixels = bitmap.Bytes; // Rgba8888, 4 bytes/pixel, row-major
+        var rowBytes = bitmap.RowBytes;
+
+        for (var y = 0; y < bitmap.Height; y++)
         {
-            unsafe
+            var rowStart = y * rowBytes;
+            for (var x = 0; x < bitmap.Width; x++)
             {
-                for (var y = 0; y < bitmap.Height; y++)
+                var offset = rowStart + x * 4; // R, G, B, A
+                var luminance = (pixels[offset] * 299 + pixels[offset + 1] * 587 + pixels[offset + 2] * 114) / 1000;
+                if (luminance < 128)
                 {
-                    var row = (byte*)bits.Scan0 + y * bits.Stride;
-                    for (var x = 0; x < bitmap.Width; x++)
-                    {
-                        var pixel = row + x * 4; // B, G, R, A
-                        var luminance = (pixel[2] * 299 + pixel[1] * 587 + pixel[0] * 114) / 1000;
-                        if (luminance < 128)
-                        {
-                            data[y * widthBytes + x / 8] |= (byte)(0x80 >> (x % 8));
-                        }
-                    }
+                    data[y * widthBytes + x / 8] |= (byte)(0x80 >> (x % 8));
                 }
             }
-        }
-        finally
-        {
-            bitmap.UnlockBits(bits);
         }
 
         List<byte> command =

@@ -1,15 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Plain net8.0, not net8.0-windows - this now needs to be referenceable
+         from the Android build of POS-MB.Cashier, not just Windows apps.
+         SkiaSharp (below) is what makes that possible: it renders identically
+         on Windows and Android, unlike the System.Drawing/GDI+ this project
+         used to depend on. -->
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>POS_MB.Printing</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Drawing.Common" Version="8.0.10" />
+    <!-- SkiaSharp draws the Arabic raster image itself, cross-platform.
+         SkiaSharp.HarfBuzz (SKShaper) does the actual contextual Arabic
+         shaping + right-to-left reordering - Skia itself is just a raster
+         library with no complex-script shaping built in, unlike GDI+ which
+         got that for free from Windows' own text engine. -->
+    <PackageReference Include="SkiaSharp" Version="3.116.1" />
+    <PackageReference Include="SkiaSharp.HarfBuzz" Version="3.116.1" />
   </ItemGroup>
 
 </Project>
