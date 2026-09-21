@@ -14,7 +14,19 @@ public static class ApiConfig
     // A same-network default so a fresh dev/test install still points
     // somewhere sensible before an installer sets the real address - not
     // meant to be the production value for any real deployment.
+    //
+    // "localhost" from inside an Android emulator means the emulator
+    // itself, not the host PC running it - 10.0.2.2 is the special alias
+    // Android's emulator provides specifically to reach the host machine's
+    // own localhost (same reasoning as POS-MB.Mobile's ApiConfig, which
+    // instead uses a real LAN IP since it also targets real devices - this
+    // app's dev/test loop so far is emulator-only, so the simpler alias
+    // works without needing to know this PC's actual IP at all).
+#if ANDROID
+    private const string DefaultBaseUrl = "http://10.0.2.2:5098/";
+#else
     private const string DefaultBaseUrl = "http://localhost:5098/";
+#endif
 
     public static string BaseUrl
     {
