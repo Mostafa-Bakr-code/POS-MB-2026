@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="POS_MB.Cashier.Pages.LoginPage"
+             Title="Log In">
+
+    <Grid>
+        <VerticalStackLayout
+            VerticalOptions="Center"
+            HorizontalOptions="Center"
+            WidthRequest="360"
+            Spacing="14"
+            Padding="20">
+
+            <Label
+                Text="POS-MB"
+                FontSize="32"
+                FontAttributes="Bold"
+                HorizontalOptions="Center"
+                Margin="0,0,0,20" />
+
+            <Label Text="Username" FontAttributes="Bold" />
+            <Entry x:Name="UserNameEntry" ReturnType="Next" />
+
+            <Label Text="Password" FontAttributes="Bold" />
+            <Entry x:Name="PasswordEntry" IsPassword="True" ReturnType="Go" Completed="OnLoginClicked" />
+
+            <Label
+                x:Name="ErrorLabel"
+                TextColor="Red"
+                HorizontalOptions="Center"
+                IsVisible="False" />
+
+            <Button
+                x:Name="LoginButton"
+                Text="Log In"
+                Clicked="OnLoginClicked"
+                HeightRequest="50"
+                FontAttributes="Bold"
+                Margin="0,10,0,0" />
+
+            <ActivityIndicator x:Name="LoadingIndicator" IsVisible="False" IsRunning="False" />
+
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

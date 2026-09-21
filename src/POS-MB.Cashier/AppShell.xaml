@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
+<!-- Used only as a root container (no tabs/flyout) - same pattern as
+     POS-MB.Mobile's AppShell. All real navigation is classic code-behind
+     Navigation.PushAsync/PopAsync/PopToRootAsync, not Shell routing. -->
 <Shell
     x:Class="POS_MB.Cashier.AppShell"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-    xmlns:local="clr-namespace:POS_MB.Cashier"
-    Title="POS_MB.Cashier">
+    xmlns:pages="clr-namespace:POS_MB.Cashier.Pages"
+    Title="POS-MB Cashier">
 
     <ShellContent
-        Title="Home"
-        ContentTemplate="{DataTemplate local:MainPage}"
-        Route="MainPage" />
+        Title="Login"
+        ContentTemplate="{DataTemplate pages:LoginPage}"
+        Route="LoginPage" />
 
 </Shell>
