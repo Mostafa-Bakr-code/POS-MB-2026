@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.OrderTakingPage"
+             Title="New Order">
+
+    <Grid ColumnDefinitions="*,360" RowDefinitions="Auto,Auto,*" Padding="10" RowSpacing="8" ColumnSpacing="10">
+
+        <!-- Categories - fixed-height scroll area, same reasoning as
+             OrderTakingControl's 2-row category panel: enough room for a
+             couple of wrapped rows, scrollable if there are ever more. -->
+        <ScrollView Grid.Row="0" Grid.Column="0" HeightRequest="140">
+            <FlexLayout x:Name="CategoriesLayout" Direction="Row" Wrap="Wrap" />
+        </ScrollView>
+
+        <!-- Typing a quantity here (instead of tapping a tile N times) is how a
+             cashier adds e.g. 100 burgers without 100 clicks - collapses into one
+             "Burger x100" line with one shared comment. Tapping a tile directly
+             always adds a separate quantity-1 line. -->
+        <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Spacing="10">
+            <Label Text="Quantity to add:" VerticalOptions="Center" FontAttributes="Bold" />
+            <controls:NumericStepper x:Name="QuantityStepper" Minimum="1" Maximum="999" Increment="1" WidthRequest="160" />
+        </HorizontalStackLayout>
+
+        <ScrollView Grid.Row="2" Grid.Column="0">
+            <FlexLayout x:Name="ItemsLayout" Direction="Row" Wrap="Wrap" />
+        </ScrollView>
+
+        <!-- Current Order - spans all three rows on the right, same reasoning
+             as WinForms' cartContainer always spanning full height regardless
+             of how tall the category row gets. -->
+        <Grid Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" BackgroundColor="#F8F9FA" Padding="10" RowSpacing="6">
+            <Label Grid.Row="0" Text="Current Order" FontSize="20" FontAttributes="Bold" />
+
+            <CollectionView x:Name="CartView" Grid.Row="1">
+                <CollectionView.ItemsLayout>
+                    <LinearItemsLayout Orientation="Vertical" ItemSpacing="4" />
+                </CollectionView.ItemsLayout>
+            </CollectionView>
+
+            <Label x:Name="PrintStatusLabel" Grid.Row="2" FontSize="11" TextColor="#DC3545" HorizontalTextAlignment="Center" />
+            <Label x:Name="TotalLabel" Grid.Row="3" Text="Total: 0.00" FontSize="18" FontAttributes="Bold" />
+
+            <HorizontalStackLayout Grid.Row="4" Spacing="8">
+                <CheckBox x:Name="ComplimentaryCheck" />
+                <Label x:Name="ComplimentaryLabel" Text="Complimentary Order (no charge)" VerticalOptions="Center" TextColor="#DC3545" FontAttributes="Bold" />
+            </HorizontalStackLayout>
+
+            <Button
+                x:Name="PlaceOrderButton"
+                Grid.Row="5"
+                Text="Place Order"
+                Clicked="OnPlaceOrderClicked"
+                BackgroundColor="#198754"
+                TextColor="White"
+                FontAttributes="Bold"
+                HeightRequest="60" />
+        </Grid>
+
+    </Grid>
+
+</ContentPage>

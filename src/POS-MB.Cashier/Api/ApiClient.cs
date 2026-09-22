@@ -453,6 +453,23 @@ public class ApiClient
         return "Something went wrong. Please try again.";
     }
 
+    public async Task<(OrderDto? Result, string? Error)> CreateOrderAsync(CreateOrderRequest request)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync("api/orders", request);
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Could not reach the server: {ex.Message}");
+        }
+
+        if (!response.IsSuccessStatusCode) return (null, await ExtractErrorAsync(response));
+
+        return (await response.Content.ReadFromJsonAsync<OrderDto>(), null);
+    }
+
     public async Task<List<OrderDto>> GetOrdersAsync(DateTime? startDate, DateTime? endDate, OrderSource? orderSource)
     {
         try

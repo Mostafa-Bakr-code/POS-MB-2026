@@ -33,7 +33,7 @@ public partial class MainShellPage : ContentPage
 
         ActiveUserLabel.Text = AppSession.CurrentUser?.UserName ?? "";
 
-        _newOrderButton = AddNavButton("New Order", Permission.Orders, () => new StubPage("New Order"));
+        _newOrderButton = AddNavButton("New Order", Permission.Orders, () => new OrderTakingPage());
         _orderStatusButton = AddNavButton("Order Status", Permission.Orders, () => new StubPage("Order Status"));
         AddNavButton("Categories", Permission.Categories, () => new CategoriesPage());
         AddNavButton("Items", Permission.Items, () => new ItemsPage());

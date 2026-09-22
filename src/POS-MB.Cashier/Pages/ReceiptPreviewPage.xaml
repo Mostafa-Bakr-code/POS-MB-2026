@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="POS_MB.Cashier.Pages.ReceiptPreviewPage">
+
+    <Grid RowDefinitions="*,Auto" Padding="10" RowSpacing="10">
+        <ScrollView Grid.Row="0">
+            <!-- Consolas isn't guaranteed off Windows - Courier New has a
+                 monospace fallback on both Windows and Android and needs no
+                 bundled font file, unlike SkiaSharp's own printer-side
+                 rendering (see POS-MB.Printing.EscPosDocument) which can't
+                 rely on system fonts as loosely as this on-screen-only preview can. -->
+            <Label x:Name="PreviewLabel" FontFamily="Courier New" FontSize="13" />
+        </ScrollView>
+        <Button Grid.Row="1" Text="Close" Clicked="OnCloseClicked" FontAttributes="Bold" />
+    </Grid>
+
+</ContentPage>
