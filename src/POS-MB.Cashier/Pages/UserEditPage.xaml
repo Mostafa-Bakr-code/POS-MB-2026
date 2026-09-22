@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="POS_MB.Cashier.Pages.UserEditPage">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="10">
+
+            <Label Text="Username" FontAttributes="Bold" />
+            <Entry x:Name="UserNameEntry" MaxLength="50" />
+
+            <Label x:Name="PasswordLabel" Text="Password" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Entry x:Name="PasswordEntry" IsPassword="True" />
+
+            <Label Text="Permissions" FontAttributes="Bold" FontSize="16" Margin="0,14,0,0" />
+
+            <HorizontalStackLayout Spacing="8">
+                <CheckBox x:Name="FullAccessCheck" CheckedChanged="OnFullAccessChanged" />
+                <Label Text="Full Access" VerticalOptions="Center" FontAttributes="Bold" />
+            </HorizontalStackLayout>
+
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6" ColumnSpacing="10">
+                <HorizontalStackLayout Grid.Row="0" Grid.Column="0" Spacing="8">
+                    <CheckBox x:Name="CategoriesCheck" />
+                    <Label Text="Categories" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Grid.Row="0" Grid.Column="1" Spacing="8">
+                    <CheckBox x:Name="ItemsCheck" />
+                    <Label Text="Items" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <!-- Labeled to match the actual nav button ("New Order") it gates, not
+                     the underlying Permission.Orders enum name - "Orders" alone reads
+                     like it means Order History and is easy to leave unchecked by mistake. -->
+                <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Spacing="8">
+                    <CheckBox x:Name="OrdersCheck" />
+                    <Label Text="New Order" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Grid.Row="1" Grid.Column="1" Spacing="8">
+                    <CheckBox x:Name="UsersCheck" />
+                    <Label Text="Users" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Grid.Row="2" Grid.Column="0" Spacing="8">
+                    <CheckBox x:Name="ReportsCheck" />
+                    <Label Text="Reports" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Grid.Row="2" Grid.Column="1" Spacing="8">
+                    <CheckBox x:Name="OrderHistoryCheck" />
+                    <Label Text="Order History" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Grid.Row="3" Grid.Column="0" Spacing="8">
+                    <CheckBox x:Name="DailySummaryCheck" />
+                    <Label Text="Daily Summary" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Grid.Row="3" Grid.Column="1" Spacing="8">
+                    <CheckBox x:Name="SettingsCheck" />
+                    <Label Text="Settings" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Grid.Row="4" Grid.Column="0" Spacing="8">
+                    <CheckBox x:Name="LogsCheck" />
+                    <Label Text="Logs" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <HorizontalStackLayout Grid.Row="4" Grid.Column="1" Spacing="8">
+                    <CheckBox x:Name="ComplimentaryCheck" />
+                    <Label Text="Complimentary Orders" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Grid>
+
+            <BoxView HeightRequest="1" BackgroundColor="#DDDDDD" Margin="0,10,0,0" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,10,0,0">
+                <Button Grid.Column="0" Text="Save" Clicked="OnSaveClicked" BackgroundColor="#198754" TextColor="White" FontAttributes="Bold" />
+                <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelClicked" />
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

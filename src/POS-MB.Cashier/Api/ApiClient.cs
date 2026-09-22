@@ -341,6 +341,75 @@ public class ApiClient
         }
     }
 
+    public async Task<List<UserDto>> GetUsersAsync(bool includeInactive = false)
+    {
+        try
+        {
+            var url = $"api/users?includeInactive={includeInactive}";
+            var result = await _httpClient.GetFromJsonAsync<List<UserDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> CreateUserAsync(string userName, string password, int permissions)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                "api/users", new { UserName = userName, Password = password, Permissions = permissions });
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    // password: null/blank keeps the user's existing password unchanged.
+    public async Task<(bool Success, string? Error)> UpdateUserAsync(int userId, string userName, string? password, int permissions)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync(
+                $"api/users/{userId}", new { UserName = userName, Password = password, Permissions = permissions });
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> DeactivateUserAsync(int userId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/users/{userId}/deactivate", null);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> ReactivateUserAsync(int userId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/users/{userId}/reactivate", null);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
     public async Task<(bool Success, string? Error)> SetItemAvailabilityAsync(int itemId, bool isAvailable)
     {
         try
