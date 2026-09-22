@@ -5,32 +5,47 @@
              x:Class="POS_MB.Cashier.Pages.OrderTakingPage"
              Title="New Order">
 
-    <Grid ColumnDefinitions="*,360" RowDefinitions="Auto,Auto,*" Padding="10" RowSpacing="8" ColumnSpacing="10">
+    <Grid ColumnDefinitions="*,360" RowDefinitions="*" Padding="10" ColumnSpacing="10">
 
-        <!-- Categories - fixed-height scroll area, same reasoning as
-             OrderTakingControl's 2-row category panel: enough room for a
-             couple of wrapped rows, scrollable if there are ever more. -->
-        <ScrollView Grid.Row="0" Grid.Column="0" HeightRequest="140">
-            <FlexLayout x:Name="CategoriesLayout" Direction="Row" Wrap="Wrap" />
-        </ScrollView>
+        <!-- Categories and items are two full-height "screens" occupying the
+             same cell, only one visible at a time - a tablet is too narrow
+             to show both a wrapped category row AND a wrapped item grid
+             without constant scrolling, so tapping a category now navigates
+             forward to its items instead of both being squeezed onto one
+             screen together. -->
+        <Grid Grid.Row="0" Grid.Column="0">
 
-        <!-- Typing a quantity here (instead of tapping a tile N times) is how a
-             cashier adds e.g. 100 burgers without 100 clicks - collapses into one
-             "Burger x100" line with one shared comment. Tapping a tile directly
-             always adds a separate quantity-1 line. -->
-        <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Spacing="10">
-            <Label Text="Quantity to add:" VerticalOptions="Center" FontAttributes="Bold" />
-            <controls:NumericStepper x:Name="QuantityStepper" Minimum="1" Maximum="999" Increment="1" WidthRequest="160" />
-        </HorizontalStackLayout>
+            <ScrollView x:Name="CategoriesScreen">
+                <FlexLayout x:Name="CategoriesLayout" Direction="Row" Wrap="Wrap" />
+            </ScrollView>
 
-        <ScrollView Grid.Row="2" Grid.Column="0">
-            <FlexLayout x:Name="ItemsLayout" Direction="Row" Wrap="Wrap" />
-        </ScrollView>
+            <Grid x:Name="ItemsScreen" RowDefinitions="Auto,Auto,*" RowSpacing="8" IsVisible="False">
+                <HorizontalStackLayout Grid.Row="0" Spacing="10">
+                    <Button Text="&#8592; Categories" Clicked="OnBackToCategoriesClicked" FontAttributes="Bold" />
+                    <Label x:Name="SelectedCategoryLabel" FontSize="18" FontAttributes="Bold" VerticalOptions="Center" />
+                </HorizontalStackLayout>
 
-        <!-- Current Order - spans all three rows on the right, same reasoning
-             as WinForms' cartContainer always spanning full height regardless
-             of how tall the category row gets. -->
-        <Grid Grid.Row="0" Grid.RowSpan="3" Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" BackgroundColor="#F8F9FA" Padding="10" RowSpacing="6">
+                <!-- Typing a quantity here (instead of tapping a tile N times) is
+                     how a cashier adds e.g. 100 burgers without 100 clicks -
+                     collapses into one "Burger x100" line with one shared
+                     comment. Tapping a tile directly always adds a separate
+                     quantity-1 line. -->
+                <HorizontalStackLayout Grid.Row="1" Spacing="10">
+                    <Label Text="Quantity to add:" VerticalOptions="Center" FontAttributes="Bold" />
+                    <controls:NumericStepper x:Name="QuantityStepper" Minimum="1" Maximum="999" Increment="1" WidthRequest="160" />
+                </HorizontalStackLayout>
+
+                <ScrollView Grid.Row="2">
+                    <FlexLayout x:Name="ItemsLayout" Direction="Row" Wrap="Wrap" />
+                </ScrollView>
+            </Grid>
+
+        </Grid>
+
+        <!-- Current Order - always visible regardless of which screen
+             (categories or items) is showing on the left, same reasoning as
+             WinForms' cartContainer always spanning full height. -->
+        <Grid Grid.Row="0" Grid.Column="1" RowDefinitions="Auto,*,Auto,Auto,Auto,Auto" BackgroundColor="#F8F9FA" Padding="10" RowSpacing="6">
             <Label Grid.Row="0" Text="Current Order" FontSize="20" FontAttributes="Bold" />
 
             <CollectionView x:Name="CartView" Grid.Row="1">

@@ -19,7 +19,6 @@ public partial class OrderTakingPage : ContentPage
 
     private List<CategoryDto> _categories = [];
     private readonly List<CartLine> _cart = [];
-    private int? _selectedCategoryId;
 
     public OrderTakingPage()
     {
@@ -48,31 +47,27 @@ public partial class OrderTakingPage : ContentPage
         foreach (var category in _categories)
         {
             var button = CreateTileButton(category.CategoryName, null);
-            button.Clicked += async (s, _) =>
-            {
-                _selectedCategoryId = category.CategoryId;
-                HighlightSelectedCategory((Button)s!);
-                await LoadItemsAsync(category.CategoryId);
-            };
+            button.Clicked += async (_, _) => await OpenCategoryAsync(category);
             CategoriesLayout.Children.Add(button);
-        }
-
-        if (_categories.Count > 0 && CategoriesLayout.Children.Count > 0)
-        {
-            _selectedCategoryId = _categories[0].CategoryId;
-            HighlightSelectedCategory((Button)CategoriesLayout.Children[0]);
-            await LoadItemsAsync(_categories[0].CategoryId);
         }
     }
 
-    private void HighlightSelectedCategory(Button selected)
+    // Drill-down, not a Navigation.PushAsync page - the cart on the right
+    // and the whole page's state need to stay exactly as they are; only
+    // which of the two "screens" is visible changes.
+    private async Task OpenCategoryAsync(CategoryDto category)
     {
-        foreach (var child in CategoriesLayout.Children)
-        {
-            if (child is not Button button) continue;
-            button.BackgroundColor = button == selected ? Color.FromArgb("#0D6EFD") : Color.FromArgb("#E9ECEF");
-            button.TextColor = button == selected ? Colors.White : Colors.Black;
-        }
+        SelectedCategoryLabel.Text = category.CategoryName;
+        await LoadItemsAsync(category.CategoryId);
+
+        CategoriesScreen.IsVisible = false;
+        ItemsScreen.IsVisible = true;
+    }
+
+    private void OnBackToCategoriesClicked(object? sender, EventArgs e)
+    {
+        ItemsScreen.IsVisible = false;
+        CategoriesScreen.IsVisible = true;
     }
 
     private async Task LoadItemsAsync(int categoryId)
