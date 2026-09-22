@@ -11,7 +11,8 @@
             Grid.Column="1"
             Keyboard="Numeric"
             HorizontalTextAlignment="Center"
-            TextChanged="OnEntryTextChanged" />
+            TextChanged="OnEntryTextChanged"
+            Unfocused="OnEntryUnfocused" />
 
         <Button Grid.Column="2" Text="+" Clicked="OnIncrementClicked" FontAttributes="Bold" Padding="0" />
     </Grid>

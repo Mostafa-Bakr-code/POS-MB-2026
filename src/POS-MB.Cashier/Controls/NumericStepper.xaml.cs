@@ -17,6 +17,17 @@ public partial class NumericStepper : ContentView
     // with the reformatted text being written back.
     private bool _suppressTextChanged;
 
+    // Set while OnEntryTextChanged is the one driving a Value change (the
+    // user typing) - OnValueChanged then skips reformatting Entry.Text
+    // immediately. Re-assigning Entry.Text from INSIDE Android's own native
+    // TextChanged callback throws a native IllegalArgumentException
+    // ("end should be < than charSequence length") - the EditText is still
+    // mid-processing the previous edit and its selection tracking goes
+    // stale the moment the text underneath it changes again. Reformatting
+    // is deferred to OnEntryUnfocused instead, once Android is done with
+    // this edit entirely.
+    private bool _isTextEntryDriven;
+
     public static readonly BindableProperty MinimumProperty =
         BindableProperty.Create(nameof(Minimum), typeof(decimal), typeof(NumericStepper), 1m);
 
@@ -76,7 +87,7 @@ public partial class NumericStepper : ContentView
     private static void OnValueChanged(BindableObject bindable, object oldValue, object newValue)
     {
         var stepper = (NumericStepper)bindable;
-        stepper.RefreshEntryText();
+        if (!stepper._isTextEntryDriven) stepper.RefreshEntryText();
         stepper.ValueChanged?.Invoke(stepper, (decimal)newValue);
     }
 
@@ -95,7 +106,16 @@ public partial class NumericStepper : ContentView
     {
         if (_suppressTextChanged) return;
 
-        if (decimal.TryParse(e.NewTextValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed))
-            Value = parsed;
+        if (!decimal.TryParse(e.NewTextValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed)) return;
+
+        _isTextEntryDriven = true;
+        try { Value = parsed; }
+        finally { _isTextEntryDriven = false; }
     }
+
+    // Normalizes whatever partial/unformatted text the user was typing
+    // (e.g. "1" or "1.5") into the full "F{DecimalPlaces}" format once
+    // they're done editing - deferred from every keystroke to here, see
+    // _isTextEntryDriven above.
+    private void OnEntryUnfocused(object? sender, FocusEventArgs e) => RefreshEntryText();
 }
