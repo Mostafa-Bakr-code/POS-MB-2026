@@ -79,7 +79,7 @@ public partial class MainShellPage : ContentPage
         return button;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         if (_timersStarted) return;
@@ -101,6 +101,11 @@ public partial class MainShellPage : ContentPage
                 null, KitchenTicketPollInterval, KitchenTicketPollInterval);
             _ = _kitchenTicketPrintService.PollOnceAsync();
         }
+
+        // Same as FormMain_Load's own trailing ShowOrderTaking() call - New
+        // Order is the default screen a cashier lands on, not a blank "pick
+        // a screen above" placeholder.
+        await Navigation.PushAsync(new OrderTakingPage());
     }
 
     private async Task RefreshTokenAsync()

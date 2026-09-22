@@ -16,7 +16,14 @@
         <Grid Grid.Row="0" Grid.Column="0">
 
             <ScrollView x:Name="CategoriesScreen">
-                <FlexLayout x:Name="CategoriesLayout" Direction="Row" Wrap="Wrap" />
+                <!-- AlignContent="Start" (and VerticalOptions="Start" on the
+                     ScrollView's content) - FlexLayout's default Stretch
+                     spreads any leftover vertical space evenly BETWEEN
+                     wrapped rows, which is what was showing up as a huge
+                     gap between rows whenever there were fewer rows than
+                     fit the screen. Start packs rows tightly instead, so
+                     the screen shows as many rows as actually fit. -->
+                <FlexLayout x:Name="CategoriesLayout" Direction="Row" Wrap="Wrap" AlignContent="Start" VerticalOptions="Start" />
             </ScrollView>
 
             <Grid x:Name="ItemsScreen" RowDefinitions="Auto,Auto,*" RowSpacing="8" IsVisible="False">
@@ -36,7 +43,7 @@
                 </HorizontalStackLayout>
 
                 <ScrollView Grid.Row="2">
-                    <FlexLayout x:Name="ItemsLayout" Direction="Row" Wrap="Wrap" />
+                    <FlexLayout x:Name="ItemsLayout" Direction="Row" Wrap="Wrap" AlignContent="Start" VerticalOptions="Start" />
                 </ScrollView>
             </Grid>
 
