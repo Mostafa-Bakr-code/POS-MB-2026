@@ -499,6 +499,75 @@ public class ApiClient
         }
     }
 
+    public async Task<bool> UpdateOrderStatusAsync(int orderId, OrderStatus status)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/orders/{orderId}/status", new { Status = status });
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> CancelOrderAsync(int orderId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/orders/{orderId}/cancel", null);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    // Feeds the background kitchen-ticket poller (KitchenTicketPrintService) -
+    // any mobile order that just entered Preparing, regardless of which
+    // client (this app, WinForms, or the chef tablet) moved it there and
+    // hasn't had its ticket printed yet.
+    public async Task<List<OrderDto>> GetOrdersNeedingKitchenTicketAsync()
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<List<OrderDto>>("api/orders/needing-kitchen-ticket");
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<bool> MarkKitchenTicketPrintedAsync(int orderId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/orders/{orderId}/mark-kitchen-ticket-printed", null);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> SetAcceptingOnlineOrdersAsync(bool isAccepting)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/settings/accepting-online-orders", isAccepting);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
     public async Task<List<LogDto>> GetLogsAsync(DateTime? startDate, DateTime? endDate)
     {
         try

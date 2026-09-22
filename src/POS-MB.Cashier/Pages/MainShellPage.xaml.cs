@@ -18,9 +18,17 @@ public partial class MainShellPage : ContentPage
     // between screens, not one tied to a specific screen being active.
     private static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
 
+    // Same interval as FormMain's own kitchen-ticket poll timer - a
+    // kitchen ticket needs to print regardless of which page (or client
+    // entirely - the chef tablet can move an order to Preparing too) is
+    // currently active.
+    private static readonly TimeSpan KitchenTicketPollInterval = TimeSpan.FromSeconds(5);
+
     private readonly ApiClient _apiClient = new();
+    private readonly KitchenTicketPrintService _kitchenTicketPrintService;
     private TokenRefreshTimer? _refreshTimer;
     private System.Threading.Timer? _heartbeatTimer;
+    private System.Threading.Timer? _kitchenTicketTimer;
     private bool _timersStarted;
     private bool _loggedOut;
 
@@ -31,10 +39,20 @@ public partial class MainShellPage : ContentPage
     {
         InitializeComponent();
 
+        _kitchenTicketPrintService = new KitchenTicketPrintService(_apiClient);
+        _kitchenTicketPrintService.StatusChanged += (text, success) =>
+        {
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                PrintStatusLabel.Text = text;
+                PrintStatusLabel.TextColor = success ? Color.FromArgb("#28C882") : Color.FromArgb("#FF8C8C");
+            });
+        };
+
         ActiveUserLabel.Text = AppSession.CurrentUser?.UserName ?? "";
 
         _newOrderButton = AddNavButton("New Order", Permission.Orders, () => new OrderTakingPage());
-        _orderStatusButton = AddNavButton("Order Status", Permission.Orders, () => new StubPage("Order Status"));
+        _orderStatusButton = AddNavButton("Order Status", Permission.Orders, () => new OrderStatusPage());
         AddNavButton("Categories", Permission.Categories, () => new CategoriesPage());
         AddNavButton("Items", Permission.Items, () => new ItemsPage());
         AddNavButton("Users", Permission.Users, () => new UsersPage());
@@ -77,6 +95,11 @@ public partial class MainShellPage : ContentPage
                 async _ => await _apiClient.SendHeartbeatAsync(),
                 null, HeartbeatInterval, HeartbeatInterval);
             _ = _apiClient.SendHeartbeatAsync(); // immediately at login, not just on the first tick
+
+            _kitchenTicketTimer = new System.Threading.Timer(
+                async _ => await _kitchenTicketPrintService.PollOnceAsync(),
+                null, KitchenTicketPollInterval, KitchenTicketPollInterval);
+            _ = _kitchenTicketPrintService.PollOnceAsync();
         }
     }
 
@@ -112,6 +135,7 @@ public partial class MainShellPage : ContentPage
 
         _refreshTimer?.Dispose();
         _heartbeatTimer?.Dispose();
+        _kitchenTicketTimer?.Dispose();
 
         if (AppSession.LogId is int logId)
             await _apiClient.EndSessionAsync(logId);
