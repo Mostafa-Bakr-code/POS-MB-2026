@@ -11,10 +11,15 @@ public class GridColumn(string header, Func<object, string> getText, double weig
     public double Weight { get; } = weight;
 }
 
-// One row-level action button (e.g. "Edit", "Deactivate") - rendered after
-// the data columns. OnClick receives the row object the button was on.
-public class GridRowAction(string label, Action<object> onClick)
+// One row-level action button (e.g. "Edit", or a "Deactivate"/"Reactivate"
+// toggle whose label depends on the row) - rendered after the data columns.
+// OnClick receives the row object the button was on.
+public class GridRowAction(Func<object, string> getLabel, Action<object> onClick)
 {
-    public string Label { get; } = label;
+    // Convenience overload for the common case (every row's button says
+    // the same fixed thing, e.g. "Edit").
+    public GridRowAction(string label, Action<object> onClick) : this(_ => label, onClick) { }
+
+    public Func<object, string> GetLabel { get; } = getLabel;
     public Action<object> OnClick { get; } = onClick;
 }

@@ -81,7 +81,8 @@ public partial class DataGridView : ContentView
         for (var i = 0; i < _rowActions.Count; i++)
         {
             var action = _rowActions[i];
-            var button = new Button { Text = action.Label, FontSize = 12, Padding = new Thickness(6, 2) };
+            var button = new Button { FontSize = 12, Padding = new Thickness(6, 2) };
+            button.SetBinding(Button.TextProperty, new Binding(".", converter: new FuncConverter(action.GetLabel)));
             button.Clicked += (_, _) =>
             {
                 if (grid.BindingContext is not null) action.OnClick(grid.BindingContext);

@@ -35,7 +35,7 @@ public partial class MainShellPage : ContentPage
 
         _newOrderButton = AddNavButton("New Order", Permission.Orders, () => new StubPage("New Order"));
         _orderStatusButton = AddNavButton("Order Status", Permission.Orders, () => new StubPage("Order Status"));
-        AddNavButton("Categories", Permission.Categories, () => new StubPage("Categories"));
+        AddNavButton("Categories", Permission.Categories, () => new CategoriesPage());
         AddNavButton("Items", Permission.Items, () => new StubPage("Items"));
         AddNavButton("Users", Permission.Users, () => new StubPage("Users"));
         AddNavButton("Order History", Permission.OrderHistory, () => new StubPage("Order History"));
