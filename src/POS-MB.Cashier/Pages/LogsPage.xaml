@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.LogsPage"
+             Title="Logs">
+
+    <Grid RowDefinitions="Auto,*" Padding="10" RowSpacing="10">
+
+        <FlexLayout Grid.Row="0" Direction="Row" Wrap="Wrap" AlignItems="Center">
+            <HorizontalStackLayout Spacing="8" Margin="0,0,10,8">
+                <Switch x:Name="UseDateRangeSwitch" IsToggled="True" Toggled="OnUseDateRangeToggled" />
+                <Label Text="Filter by Date Range" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <DatePicker x:Name="StartDatePicker" Margin="0,0,10,8" />
+            <DatePicker x:Name="EndDatePicker" Margin="0,0,10,8" />
+
+            <Button Text="Refresh" Clicked="OnRefreshClicked" FontAttributes="Bold" Margin="0,0,0,8" />
+        </FlexLayout>
+
+        <controls:DataGridView x:Name="LogsGrid" Grid.Row="1" />
+
+    </Grid>
+
+</ContentPage>

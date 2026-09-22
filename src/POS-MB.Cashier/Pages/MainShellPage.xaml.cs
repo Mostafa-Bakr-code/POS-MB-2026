@@ -38,11 +38,11 @@ public partial class MainShellPage : ContentPage
         AddNavButton("Categories", Permission.Categories, () => new CategoriesPage());
         AddNavButton("Items", Permission.Items, () => new ItemsPage());
         AddNavButton("Users", Permission.Users, () => new UsersPage());
-        AddNavButton("Order History", Permission.OrderHistory, () => new StubPage("Order History"));
+        AddNavButton("Order History", Permission.OrderHistory, () => new OrderHistoryPage());
         AddNavButton("Daily Summary", Permission.DailySummary, () => new StubPage("Daily Summary"));
         AddNavButton("Reports", Permission.Reports, () => new StubPage("Reports"));
         AddNavButton("Settings", Permission.Settings, () => new StubPage("Settings"));
-        AddNavButton("Logs", Permission.Logs, () => new StubPage("Logs"));
+        AddNavButton("Logs", Permission.Logs, () => new LogsPage());
     }
 
     private Button AddNavButton(string text, Permission requiredPermission, Func<Page> createPage)

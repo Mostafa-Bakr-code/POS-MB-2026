@@ -453,6 +453,57 @@ public class ApiClient
         return "Something went wrong. Please try again.";
     }
 
+    public async Task<List<OrderDto>> GetOrdersAsync(DateTime? startDate, DateTime? endDate, OrderSource? orderSource)
+    {
+        try
+        {
+            var url = "api/orders" + DateQuery(startDate, endDate);
+            if (orderSource is not null) url += $"&orderSource={orderSource}";
+            var result = await _httpClient.GetFromJsonAsync<List<OrderDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<OrderDto?> GetOrderByIdAsync(int orderId)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"api/orders/{orderId}");
+            if (!response.IsSuccessStatusCode) return null;
+            return await response.Content.ReadFromJsonAsync<OrderDto>();
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    public async Task<List<LogDto>> GetLogsAsync(DateTime? startDate, DateTime? endDate)
+    {
+        try
+        {
+            var url = "api/logs" + DateQuery(startDate, endDate);
+            var result = await _httpClient.GetFromJsonAsync<List<LogDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    private static string DateQuery(DateTime? startDate, DateTime? endDate)
+    {
+        var query = "?x=1";
+        if (startDate is not null) query += $"&startDate={startDate:yyyy-MM-dd}";
+        if (endDate is not null) query += $"&endDate={endDate:yyyy-MM-dd}";
+        return query;
+    }
+
     private record StartSessionResponse(int LogId);
     private record SettingDto(int Id, string Key, string? Value);
 }
