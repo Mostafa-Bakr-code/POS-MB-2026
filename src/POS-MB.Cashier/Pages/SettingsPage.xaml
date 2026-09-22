@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.SettingsPage"
+             Title="Settings">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="6">
+
+            <Label Text="Shared Settings (applies to every terminal)" FontAttributes="Bold" FontSize="16" Margin="0,0,0,6" />
+
+            <Label Text="Default Tax Rate (%) - applied to newly created items unless overridden" />
+            <controls:NumericStepper x:Name="TaxRateStepper" Minimum="0" Maximum="100" Increment="0.5" DecimalPlaces="2" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Label Text="Time Zone Offset (hours from UTC) - used so reports and order history match your local calendar day" Margin="0,12,0,0" />
+            <controls:NumericStepper x:Name="TimeZoneOffsetStepper" Minimum="-12" Maximum="14" Increment="1" DecimalPlaces="1" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Label Text="Auto-cancel a mobile order if still unaccepted after this many minutes (safety net - see Order Status)" Margin="0,12,0,0" />
+            <controls:NumericStepper x:Name="AutoCancelMinutesStepper" Minimum="1" Maximum="240" Increment="1" DecimalPlaces="0" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Button x:Name="SaveSharedButton" Text="Save Tax Rate, Time Zone &amp; Auto-Cancel" Clicked="OnSaveSharedClicked" FontAttributes="Bold" Margin="0,16,0,0" HorizontalOptions="Start" />
+            <Label x:Name="SharedStatusLabel" TextColor="#28C882" />
+
+            <BoxView HeightRequest="1" BackgroundColor="#DEE2E6" Margin="0,20,0,20" />
+
+            <Label Text="Printer Settings (this device only)" FontAttributes="Bold" FontSize="16" Margin="0,0,0,6" />
+
+            <Label Text="Client Receipt Printer" FontAttributes="Bold" Margin="0,10,0,0" />
+            <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center">
+                <Entry x:Name="ClientIpEntry" Placeholder="IP address" WidthRequest="180" Margin="0,0,10,8" />
+                <controls:NumericStepper x:Name="ClientPortStepper" Minimum="1" Maximum="65535" Increment="1" DecimalPlaces="0" WidthRequest="160" Margin="0,0,10,8" />
+                <Button Text="Preview" Clicked="OnPreviewClientClicked" Margin="0,0,10,8" />
+                <Button Text="Test Print" Clicked="OnTestClientClicked" Margin="0,0,0,8" />
+            </FlexLayout>
+
+            <Label Text="Kitchen Ticket Printer" FontAttributes="Bold" Margin="0,10,0,0" />
+            <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Center">
+                <Entry x:Name="KitchenIpEntry" Placeholder="IP address" WidthRequest="180" Margin="0,0,10,8" />
+                <controls:NumericStepper x:Name="KitchenPortStepper" Minimum="1" Maximum="65535" Increment="1" DecimalPlaces="0" WidthRequest="160" Margin="0,0,10,8" />
+                <Button Text="Preview" Clicked="OnPreviewKitchenClicked" Margin="0,0,10,8" />
+                <Button Text="Test Print" Clicked="OnTestKitchenClicked" Margin="0,0,0,8" />
+            </FlexLayout>
+
+            <Label Text="Both Receipts" FontAttributes="Bold" Margin="0,16,0,0" />
+            <Label Text="Wrap order number on receipts after (0 = don't wrap)" />
+            <controls:NumericStepper x:Name="WrapAtStepper" Minimum="0" Maximum="9999" Increment="1" DecimalPlaces="0" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Label Text="Customer Receipt Options" FontAttributes="Bold" Margin="0,16,0,0" />
+            <HorizontalStackLayout Spacing="8">
+                <CheckBox x:Name="ShowOrderTimeCheck" />
+                <Label Text="Show order time on customer receipt" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <Label Text="VAT display on customer receipt" Margin="0,10,0,0" />
+            <Picker x:Name="TaxDisplayModePicker" WidthRequest="260" HorizontalOptions="Start">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Don't show VAT</x:String>
+                        <x:String>VAT on total only</x:String>
+                        <x:String>VAT on every item</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Client receipt font size (1 = normal, half-steps allowed, up to 8)" Margin="0,12,0,0" />
+            <controls:NumericStepper x:Name="ClientFontSizeStepper" Minimum="1" Maximum="8" Increment="0.5" DecimalPlaces="1" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Label Text="Kitchen ticket font size (1 = normal, half-steps allowed, up to 8)" Margin="0,12,0,0" />
+            <controls:NumericStepper x:Name="KitchenFontSizeStepper" Minimum="1" Maximum="8" Increment="0.5" DecimalPlaces="1" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Button Text="Print Diagnostic Test (Kitchen)" Clicked="OnDiagnosticTestClicked" Margin="0,16,0,0" HorizontalOptions="Start" />
+
+            <Button x:Name="SavePrintersButton" Text="Save Printer Settings" Clicked="OnSavePrintersClicked" FontAttributes="Bold" Margin="0,16,0,0" HorizontalOptions="Start" />
+            <Label x:Name="PrinterStatusLabel" TextColor="#28C882" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

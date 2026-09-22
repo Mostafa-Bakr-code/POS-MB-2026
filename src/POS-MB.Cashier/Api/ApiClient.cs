@@ -582,6 +582,93 @@ public class ApiClient
         }
     }
 
+    public async Task<SalesSummaryDto?> GetSalesSummaryAsync(DateTime? startDate, DateTime? endDate)
+    {
+        try
+        {
+            var url = "api/reports/sales-summary" + DateQuery(startDate, endDate);
+            return await _httpClient.GetFromJsonAsync<SalesSummaryDto>(url);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    public async Task<List<ItemSalesRowDto>> GetItemSalesAsync(DateTime? startDate, DateTime? endDate, bool groupByDay, bool groupByPrice = false, bool groupBySource = false)
+    {
+        try
+        {
+            var url = "api/reports/item-sales" + DateQuery(startDate, endDate) + $"&groupByDay={groupByDay}&groupByPrice={groupByPrice}&groupBySource={groupBySource}";
+            var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<List<ItemSalesRowDto>> GetTopSellersAsync(DateTime? startDate, DateTime? endDate, TopSellersSortBy sortBy, int take)
+    {
+        try
+        {
+            var url = "api/reports/top-sellers" + DateQuery(startDate, endDate) + $"&sortBy={sortBy}&take={take}";
+            var result = await _httpClient.GetFromJsonAsync<List<ItemSalesRowDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<List<StaffPerformanceRowDto>> GetStaffPerformanceAsync(DateTime? startDate, DateTime? endDate)
+    {
+        try
+        {
+            var url = "api/reports/staff-performance" + DateQuery(startDate, endDate);
+            var result = await _httpClient.GetFromJsonAsync<List<StaffPerformanceRowDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    // Excel generation happens server-side (same file bytes WinForms' own
+    // SaveFileDialog flow writes out) - this app only needs to hand the
+    // bytes off to the platform's own save/share mechanism (see
+    // Services/IExportFileHandler), never write an .xlsx itself.
+    public async Task<(byte[]? Bytes, string? Error)> DownloadReportExcelAsync(string reportPath, DateTime? startDate, DateTime? endDate, string extraParams = "")
+    {
+        try
+        {
+            var url = $"api/reports/{reportPath}" + DateQuery(startDate, endDate) + "&format=excel" + extraParams;
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return (null, await ExtractErrorAsync(response));
+            return (await response.Content.ReadAsByteArrayAsync(), null);
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> SetSettingValueAsync(string key, string value)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/settings/{key}", new { Value = value });
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
     private static string DateQuery(DateTime? startDate, DateTime? endDate)
     {
         var query = "?x=1";

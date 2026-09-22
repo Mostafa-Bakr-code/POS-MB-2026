@@ -57,9 +57,9 @@ public partial class MainShellPage : ContentPage
         AddNavButton("Items", Permission.Items, () => new ItemsPage());
         AddNavButton("Users", Permission.Users, () => new UsersPage());
         AddNavButton("Order History", Permission.OrderHistory, () => new OrderHistoryPage());
-        AddNavButton("Daily Summary", Permission.DailySummary, () => new StubPage("Daily Summary"));
-        AddNavButton("Reports", Permission.Reports, () => new StubPage("Reports"));
-        AddNavButton("Settings", Permission.Settings, () => new StubPage("Settings"));
+        AddNavButton("Daily Summary", Permission.DailySummary, () => new DailySummaryPage());
+        AddNavButton("Reports", Permission.Reports, () => new ReportsPage());
+        AddNavButton("Settings", Permission.Settings, () => new SettingsPage());
         AddNavButton("Logs", Permission.Logs, () => new LogsPage());
     }
 

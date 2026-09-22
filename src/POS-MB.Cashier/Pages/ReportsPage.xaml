@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.ReportsPage"
+             Title="Reports">
+
+    <Grid RowDefinitions="Auto,Auto,*" Padding="10" RowSpacing="10">
+
+        <FlexLayout Grid.Row="0" Direction="Row" Wrap="Wrap" AlignItems="Center">
+            <Picker x:Name="ReportTypePicker" WidthRequest="180" Margin="0,0,10,8" SelectedIndexChanged="OnReportTypeChanged">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Sales Summary</x:String>
+                        <x:String>Item Sales</x:String>
+                        <x:String>Top Sellers</x:String>
+                        <x:String>Staff Performance</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <HorizontalStackLayout Spacing="8" Margin="0,0,10,8">
+                <Switch x:Name="UseDateRangeSwitch" IsToggled="True" Toggled="OnUseDateRangeToggled" />
+                <Label Text="Filter by Date Range" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <DatePicker x:Name="StartDatePicker" Margin="0,0,10,8" />
+            <DatePicker x:Name="EndDatePicker" Margin="0,0,10,8" />
+
+            <Button x:Name="RunButton" Text="Run" Clicked="OnRunClicked" FontAttributes="Bold" Margin="0,0,10,8" />
+            <Button x:Name="ExportButton" Text="Export to Excel" Clicked="OnExportClicked" Margin="0,0,0,8" />
+        </FlexLayout>
+
+        <FlexLayout Grid.Row="1" Direction="Row" Wrap="Wrap" AlignItems="Center">
+            <!-- Item Sales only -->
+            <HorizontalStackLayout x:Name="GroupByDayRow" Spacing="8" Margin="0,0,14,8">
+                <CheckBox x:Name="GroupByDayCheck" />
+                <Label Text="Group by Day" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout x:Name="GroupByPriceRow" Spacing="8" Margin="0,0,14,8">
+                <CheckBox x:Name="GroupByPriceCheck" />
+                <Label Text="Break Down by Price" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+            <HorizontalStackLayout x:Name="GroupBySourceRow" Spacing="8" Margin="0,0,14,8">
+                <CheckBox x:Name="GroupBySourceCheck" />
+                <Label Text="Group by Source" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <!-- Top Sellers only -->
+            <Picker x:Name="SortByPicker" WidthRequest="140" Margin="0,0,10,8">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Quantity</x:String>
+                        <x:String>Revenue</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+            <HorizontalStackLayout x:Name="TakeRow" Spacing="8" Margin="0,0,10,8">
+                <Label Text="Take:" VerticalOptions="Center" />
+                <controls:NumericStepper x:Name="TakeStepper" Minimum="1" Maximum="100" Value="10" WidthRequest="140" />
+            </HorizontalStackLayout>
+        </FlexLayout>
+
+        <controls:DataGridView x:Name="ReportGrid" Grid.Row="2" />
+
+    </Grid>
+
+</ContentPage>
