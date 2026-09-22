@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.ItemEditPage">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="10">
+
+            <Label Text="Item Name" FontAttributes="Bold" />
+            <Entry x:Name="NameEntry" MaxLength="50" />
+
+            <Label Text="Category" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Picker x:Name="CategoryPicker" ItemDisplayBinding="{Binding CategoryName}" />
+
+            <Label Text="Price" FontAttributes="Bold" Margin="0,10,0,0" />
+            <controls:NumericStepper x:Name="PriceStepper" Minimum="0" Maximum="100000" Increment="1" DecimalPlaces="2" WidthRequest="220" HorizontalOptions="Start" />
+
+            <Label Text="Description (optional)" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Editor x:Name="DescriptionEditor" MaxLength="500" HeightRequest="80" AutoSize="TextChanges" />
+
+            <Label Text="Photo" FontAttributes="Bold" Margin="0,10,0,0" />
+            <Frame WidthRequest="120" HeightRequest="120" Padding="0" HorizontalOptions="Start" BackgroundColor="#F5F5F5" BorderColor="#DDDDDD">
+                <Image x:Name="PreviewImage" Aspect="AspectFit" />
+            </Frame>
+
+            <Button x:Name="ChooseImageButton" Text="Choose Image..." Clicked="OnChooseImageClicked" />
+            <Button x:Name="RemoveImageButton" Text="Remove Photo" Clicked="OnRemoveImageClicked" />
+
+            <BoxView HeightRequest="1" BackgroundColor="#DDDDDD" Margin="0,10,0,0" />
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,10,0,0">
+                <Button Grid.Column="0" Text="Save" Clicked="OnSaveClicked" BackgroundColor="#198754" TextColor="White" FontAttributes="Bold" />
+                <Button Grid.Column="1" Text="Cancel" Clicked="OnCancelClicked" />
+            </Grid>
+
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>

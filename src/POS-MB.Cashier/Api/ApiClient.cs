@@ -227,6 +227,133 @@ public class ApiClient
 
     public string ResolveImageUrl(string relativeUrl) => new Uri(_httpClient.BaseAddress!, relativeUrl).ToString();
 
+    public async Task<List<ItemDto>> GetItemsAsync(int? categoryId = null, bool includeInactive = false, bool availableOnly = false)
+    {
+        try
+        {
+            var url = $"api/items?includeInactive={includeInactive}&availableOnly={availableOnly}";
+            if (categoryId is not null) url += $"&categoryId={categoryId}";
+            var result = await _httpClient.GetFromJsonAsync<List<ItemDto>>(url);
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<(int? ItemId, string? Error)> CreateItemAsync(string name, int categoryId, decimal price, string? description = null)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PostAsJsonAsync(
+                "api/items", new { Name = name, CategoryId = categoryId, Price = price, Description = description });
+        }
+        catch (Exception ex)
+        {
+            return (null, $"Could not reach the server: {ex.Message}");
+        }
+
+        if (!response.IsSuccessStatusCode) return (null, await ExtractErrorAsync(response));
+
+        var created = await response.Content.ReadFromJsonAsync<ItemDto>();
+        return (created!.ItemId, null);
+    }
+
+    public async Task<(bool Success, string? Error)> UpdateItemAsync(int itemId, string name, int categoryId, decimal price, string? description = null)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.PutAsJsonAsync(
+                $"api/items/{itemId}", new { Name = name, CategoryId = categoryId, Price = price, Description = description });
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+
+        return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+    }
+
+    // Takes a Stream + file name rather than a file path - same reasoning
+    // as UploadCategoryImageAsync.
+    public async Task<(bool Success, string? Error)> UploadItemImageAsync(int itemId, Stream fileStream, string fileName)
+    {
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            using var streamContent = new StreamContent(fileStream);
+            content.Add(streamContent, "file", fileName);
+
+            var response = await _httpClient.PostAsync($"api/items/{itemId}/image", content);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task RemoveItemImageAsync(int itemId)
+    {
+        try { await _httpClient.DeleteAsync($"api/items/{itemId}/image"); }
+        catch (Exception) { /* best-effort */ }
+    }
+
+    public async Task<List<ItemPriceHistoryDto>> GetItemPriceHistoryAsync(int itemId)
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<List<ItemPriceHistoryDto>>($"api/items/{itemId}/price-history");
+            return result ?? [];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> DeactivateItemAsync(int itemId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/items/{itemId}/deactivate", null);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> ReactivateItemAsync(int itemId)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsync($"api/items/{itemId}/reactivate", null);
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> SetItemAvailabilityAsync(int itemId, bool isAvailable)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync($"api/items/{itemId}/availability", new { IsAvailable = isAvailable });
+            return response.IsSuccessStatusCode ? (true, null) : (false, await ExtractErrorAsync(response));
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Could not reach the server: {ex.Message}");
+        }
+    }
+
     // The API returns two different error shapes depending on what
     // rejected the request: DataAnnotations validation failures come back
     // as ProblemDetails with an "errors" object (field name -> message

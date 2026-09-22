@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:controls="clr-namespace:POS_MB.Cashier.Controls"
+             x:Class="POS_MB.Cashier.Pages.ItemsPage"
+             Title="Items">
+
+    <Grid RowDefinitions="Auto,*" Padding="10" RowSpacing="10">
+
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="16">
+            <Button Grid.Column="0" Text="Add Item" Clicked="OnAddClicked" FontAttributes="Bold" />
+            <Picker x:Name="CategoryFilterPicker" Grid.Column="1" Title="Category" WidthRequest="180" SelectedIndexChanged="OnCategoryFilterChanged" />
+            <HorizontalStackLayout Grid.Column="2" Spacing="8" VerticalOptions="Center">
+                <Switch x:Name="ShowInactiveSwitch" Toggled="OnShowInactiveToggled" />
+                <Label Text="Show Inactive" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <controls:DataGridView x:Name="ItemsGrid" Grid.Row="1" RowTapped="OnRowTapped" />
+
+    </Grid>
+
+</ContentPage>
