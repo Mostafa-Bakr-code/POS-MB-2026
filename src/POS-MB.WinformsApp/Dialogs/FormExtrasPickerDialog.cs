@@ -8,9 +8,15 @@ namespace POS_MB.WinformsApp.Dialogs;
 // accurately mid-rush than a vertical text list. FlowLayoutPanel wraps
 // naturally once a row's tiles fill the available width - ClientSize below
 // is sized so exactly 3 fit per row (160 tile + 16 margin = 176 each).
+//
+// Deliberately stays open across multiple taps instead of closing after
+// one selection - adding three different extras to the same item used to
+// mean reopening this dialog three separate times, which was slow mid-
+// rush. Each tap fires ItemSelected immediately and the dialog only
+// closes via its own "Done" button (or the caller's ShowDialog return).
 public class FormExtrasPickerDialog : Form
 {
-    public ItemDto? SelectedItem { get; private set; }
+    public event Action<ItemDto>? ItemSelected;
 
     public FormExtrasPickerDialog(string title, List<ItemDto> items)
     {
@@ -43,26 +49,22 @@ public class FormExtrasPickerDialog : Form
                 Font = new Font("Segoe UI", 12F, FontStyle.Bold)
             };
             button.FlatAppearance.BorderSize = 1;
-            button.Click += (_, _) =>
-            {
-                SelectedItem = captured;
-                DialogResult = DialogResult.OK;
-                Close();
-            };
+            button.Click += (_, _) => ItemSelected?.Invoke(captured);
             flow.Controls.Add(button);
         }
 
-        var btnCancel = new Button
+        var btnDone = new Button
         {
-            Text = "Cancel",
+            Text = "Done",
             Dock = DockStyle.Bottom,
             Height = 50,
-            Font = new Font("Segoe UI", 12F),
-            DialogResult = DialogResult.Cancel
+            Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+            DialogResult = DialogResult.OK
         };
 
         Controls.Add(flow);
-        Controls.Add(btnCancel);
-        CancelButton = btnCancel;
+        Controls.Add(btnDone);
+        AcceptButton = btnDone;
+        CancelButton = btnDone;
     }
 }

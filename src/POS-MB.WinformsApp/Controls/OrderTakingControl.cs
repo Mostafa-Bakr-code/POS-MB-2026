@@ -287,11 +287,16 @@ public class OrderTakingControl : UserControl
         // faster and is easier to tap accurately than a vertical text
         // list. ShowDialog blocks until closed, so `using` disposal here
         // is safe (unlike ContextMenuStrip.Show, which isn't blocking).
-        using var dialog = new FormExtrasPickerDialog($"Add extra to {parentLine.Item.ItemName}", _extraItems);
-        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedItem is null) return;
-
-        InsertGrouped(parentLine.Extras, new CartLine(dialog.SelectedItem, 1, isExtra: true));
-        RenderCart();
+        // Stays open across multiple taps (see the dialog's own comment) -
+        // adding three extras to one item is three taps, not three
+        // separate trips through this method.
+        using var dialog = new FormExtrasPickerDialog($"Add extras to {parentLine.Item.ItemName}", _extraItems);
+        dialog.ItemSelected += extraItem =>
+        {
+            InsertGrouped(parentLine.Extras, new CartLine(extraItem, 1, isExtra: true));
+            RenderCart();
+        };
+        dialog.ShowDialog(this);
     }
 
     // Groups with any existing line(s) for the same item instead of always
@@ -343,6 +348,16 @@ public class OrderTakingControl : UserControl
 
     private void RenderCart()
     {
+        // Controls.Clear() alone only removes the old row Panels from the
+        // collection - it never disposes them, so their Labels/Buttons
+        // (and the window handles backing them) stay alive and orphaned.
+        // With a ToolTip component involved, that's not just a leak: the
+        // OS can recycle an orphaned control's handle onto a brand-new
+        // control, and the ToolTip's own internal handle tracking can then
+        // point at the wrong one - which is exactly why the cart's name
+        // tooltip was only catching sometimes instead of reliably.
+        foreach (Control oldRow in _cartPanel.Controls)
+            oldRow.Dispose();
         _cartPanel.Controls.Clear();
 
         foreach (var line in FlattenCart())
@@ -366,7 +381,11 @@ public class OrderTakingControl : UserControl
             // A long name (e.g. "pizza supersupreme") wraps and pushes the
             // price line out of this label's fixed height, clipped rather
             // than shown - the tooltip is the one place the full text is
-            // always visible regardless of how much room wrapped.
+            // always visible regardless of how much room wrapped. Set on
+            // the whole row, not just the small name label - a 150x60
+            // target was too easy to miss; the full row is easy to land on
+            // without aiming.
+            _cartTooltip.SetToolTip(row, nameText);
             _cartTooltip.SetToolTip(lblName, nameText);
 
             // One level of nesting only - an extra can't itself carry
