@@ -19,6 +19,12 @@ public class OrderTakingControl : UserControl
     private readonly Button _btnPlaceOrder;
     private readonly Label _lblPrintStatus;
 
+    // A long item name (e.g. "pizza supersupreme") wraps inside the cart
+    // row's fixed-height name label and pushes the price line below it
+    // out of view, clipped rather than shown - this surfaces the full
+    // name-and-price text on hover so nothing is ever silently hidden.
+    private readonly ToolTip _cartTooltip = new();
+
     // Matches the Cashier/Mobile apps' own copy of this key - the setting
     // that marks which category's items show up behind a cart line's
     // "+Extra" button.
@@ -348,14 +354,20 @@ public class OrderTakingControl : UserControl
             // receipt, instead of looking like just another top-level line.
             var nameX = line.IsExtra ? 20 : 0;
             var namePrefix = line.IsExtra ? "+ " : "";
+            var nameText = line.Quantity > 1
+                ? $"{namePrefix}{line.Item.ItemName} x{line.Quantity}\n{(line.Item.Price * line.Quantity):0.00}"
+                : $"{namePrefix}{line.Item.ItemName}\n{line.Item.Price:0.00}";
             var lblName = new Label
             {
-                Text = line.Quantity > 1
-                    ? $"{namePrefix}{line.Item.ItemName} x{line.Quantity}\n{(line.Item.Price * line.Quantity):0.00}"
-                    : $"{namePrefix}{line.Item.ItemName}\n{line.Item.Price:0.00}",
+                Text = nameText,
                 Location = new Point(nameX, 0),
                 Size = new Size(150 - nameX, 60)
             };
+            // A long name (e.g. "pizza supersupreme") wraps and pushes the
+            // price line out of this label's fixed height, clipped rather
+            // than shown - the tooltip is the one place the full text is
+            // always visible regardless of how much room wrapped.
+            _cartTooltip.SetToolTip(lblName, nameText);
 
             // One level of nesting only - an extra can't itself carry
             // further extras, so it gets no "+Extra" button of its own.
