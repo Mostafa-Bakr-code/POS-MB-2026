@@ -264,7 +264,7 @@ public class OrderTakingControl : UserControl
     // for - never to the cart generally - so two separate occurrences of
     // the same base item can carry two different extras without either
     // receipt line being ambiguous about which extra belongs to which.
-    private void OnAddExtraClicked(Control anchor, CartLine parentLine)
+    private void OnAddExtraClicked(CartLine parentLine)
     {
         if (_extraItems.Count == 0)
         {
@@ -276,31 +276,16 @@ public class OrderTakingControl : UserControl
             return;
         }
 
-        // NOT wrapped in `using` and never disposed manually - Show() below
-        // is non-blocking (it displays the dropdown and returns
-        // immediately, it doesn't wait for a click), so disposing on method
-        // return tore the menu down before a click could register.
-        // Disposing from its own Closed event instead threw
-        // ObjectDisposedException - the strip isn't fully done closing
-        // itself yet at that point, so disposing reenters it mid-teardown.
-        // This is a small, short-lived object; left for the GC instead of
-        // fighting that timing.
-        var menu = new ContextMenuStrip { Font = new Font("Segoe UI", 14F) };
-        foreach (var extraItem in _extraItems)
-        {
-            var captured = extraItem;
-            // Padding alone (not just a bigger font) is what actually grows
-            // the tap target - a cashier needs to hit this fast mid-rush,
-            // not read it carefully.
-            var item = new ToolStripMenuItem($"{captured.ItemName} ({captured.Price:0.00})") { Padding = new Padding(10, 12, 10, 12) };
-            item.Click += (_, _) =>
-            {
-                InsertGrouped(parentLine.Extras, new CartLine(captured, 1, isExtra: true));
-                RenderCart();
-            };
-            menu.Items.Add(item);
-        }
-        menu.Show(anchor, new Point(0, anchor.Height));
+        // A proper modal dialog, not the original ContextMenuStrip - a
+        // grid of tiles (same look as the category/item tiles above) reads
+        // faster and is easier to tap accurately than a vertical text
+        // list. ShowDialog blocks until closed, so `using` disposal here
+        // is safe (unlike ContextMenuStrip.Show, which isn't blocking).
+        using var dialog = new FormExtrasPickerDialog($"Add extra to {parentLine.Item.ItemName}", _extraItems);
+        if (dialog.ShowDialog(this) != DialogResult.OK || dialog.SelectedItem is null) return;
+
+        InsertGrouped(parentLine.Extras, new CartLine(dialog.SelectedItem, 1, isExtra: true));
+        RenderCart();
     }
 
     // Groups with any existing line(s) for the same item instead of always
@@ -377,7 +362,7 @@ public class OrderTakingControl : UserControl
             // Bigger than the other row buttons - a cashier taps this one
             // the most, mid-rush, and needs to hit it fast without aiming.
             var btnAddExtra = new Button { Text = "+Extra", Location = new Point(155, 3), Size = new Size(72, 44), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10F, FontStyle.Bold), Visible = !line.IsExtra };
-            btnAddExtra.Click += (_, _) => OnAddExtraClicked(btnAddExtra, line);
+            btnAddExtra.Click += (_, _) => OnAddExtraClicked(line);
 
             var btnAddOne = new Button { Text = "+", Location = new Point(245, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
             btnAddOne.Click += (_, _) => AddAnother(line);
