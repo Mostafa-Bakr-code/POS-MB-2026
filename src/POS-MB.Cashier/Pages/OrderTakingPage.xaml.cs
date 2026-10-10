@@ -342,12 +342,19 @@ public partial class OrderTakingPage : ContentPage
                 .DistinctBy(i => i.ItemId)
                 .ToDictionary(i => i.ItemId, i => i.ItemName);
 
+            // order.Items comes back in the exact order allLines was sent
+            // in (the server just confirms the same list it was given,
+            // same reasoning the extras feature itself relies on for the
+            // receipt to stay unambiguous) - matched up by position here
+            // purely to carry IsExtra across, since that flag only ever
+            // existed locally in the cart, never on the server.
             var receiptOrder = new ReceiptOrder(
                 order.SerialNumber ?? order.OrderId,
                 AppSession.ToLocalDisplay(order.Date),
-                order.Items.Select(oi => new ReceiptItem(
+                order.Items.Select((oi, i) => new ReceiptItem(
                     itemNamesById.GetValueOrDefault(oi.ItemId, "Item"),
-                    oi.Quantity, oi.Price, oi.TaxRate, oi.Comment)).ToList(),
+                    oi.Quantity, oi.Price, oi.TaxRate, oi.Comment,
+                    IsExtra: i < allLines.Count && allLines[i].IsExtra)).ToList(),
                 order.Total,
                 order.IsComplimentary,
                 order.OrderSource == OrderSource.Cashier ? "CASHIER" : "MOBILE");

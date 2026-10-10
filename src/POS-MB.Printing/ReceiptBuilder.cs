@@ -134,8 +134,10 @@ public static class ReceiptBuilder
         if (order.IsComplimentary)
             doc.Center().Bold(true).Line("*** COMPLIMENTARY ***").Bold(false).Left().Divider();
 
-        foreach (var item in order.Items)
+        for (var i = 0; i < order.Items.Count; i++)
         {
+            var item = order.Items[i];
+
             doc.Bold(true).Size((float)fontSize, (float)fontSize)
                 .Line($"{item.Quantity} x {item.Name}")
                 .Size(1, 1).Bold(false);
@@ -143,7 +145,17 @@ public static class ReceiptBuilder
             if (!string.IsNullOrWhiteSpace(item.Comment))
                 doc.Bold(true).Size((float)fontSize, (float)fontSize).Line($">> {item.Comment}").Size(1, 1).Bold(false);
 
-            doc.Divider();
+            // One line per ITEM GROUP (a base item plus whichever extras
+            // follow it), not per individual line - a divider straight
+            // after the base item (or between two of its own extras) would
+            // visually split one thing the chef needs to make into
+            // several, exactly the ambiguity the extras feature itself
+            // was built to remove. Only printed once the next line is a
+            // new group - i.e. the current line is the last one in its
+            // own group.
+            var nextLineContinuesThisGroup = i + 1 < order.Items.Count && order.Items[i + 1].IsExtra;
+            if (!nextLineContinuesThisGroup)
+                doc.Divider();
         }
 
         doc.Feed(6).Cut();

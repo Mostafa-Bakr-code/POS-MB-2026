@@ -51,6 +51,13 @@ public class KitchenTicketPrintService(ApiClient apiClient)
 
     private async Task PrintAndMarkAsync(OrderDto order, Dictionary<int, string> itemNamesById)
     {
+        // ReceiptItem.IsExtra is left at its default (false) here - unlike
+        // OrderTakingPage's own immediate print, this runs later/separately
+        // from whatever cart placed the order, with no access to which
+        // lines were extras (that flag only ever existed in a cart in
+        // memory, never stored server-side). A mobile order's kitchen
+        // ticket still prints correctly, just with the older one-divider-
+        // per-line layout rather than the grouped-by-item one.
         var receiptOrder = new ReceiptOrder(
             order.SerialNumber ?? order.OrderId,
             AppSession.ToLocalDisplay(order.Date),

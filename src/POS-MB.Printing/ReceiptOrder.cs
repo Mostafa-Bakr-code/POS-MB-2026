@@ -8,7 +8,14 @@ namespace POS_MB.Printing;
 // is the catalog/charged price, TaxRate is the percentage baked into it, not on
 // top of it). The tax-exclusive amount and the tax portion are derived from
 // these two, not stored separately, so they can never disagree with each other.
-public record ReceiptItem(string Name, int Quantity, decimal Price, decimal TaxRate, string? Comment);
+// IsExtra defaults to false, not because every item not explicitly marked
+// is safe to assume isn't one, but because most callers genuinely have no
+// way to know - the database has no such column (deliberately, see the
+// extras feature's own commit), so only a caller still holding the
+// original cart in memory (the cashier's own immediate print, right after
+// placing an order) can ever set this accurately. See KitchenTicketDocument
+// below for what it actually changes.
+public record ReceiptItem(string Name, int Quantity, decimal Price, decimal TaxRate, string? Comment, bool IsExtra = false);
 
 public record ReceiptOrder(
     int SerialNumber,
