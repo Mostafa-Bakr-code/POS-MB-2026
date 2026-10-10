@@ -276,21 +276,29 @@ public class OrderTakingControl : UserControl
             return;
         }
 
-        // NOT wrapped in `using` - Show() below is non-blocking (it displays
-        // the dropdown and returns immediately, it doesn't wait for a
-        // click), so disposing on method return would tear the menu down
-        // before the user ever gets a chance to click anything. Disposed
-        // instead once it actually closes.
-        var menu = new ContextMenuStrip();
-        menu.Closed += (_, _) => menu.Dispose();
+        // NOT wrapped in `using` and never disposed manually - Show() below
+        // is non-blocking (it displays the dropdown and returns
+        // immediately, it doesn't wait for a click), so disposing on method
+        // return tore the menu down before a click could register.
+        // Disposing from its own Closed event instead threw
+        // ObjectDisposedException - the strip isn't fully done closing
+        // itself yet at that point, so disposing reenters it mid-teardown.
+        // This is a small, short-lived object; left for the GC instead of
+        // fighting that timing.
+        var menu = new ContextMenuStrip { Font = new Font("Segoe UI", 14F) };
         foreach (var extraItem in _extraItems)
         {
             var captured = extraItem;
-            menu.Items.Add($"{captured.ItemName} ({captured.Price:0.00})", null, (_, _) =>
+            // Padding alone (not just a bigger font) is what actually grows
+            // the tap target - a cashier needs to hit this fast mid-rush,
+            // not read it carefully.
+            var item = new ToolStripMenuItem($"{captured.ItemName} ({captured.Price:0.00})") { Padding = new Padding(10, 12, 10, 12) };
+            item.Click += (_, _) =>
             {
                 InsertGrouped(parentLine.Extras, new CartLine(captured, 1, isExtra: true));
                 RenderCart();
-            });
+            };
+            menu.Items.Add(item);
         }
         menu.Show(anchor, new Point(0, anchor.Height));
     }
@@ -366,7 +374,9 @@ public class OrderTakingControl : UserControl
 
             // One level of nesting only - an extra can't itself carry
             // further extras, so it gets no "+Extra" button of its own.
-            var btnAddExtra = new Button { Text = "+Extra", Location = new Point(160, 5), Size = new Size(55, 40), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 8F), Visible = !line.IsExtra };
+            // Bigger than the other row buttons - a cashier taps this one
+            // the most, mid-rush, and needs to hit it fast without aiming.
+            var btnAddExtra = new Button { Text = "+Extra", Location = new Point(155, 3), Size = new Size(72, 44), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 10F, FontStyle.Bold), Visible = !line.IsExtra };
             btnAddExtra.Click += (_, _) => OnAddExtraClicked(btnAddExtra, line);
 
             var btnAddOne = new Button { Text = "+", Location = new Point(245, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
