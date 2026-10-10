@@ -19,10 +19,17 @@ public class OrderTakingControl : UserControl
     private readonly Button _btnPlaceOrder;
     private readonly Label _lblPrintStatus;
 
+    // Matches the Cashier/Mobile apps' own copy of this key - the setting
+    // that marks which category's items show up behind a cart line's
+    // "+Extra" button.
+    private const string ExtrasCategorySettingKey = "ExtrasCategoryId";
+
     private List<CategoryDto> _categories = [];
     private List<ItemDto> _items = [];
     private readonly List<CartLine> _cart = [];
     private int? _selectedCategoryId;
+    private int? _extrasCategoryId;
+    private List<ItemDto> _extraItems = [];
 
     public OrderTakingControl()
     {
@@ -157,7 +164,23 @@ public class OrderTakingControl : UserControl
         Controls.Add(_categoryPanel);
         Controls.Add(cartContainer);
 
-        Load += async (_, _) => await LoadCategoriesAsync();
+        Load += async (_, _) =>
+        {
+            await LoadCategoriesAsync();
+            await LoadExtrasCategoryAsync();
+        };
+    }
+
+    // Loaded once per control load, not re-fetched on every "+Extra" click -
+    // the extras list is small and rarely changes mid-shift, same tradeoff
+    // as LoadCategoriesAsync itself.
+    private async Task LoadExtrasCategoryAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(ExtrasCategorySettingKey);
+        _extrasCategoryId = int.TryParse(value, out var id) ? id : null;
+        _extraItems = _extrasCategoryId is int categoryId
+            ? await _apiClient.GetItemsAsync(categoryId, availableOnly: true)
+            : [];
     }
 
     private async Task LoadCategoriesAsync()
@@ -230,65 +253,129 @@ public class OrderTakingControl : UserControl
     // with one shared comment, not 100 unreadable lines.
     private void AddToCart(ItemDto item, int quantity = 1)
     {
-        // Groups with any existing line(s) for the same item instead of
-        // always appending at the bottom - so re-tapping a tile lands right
-        // next to the item's other line(s), same reasoning as the cart's own
-        // "+1" button (see AddAnother).
-        var lastIndex = _cart.FindLastIndex(c => c.Item.ItemId == item.ItemId);
-        var newLine = new CartLine(item, quantity);
-
-        if (lastIndex >= 0)
-            _cart.Insert(lastIndex + 1, newLine);
-        else
-            _cart.Add(newLine);
+        InsertGrouped(_cart, new CartLine(item, quantity));
 
         if (_numQuantity.Value != 1) _numQuantity.Value = 1;
 
         RenderCart();
     }
 
+    // An extra always attaches to the ONE specific line it was requested
+    // for - never to the cart generally - so two separate occurrences of
+    // the same base item can carry two different extras without either
+    // receipt line being ambiguous about which extra belongs to which.
+    private void OnAddExtraClicked(Control anchor, CartLine parentLine)
+    {
+        if (_extraItems.Count == 0)
+        {
+            MessageBox.Show(
+                _extrasCategoryId is null
+                    ? "No extras category is configured yet - set one in Settings."
+                    : "The extras category has no items yet.",
+                "Extras", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var menu = new ContextMenuStrip();
+        foreach (var extraItem in _extraItems)
+        {
+            var captured = extraItem;
+            menu.Items.Add($"{captured.ItemName} ({captured.Price:0.00})", null, (_, _) =>
+            {
+                InsertGrouped(parentLine.Extras, new CartLine(captured, 1, isExtra: true));
+                RenderCart();
+            });
+        }
+        menu.Show(anchor, new Point(0, anchor.Height));
+    }
+
+    // Groups with any existing line(s) for the same item instead of always
+    // appending at the bottom - shared by base items (against the whole
+    // cart) and extras (against their one parent's own Extras list), same
+    // reasoning either way: re-tapping the same thing should land right
+    // next to its other occurrence(s), not at the very end.
+    private static void InsertGrouped(List<CartLine> list, CartLine newLine)
+    {
+        var lastIndex = list.FindLastIndex(c => c.Item.ItemId == newLine.Item.ItemId);
+        if (lastIndex >= 0)
+            list.Insert(lastIndex + 1, newLine);
+        else
+            list.Add(newLine);
+    }
+
     // The cart's own "+1" button inserts right after the line it was pressed
     // on, not at the bottom - so the kitchen sees same-item lines grouped
     // together and can prepare them as a batch instead of hunting for the
-    // matching item scattered across the ticket.
+    // matching item scattered across the ticket. Works for an extra line
+    // too, via FindOwningList - it lands in that same extra's parent, not
+    // at the top level.
     private void AddAnother(CartLine existing)
     {
-        var index = _cart.IndexOf(existing);
-        _cart.Insert(index + 1, new CartLine(existing.Item));
+        var list = FindOwningList(existing);
+        var index = list.IndexOf(existing);
+        list.Insert(index + 1, new CartLine(existing.Item, 1, existing.IsExtra));
 
         RenderCart();
     }
+
+    // A cart line can live at the top level OR inside some other line's
+    // Extras - the +1/X/comment buttons are shared by both via this lookup
+    // rather than needing two separate code paths.
+    private List<CartLine> FindOwningList(CartLine target)
+    {
+        if (_cart.Contains(target)) return _cart;
+        foreach (var line in _cart)
+            if (line.Extras.Contains(target)) return line.Extras;
+        return _cart;
+    }
+
+    // Flattens into display/order order: each base item immediately
+    // followed by its own extras, then the next base item - this is what
+    // makes the printed receipt/kitchen ticket unambiguous without needing
+    // any new field on the order itself (see BtnPlaceOrder_Click).
+    private List<CartLine> FlattenCart() =>
+        _cart.SelectMany(line => new[] { line }.Concat(line.Extras)).ToList();
 
     private void RenderCart()
     {
         _cartPanel.Controls.Clear();
 
-        foreach (var line in _cart)
+        foreach (var line in FlattenCart())
         {
             var row = new Panel { Width = _cartPanel.Width - 25, Height = 90, Margin = new Padding(0, 0, 0, 6) };
 
+            // Indented and prefixed, so an extra reads as "belonging to"
+            // whichever base item sits directly above it in the cart/
+            // receipt, instead of looking like just another top-level line.
+            var nameX = line.IsExtra ? 20 : 0;
+            var namePrefix = line.IsExtra ? "+ " : "";
             var lblName = new Label
             {
                 Text = line.Quantity > 1
-                    ? $"{line.Item.ItemName} x{line.Quantity}\n{(line.Item.Price * line.Quantity):0.00}"
-                    : $"{line.Item.ItemName}\n{line.Item.Price:0.00}",
-                Location = new Point(0, 0),
-                Size = new Size(150, 60)
+                    ? $"{namePrefix}{line.Item.ItemName} x{line.Quantity}\n{(line.Item.Price * line.Quantity):0.00}"
+                    : $"{namePrefix}{line.Item.ItemName}\n{line.Item.Price:0.00}",
+                Location = new Point(nameX, 0),
+                Size = new Size(150 - nameX, 60)
             };
+
+            // One level of nesting only - an extra can't itself carry
+            // further extras, so it gets no "+Extra" button of its own.
+            var btnAddExtra = new Button { Text = "+Extra", Location = new Point(160, 5), Size = new Size(55, 40), FlatStyle = FlatStyle.Flat, Font = new Font("Segoe UI", 8F), Visible = !line.IsExtra };
+            btnAddExtra.Click += (_, _) => OnAddExtraClicked(btnAddExtra, line);
 
             var btnAddOne = new Button { Text = "+", Location = new Point(245, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat };
             btnAddOne.Click += (_, _) => AddAnother(line);
 
             var btnRemove = new Button { Text = "X", Location = new Point(290, 5), Size = new Size(40, 40), FlatStyle = FlatStyle.Flat, ForeColor = Color.Red };
-            btnRemove.Click += (_, _) => { _cart.Remove(line); RenderCart(); };
+            btnRemove.Click += (_, _) => { FindOwningList(line).Remove(line); RenderCart(); };
 
             var lblComment = new Label
             {
                 Text = string.IsNullOrWhiteSpace(line.Comment) ? "No comment" : line.Comment,
                 Font = new Font("Segoe UI", 9F, FontStyle.Italic),
                 ForeColor = string.IsNullOrWhiteSpace(line.Comment) ? Color.Gray : Color.Black,
-                Location = new Point(0, 64),
-                Size = new Size(140, 24),
+                Location = new Point(nameX, 64),
+                Size = new Size(140 - nameX, 24),
                 AutoEllipsis = true
             };
             var btnComment = new Button
@@ -310,6 +397,7 @@ public class OrderTakingControl : UserControl
             };
 
             row.Controls.Add(lblName);
+            row.Controls.Add(btnAddExtra);
             row.Controls.Add(btnAddOne);
             row.Controls.Add(btnRemove);
             row.Controls.Add(lblComment);
@@ -318,7 +406,7 @@ public class OrderTakingControl : UserControl
             _cartPanel.Controls.Add(row);
         }
 
-        var total = _cart.Sum(c => c.Item.Price * c.Quantity);
+        var total = FlattenCart().Sum(c => c.Item.Price * c.Quantity);
         _lblTotal.Text = $"Total: {total:0.00}";
         _btnPlaceOrder.Enabled = _cart.Count > 0;
     }
@@ -344,21 +432,29 @@ public class OrderTakingControl : UserControl
                 return;
             }
 
+            // Flattened, not just _cart - each base item's own extras need
+            // to travel to the server as their own OrderItem rows too, sent
+            // immediately after their parent (not grouped by name) so the
+            // order they come back in later (Order History, a reprint, the
+            // kitchen ticket) still reads unambiguously which extra was for
+            // which specific item, with no new field needed anywhere.
+            var allLines = FlattenCart();
+
             var request = new CreateOrderRequest(
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
                 IsComplimentary: _chkComplimentary.Checked,
-                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
+                allLines.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
 
             var order = await _apiClient.CreateOrderAsync(request);
 
             // Built from order.Items (what the server actually confirmed and
-            // stored), not from the local _cart - if a price changed between
+            // stored), not from the local cart - if a price changed between
             // adding to cart and placing the order, the receipt must match what
             // was really charged, not a stale client-side snapshot. order.Items
             // has no item name, so it's resolved from the cart's own items,
             // whose names can't have changed mid-order.
-            var itemNamesById = _cart
+            var itemNamesById = allLines
                 .Select(c => c.Item)
                 .DistinctBy(i => i.ItemId)
                 .ToDictionary(i => i.ItemId, i => i.ItemName);
@@ -545,10 +641,18 @@ public class OrderTakingControl : UserControl
         else Apply();
     }
 
-    private class CartLine(ItemDto item, int quantity = 1)
+    private class CartLine(ItemDto item, int quantity = 1, bool isExtra = false)
     {
         public ItemDto Item { get; } = item;
         public int Quantity { get; } = quantity;
         public string? Comment { get; set; }
+
+        // True for a line added via another line's "+Extra" button rather
+        // than tapped directly off the menu - see OnAddExtraClicked below.
+        public bool IsExtra { get; } = isExtra;
+
+        // Only ever populated on a non-extra line - one level of nesting,
+        // see OnAddExtraClicked's own comment.
+        public List<CartLine> Extras { get; } = [];
     }
 }
