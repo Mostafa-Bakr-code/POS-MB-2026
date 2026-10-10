@@ -7,7 +7,8 @@ namespace POS_MB.WinformsApp.Dialogs;
 // on the main order-taking screen) reads faster and is easier to tap
 // accurately mid-rush than a vertical text list. FlowLayoutPanel wraps
 // naturally once a row's tiles fill the available width - ClientSize below
-// is sized so exactly 3 fit per row (160 tile + 16 margin = 176 each).
+// is sized so exactly 5 fit per row (160 tile + 16 margin = 176 each),
+// so a cashier sees more extras at once without needing to scroll.
 //
 // Deliberately stays open across multiple taps instead of closing after
 // one selection - adding three different extras to the same item used to
@@ -21,7 +22,7 @@ public class FormExtrasPickerDialog : Form
     public FormExtrasPickerDialog(string title, List<ItemDto> items)
     {
         Text = title;
-        ClientSize = new Size(580, 420);
+        ClientSize = new Size(940, 420);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
