@@ -609,7 +609,7 @@ public class OrderTakingControl : UserControl
         var printOrder = order with { SerialNumber = printSerial };
 
         var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize);
-        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(printOrder, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize);
+        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(printOrder, settings.ReceiptDateTimeDisplay, settings.TaxDisplayMode, settings.ClientReceiptFontSize);
 
         // No real printer set up yet (see Settings) - show what would have
         // printed for this actual order instead of failing/timing out against an
@@ -618,7 +618,7 @@ public class OrderTakingControl : UserControl
         if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
         {
             using var clientPreview = new FormReceiptPreviewDialog("Client Receipt (no printer configured - preview only)",
-                ReceiptBuilder.PreviewCustomerReceipt(printOrder, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize));
+                ReceiptBuilder.PreviewCustomerReceipt(printOrder, settings.ReceiptDateTimeDisplay, settings.TaxDisplayMode, settings.ClientReceiptFontSize));
             clientPreview.ShowDialog(this);
 
             using var kitchenPreview = new FormReceiptPreviewDialog("Kitchen Ticket (no printer configured - preview only)",

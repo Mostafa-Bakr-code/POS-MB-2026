@@ -7,15 +7,16 @@ namespace POS_MB.Printing;
 // could ever drift out of sync with what actually prints.
 public static class ReceiptBuilder
 {
-    // showOrderTime/taxDisplayMode are opt-in customer-receipt display choices
-    // (see PrinterSettings) - both real content that always gets computed
-    // correctly regardless, just optionally hidden/summarized on the customer's
-    // own copy. Comments are never shown to the customer at all (no toggle) -
-    // they're kitchen-only information (see KitchenTicketDocument).
-    public static byte[] BuildCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
-        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToBytes();
-    public static string PreviewCustomerReceipt(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
-        CustomerReceiptDocument(order, showOrderTime, taxDisplayMode, fontSize).ToPreviewText();
+    // dateTimeDisplay/taxDisplayMode are opt-in customer-receipt display
+    // choices (see PrinterSettings) - both real content that always gets
+    // computed correctly regardless, just optionally hidden/summarized on
+    // the customer's own copy. Comments are never shown to the customer at
+    // all (no toggle) - they're kitchen-only information (see
+    // KitchenTicketDocument).
+    public static byte[] BuildCustomerReceipt(ReceiptOrder order, ReceiptDateTimeDisplayMode dateTimeDisplay, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
+        CustomerReceiptDocument(order, dateTimeDisplay, taxDisplayMode, fontSize).ToBytes();
+    public static string PreviewCustomerReceipt(ReceiptOrder order, ReceiptDateTimeDisplayMode dateTimeDisplay, TaxDisplayMode taxDisplayMode, decimal fontSize = 1m) =>
+        CustomerReceiptDocument(order, dateTimeDisplay, taxDisplayMode, fontSize).ToPreviewText();
 
     public static byte[] BuildKitchenTicket(ReceiptOrder order, decimal fontSize = 2m) =>
         KitchenTicketDocument(order, fontSize).ToBytes();
@@ -50,7 +51,7 @@ public static class ReceiptBuilder
         return doc;
     }
 
-    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, bool showOrderTime, TaxDisplayMode taxDisplayMode, decimal fontSize)
+    private static EscPosDocument CustomerReceiptDocument(ReceiptOrder order, ReceiptDateTimeDisplayMode dateTimeDisplay, TaxDisplayMode taxDisplayMode, decimal fontSize)
     {
         var doc = new EscPosDocument()
             .Center().DoubleHeight(true).Bold(true)
@@ -60,8 +61,15 @@ public static class ReceiptBuilder
             .Line($"Order #{order.SerialNumber}")
             .Size(1, 1).Bold(false);
 
-        if (showOrderTime)
-            doc.Line(order.LocalDate.ToString("yyyy-MM-dd HH:mm"));
+        var dateTimeLine = dateTimeDisplay switch
+        {
+            ReceiptDateTimeDisplayMode.TimeOnly => order.LocalDate.ToString("HH:mm"),
+            ReceiptDateTimeDisplayMode.DateOnly => order.LocalDate.ToString("yyyy-MM-dd"),
+            ReceiptDateTimeDisplayMode.Both => order.LocalDate.ToString("yyyy-MM-dd HH:mm"),
+            _ => null
+        };
+        if (dateTimeLine is not null)
+            doc.Line(dateTimeLine);
 
         doc.Left().Divider();
 

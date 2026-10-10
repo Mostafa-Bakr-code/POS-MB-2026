@@ -440,7 +440,7 @@ public partial class OrderTakingPage : ContentPage
         var printOrder = order with { SerialNumber = printSerial };
 
         var kitchenTicket = ReceiptBuilder.BuildKitchenTicket(printOrder, settings.KitchenTicketFontSize);
-        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(printOrder, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize);
+        var customerReceipt = ReceiptBuilder.BuildCustomerReceipt(printOrder, settings.ReceiptDateTimeDisplay, settings.TaxDisplayMode, settings.ClientReceiptFontSize);
 
         // No real printer set up yet (see Settings) - show what would have
         // printed for this actual order instead of failing/timing out
@@ -448,7 +448,7 @@ public partial class OrderTakingPage : ContentPage
         if (string.IsNullOrWhiteSpace(settings.ClientPrinterIp) && string.IsNullOrWhiteSpace(settings.KitchenPrinterIp))
         {
             await Navigation.PushModalAsync(new ReceiptPreviewPage("Client Receipt (no printer configured - preview only)",
-                ReceiptBuilder.PreviewCustomerReceipt(printOrder, settings.ShowOrderTimeOnReceipt, settings.TaxDisplayMode, settings.ClientReceiptFontSize)));
+                ReceiptBuilder.PreviewCustomerReceipt(printOrder, settings.ReceiptDateTimeDisplay, settings.TaxDisplayMode, settings.ClientReceiptFontSize)));
             await Navigation.PushModalAsync(new ReceiptPreviewPage("Kitchen Ticket (no printer configured - preview only)",
                 ReceiptBuilder.PreviewKitchenTicket(printOrder, settings.KitchenTicketFontSize)));
             return;

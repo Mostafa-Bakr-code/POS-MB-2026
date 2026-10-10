@@ -36,6 +36,7 @@ public partial class SettingsPage : ContentPage
     {
         InitializeComponent();
         TaxDisplayModePicker.SelectedIndex = (int)TaxDisplayMode.PerItem;
+        DateTimeDisplayPicker.SelectedIndex = (int)ReceiptDateTimeDisplayMode.None;
     }
 
     protected override async void OnAppearing()
@@ -75,7 +76,7 @@ public partial class SettingsPage : ContentPage
         KitchenIpEntry.Text = printerSettings.KitchenPrinterIp;
         KitchenPortStepper.Value = printerSettings.KitchenPrinterPort;
         WrapAtStepper.Value = printerSettings.ReceiptOrderNumberWrapAt;
-        ShowOrderTimeCheck.IsChecked = printerSettings.ShowOrderTimeOnReceipt;
+        DateTimeDisplayPicker.SelectedIndex = (int)printerSettings.ReceiptDateTimeDisplay;
         TaxDisplayModePicker.SelectedIndex = (int)printerSettings.TaxDisplayMode;
         ClientFontSizeStepper.Value = printerSettings.ClientReceiptFontSize;
         KitchenFontSizeStepper.Value = printerSettings.KitchenTicketFontSize;
@@ -124,7 +125,7 @@ public partial class SettingsPage : ContentPage
             KitchenPrinterIp = KitchenIpEntry.Text?.Trim() ?? "",
             KitchenPrinterPort = (int)KitchenPortStepper.Value,
             ReceiptOrderNumberWrapAt = (int)WrapAtStepper.Value,
-            ShowOrderTimeOnReceipt = ShowOrderTimeCheck.IsChecked,
+            ReceiptDateTimeDisplay = (ReceiptDateTimeDisplayMode)DateTimeDisplayPicker.SelectedIndex,
             TaxDisplayMode = (TaxDisplayMode)TaxDisplayModePicker.SelectedIndex,
             ClientReceiptFontSize = ClientFontSizeStepper.Value,
             KitchenTicketFontSize = KitchenFontSizeStepper.Value
@@ -156,7 +157,7 @@ public partial class SettingsPage : ContentPage
         try
         {
             var bytes = isClient
-                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), ShowOrderTimeCheck.IsChecked, (TaxDisplayMode)TaxDisplayModePicker.SelectedIndex, ClientFontSizeStepper.Value)
+                ? ReceiptBuilder.BuildCustomerReceipt(SampleOrder(), (ReceiptDateTimeDisplayMode)DateTimeDisplayPicker.SelectedIndex, (TaxDisplayMode)TaxDisplayModePicker.SelectedIndex, ClientFontSizeStepper.Value)
                 : ReceiptBuilder.BuildKitchenTicket(SampleOrder(), KitchenFontSizeStepper.Value);
 
             await new NetworkReceiptPrinter(ip, port).PrintAsync(bytes);
@@ -205,7 +206,7 @@ public partial class SettingsPage : ContentPage
     // can be tried before committing to one.
     private async void OnPreviewClientClicked(object? sender, EventArgs e)
     {
-        var text = ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), ShowOrderTimeCheck.IsChecked, (TaxDisplayMode)TaxDisplayModePicker.SelectedIndex, ClientFontSizeStepper.Value);
+        var text = ReceiptBuilder.PreviewCustomerReceipt(SampleOrder(), (ReceiptDateTimeDisplayMode)DateTimeDisplayPicker.SelectedIndex, (TaxDisplayMode)TaxDisplayModePicker.SelectedIndex, ClientFontSizeStepper.Value);
         await Navigation.PushModalAsync(new ReceiptPreviewPage("Client Receipt Preview", text));
     }
 

@@ -50,10 +50,17 @@
             <controls:NumericStepper x:Name="WrapAtStepper" Minimum="0" Maximum="9999" Increment="1" DecimalPlaces="0" WidthRequest="200" HorizontalOptions="Start" />
 
             <Label Text="Customer Receipt Options" FontAttributes="Bold" Margin="0,16,0,0" />
-            <HorizontalStackLayout Spacing="8">
-                <CheckBox x:Name="ShowOrderTimeCheck" />
-                <Label Text="Show order time on customer receipt" VerticalOptions="Center" />
-            </HorizontalStackLayout>
+            <Label Text="Show on customer receipt" />
+            <Picker x:Name="DateTimeDisplayPicker" WidthRequest="260" HorizontalOptions="Start">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>Nothing</x:String>
+                        <x:String>Time only</x:String>
+                        <x:String>Date only</x:String>
+                        <x:String>Date and time</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
 
             <Label Text="VAT display on customer receipt" Margin="0,10,0,0" />
             <Picker x:Name="TaxDisplayModePicker" WidthRequest="260" HorizontalOptions="Start">
