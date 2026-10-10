@@ -23,7 +23,17 @@ public class OrderTakingControl : UserControl
     // row's fixed-height name label and pushes the price line below it
     // out of view, clipped rather than shown - this surfaces the full
     // name-and-price text on hover so nothing is ever silently hidden.
-    private readonly ToolTip _cartTooltip = new();
+    //
+    // Recreated from scratch on every RenderCart (see there) rather than
+    // reused - disposing the old row controls wasn't enough on its own to
+    // keep this reliable: cart rows get rebuilt at the exact same screen
+    // positions every time, and Windows frequently hands a brand-new
+    // control the SAME native window handle a just-disposed one had. A
+    // single long-lived ToolTip's internal handle bookkeeping can get
+    // confused by that reuse even though the control it now points at is
+    // a different object - a fresh ToolTip each render has no stale
+    // bookkeeping left over to get confused by at all.
+    private ToolTip _cartTooltip = new();
 
     // Matches the Cashier/Mobile apps' own copy of this key - the setting
     // that marks which category's items show up behind a cart line's
@@ -359,6 +369,9 @@ public class OrderTakingControl : UserControl
         foreach (Control oldRow in _cartPanel.Controls)
             oldRow.Dispose();
         _cartPanel.Controls.Clear();
+
+        _cartTooltip.Dispose();
+        _cartTooltip = new ToolTip();
 
         foreach (var line in FlattenCart())
         {
