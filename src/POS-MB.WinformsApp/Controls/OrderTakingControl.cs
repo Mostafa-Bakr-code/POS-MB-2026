@@ -276,7 +276,13 @@ public class OrderTakingControl : UserControl
             return;
         }
 
-        using var menu = new ContextMenuStrip();
+        // NOT wrapped in `using` - Show() below is non-blocking (it displays
+        // the dropdown and returns immediately, it doesn't wait for a
+        // click), so disposing on method return would tear the menu down
+        // before the user ever gets a chance to click anything. Disposed
+        // instead once it actually closes.
+        var menu = new ContextMenuStrip();
+        menu.Closed += (_, _) => menu.Dispose();
         foreach (var extraItem in _extraItems)
         {
             var captured = extraItem;
