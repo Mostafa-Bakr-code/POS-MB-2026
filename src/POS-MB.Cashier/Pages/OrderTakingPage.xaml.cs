@@ -15,10 +15,18 @@ namespace POS_MB.Cashier.Pages;
 // DataGridView.BuildRow), since MAUI has no drag-free equivalent otherwise.
 public partial class OrderTakingPage : ContentPage
 {
+    // Matches SettingsPage's own copy of this key - the setting that marks
+    // which category's items show up behind a cart line's "+Extra" button,
+    // same reasoning as every other setting key this app keeps its own copy
+    // of (see AcceptingOnlineOrdersSettingKey elsewhere).
+    private const string ExtrasCategorySettingKey = "ExtrasCategoryId";
+
     private readonly ApiClient _apiClient = new();
 
     private List<CategoryDto> _categories = [];
     private readonly List<CartLine> _cart = [];
+    private int? _extrasCategoryId;
+    private List<ItemDto> _extraItems = [];
 
     public OrderTakingPage()
     {
@@ -37,6 +45,19 @@ public partial class OrderTakingPage : ContentPage
     {
         base.OnAppearing();
         await LoadCategoriesAsync();
+        await LoadExtrasCategoryAsync();
+    }
+
+    // Loaded once per page visit (not re-fetched on every "+Extra" tap) -
+    // the extras list is small and rarely changes mid-shift, same tradeoff
+    // as LoadCategoriesAsync itself.
+    private async Task LoadExtrasCategoryAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(ExtrasCategorySettingKey);
+        _extrasCategoryId = int.TryParse(value, out var id) ? id : null;
+        _extraItems = _extrasCategoryId is int categoryId
+            ? await _apiClient.GetItemsAsync(categoryId, availableOnly: true)
+            : [];
     }
 
     private async Task LoadCategoriesAsync()
@@ -100,33 +121,84 @@ public partial class OrderTakingPage : ContentPage
     // first instead adds ONE line with that quantity and one shared comment.
     private void AddToCart(ItemDto item, int quantity = 1)
     {
-        // Groups with any existing line(s) for the same item instead of
-        // always appending at the bottom - same reasoning as the cart's own
-        // "+1" button (AddAnother).
-        var lastIndex = _cart.FindLastIndex(c => c.Item.ItemId == item.ItemId);
-        var newLine = new CartLine(item, quantity);
-
-        if (lastIndex >= 0) _cart.Insert(lastIndex + 1, newLine);
-        else _cart.Add(newLine);
+        InsertGrouped(_cart, new CartLine(item, quantity));
 
         if (QuantityStepper.Value != 1) QuantityStepper.Value = 1;
 
         RenderCart();
     }
 
-    private void AddAnother(CartLine existing)
+    // An extra always attaches to the ONE specific line it was requested
+    // for - never to the cart generally - so two separate occurrences of
+    // the same base item can carry two different extras without either
+    // receipt line being ambiguous about which extra belongs to which.
+    private async void OnAddExtraClicked(CartLine parentLine)
     {
-        var index = _cart.IndexOf(existing);
-        _cart.Insert(index + 1, new CartLine(existing.Item));
+        if (_extraItems.Count == 0)
+        {
+            await UiAlerts.Error(this, _extrasCategoryId is null
+                ? "No extras category is configured yet - set one in Settings."
+                : "The extras category has no items yet.");
+            return;
+        }
+
+        var labels = _extraItems.Select(i => $"{i.ItemName} ({i.Price:0.00})").ToArray();
+        var choice = await DisplayActionSheet($"Add extra to {parentLine.Item.ItemName}", "Cancel", null, labels);
+        if (choice is null || choice == "Cancel") return;
+
+        var index = Array.IndexOf(labels, choice);
+        if (index < 0) return;
+
+        InsertGrouped(parentLine.Extras, new CartLine(_extraItems[index], 1, isExtra: true));
         RenderCart();
     }
 
+    // Groups with any existing line(s) for the same item instead of always
+    // appending at the bottom - shared by base items (against the whole
+    // cart) and extras (against their one parent's own Extras list), same
+    // reasoning either way: tapping the same thing again should land right
+    // next to its other occurrence(s), not at the very end.
+    private static void InsertGrouped(List<CartLine> list, CartLine newLine)
+    {
+        var lastIndex = list.FindLastIndex(c => c.Item.ItemId == newLine.Item.ItemId);
+        if (lastIndex >= 0) list.Insert(lastIndex + 1, newLine);
+        else list.Add(newLine);
+    }
+
+    private void AddAnother(CartLine existing)
+    {
+        var list = FindOwningList(existing);
+        var index = list.IndexOf(existing);
+        list.Insert(index + 1, new CartLine(existing.Item, 1, existing.IsExtra));
+        RenderCart();
+    }
+
+    // A cart line can live at the top level OR inside some other line's
+    // Extras - the +1/X/comment buttons are shared by both via this lookup
+    // rather than needing two separate code paths.
+    private List<CartLine> FindOwningList(CartLine target)
+    {
+        if (_cart.Contains(target)) return _cart;
+        foreach (var line in _cart)
+            if (line.Extras.Contains(target)) return line.Extras;
+        return _cart;
+    }
+
+    // Flattens into display/order order: each base item immediately
+    // followed by its own extras, then the next base item - this is what
+    // makes the printed receipt/kitchen ticket unambiguous without needing
+    // any new field on the order itself (see OnPlaceOrderClicked).
+    private List<CartLine> FlattenCart() =>
+        _cart.SelectMany(line => new[] { line }.Concat(line.Extras)).ToList();
+
     private void RenderCart()
     {
-        CartView.ItemsSource = null;
-        CartView.ItemsSource = _cart;
+        var flattened = FlattenCart();
 
-        var total = _cart.Sum(c => c.Item.Price * c.Quantity);
+        CartView.ItemsSource = null;
+        CartView.ItemsSource = flattened;
+
+        var total = flattened.Sum(c => c.Item.Price * c.Quantity);
         TotalLabel.Text = $"Total: {total:0.00}";
         PlaceOrderButton.IsEnabled = _cart.Count > 0;
     }
@@ -138,8 +210,9 @@ public partial class OrderTakingPage : ContentPage
             ColumnDefinitions =
             {
                 new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(new GridLength(44)),
-                new ColumnDefinition(new GridLength(44))
+                new ColumnDefinition(new GridLength(50)),
+                new ColumnDefinition(new GridLength(40)),
+                new ColumnDefinition(new GridLength(40))
             },
             RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto) },
             Padding = new Thickness(4),
@@ -150,40 +223,57 @@ public partial class OrderTakingPage : ContentPage
         Grid.SetColumn(nameLabel, 0);
         grid.Children.Add(nameLabel);
 
-        var addButton = new Button { Text = "+", WidthRequest = 40, HeightRequest = 40, Padding = 0 };
-        Grid.SetColumn(addButton, 1);
+        var addExtraButton = new Button { Text = "+Extra", FontSize = 10, WidthRequest = 46, HeightRequest = 40, Padding = 0 };
+        Grid.SetColumn(addExtraButton, 1);
+        grid.Children.Add(addExtraButton);
+
+        var addButton = new Button { Text = "+1", WidthRequest = 36, HeightRequest = 40, Padding = 0 };
+        Grid.SetColumn(addButton, 2);
         grid.Children.Add(addButton);
 
-        var removeButton = new Button { Text = "X", WidthRequest = 40, HeightRequest = 40, Padding = 0, TextColor = Colors.Red };
-        Grid.SetColumn(removeButton, 2);
+        var removeButton = new Button { Text = "X", WidthRequest = 36, HeightRequest = 40, Padding = 0, TextColor = Colors.Red };
+        Grid.SetColumn(removeButton, 3);
         grid.Children.Add(removeButton);
 
         var commentButton = new Button { FontSize = 12, HorizontalOptions = LayoutOptions.Start };
         Grid.SetRow(commentButton, 1);
         Grid.SetColumn(commentButton, 0);
-        Grid.SetColumnSpan(commentButton, 3);
+        Grid.SetColumnSpan(commentButton, 4);
         grid.Children.Add(commentButton);
 
         grid.BindingContextChanged += (_, _) =>
         {
             if (grid.BindingContext is not CartLine line) return;
 
+            // Indented and prefixed so an extra reads as "belonging to"
+            // whichever base item sits directly above it in the cart/
+            // receipt, instead of looking like just another top-level line.
+            nameLabel.Margin = line.IsExtra ? new Thickness(20, 0, 0, 0) : new Thickness(0);
+            var prefix = line.IsExtra ? "+ " : "";
             nameLabel.Text = line.Quantity > 1
-                ? $"{line.Item.ItemName} x{line.Quantity}  {(line.Item.Price * line.Quantity):0.00}"
-                : $"{line.Item.ItemName}  {line.Item.Price:0.00}";
+                ? $"{prefix}{line.Item.ItemName} x{line.Quantity}  {(line.Item.Price * line.Quantity):0.00}"
+                : $"{prefix}{line.Item.ItemName}  {line.Item.Price:0.00}";
+
+            // One level of nesting only - an extra can't itself carry
+            // further extras.
+            addExtraButton.IsVisible = !line.IsExtra;
 
             commentButton.Text = string.IsNullOrWhiteSpace(line.Comment)
                 ? "Add Comment"
                 : $"Comment: {line.Comment}";
         };
 
+        addExtraButton.Clicked += (_, _) =>
+        {
+            if (grid.BindingContext is CartLine line) OnAddExtraClicked(line);
+        };
         addButton.Clicked += (_, _) =>
         {
             if (grid.BindingContext is CartLine line) AddAnother(line);
         };
         removeButton.Clicked += (_, _) =>
         {
-            if (grid.BindingContext is CartLine line) { _cart.Remove(line); RenderCart(); }
+            if (grid.BindingContext is CartLine line) { FindOwningList(line).Remove(line); RenderCart(); }
         };
         commentButton.Clicked += async (_, _) =>
         {
@@ -220,11 +310,19 @@ public partial class OrderTakingPage : ContentPage
                 return;
             }
 
+            // Flattened, not just _cart - each base item's own extras need
+            // to travel to the server as their own OrderItem rows too, sent
+            // immediately after their parent (not grouped by name) so the
+            // order they come back in later (Order History, a reprint, the
+            // kitchen ticket) still reads unambiguously which extra was for
+            // which specific item, with no new field needed anywhere.
+            var allLines = FlattenCart();
+
             var request = new CreateOrderRequest(
                 OrderSource.Cashier,
                 AppSession.CurrentUser.UserId,
                 IsComplimentary: ComplimentaryCheck.IsChecked,
-                _cart.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
+                allLines.Select(c => new NewOrderItemRequest(c.Item.ItemId, c.Quantity, c.Comment)).ToList());
 
             var (order, error) = await _apiClient.CreateOrderAsync(request);
             if (order is null)
@@ -234,12 +332,12 @@ public partial class OrderTakingPage : ContentPage
             }
 
             // Built from order.Items (what the server actually confirmed and
-            // stored), not from the local _cart - if a price changed between
+            // stored), not from the local cart - if a price changed between
             // adding to cart and placing the order, the receipt must match
             // what was really charged. order.Items has no item name, so
             // it's resolved from the cart's own items, whose names can't
             // have changed mid-order.
-            var itemNamesById = _cart
+            var itemNamesById = allLines
                 .Select(c => c.Item)
                 .DistinctBy(i => i.ItemId)
                 .ToDictionary(i => i.ItemId, i => i.ItemName);
@@ -404,10 +502,18 @@ public partial class OrderTakingPage : ContentPage
         });
     }
 
-    private class CartLine(ItemDto item, int quantity = 1)
+    private class CartLine(ItemDto item, int quantity = 1, bool isExtra = false)
     {
         public ItemDto Item { get; } = item;
         public int Quantity { get; } = quantity;
         public string? Comment { get; set; }
+
+        // True for a line added via another line's "+Extra" button rather
+        // than tapped directly off the menu - see Extras below.
+        public bool IsExtra { get; } = isExtra;
+
+        // Only ever populated on a non-extra line - one level of nesting,
+        // see OnAddExtraClicked's own comment.
+        public List<CartLine> Extras { get; } = [];
     }
 }

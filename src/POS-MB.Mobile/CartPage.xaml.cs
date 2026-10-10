@@ -6,17 +6,34 @@ namespace POS_MB.Mobile;
 
 public partial class CartPage : ContentPage
 {
+    // Matches the cashier side's own copy of this key - the setting that
+    // marks which category's items show up behind a cart line's "+Extra"
+    // button.
+    private const string ExtrasCategorySettingKey = "ExtrasCategoryId";
+
     private readonly ApiClient _apiClient = new();
+    private List<ItemDto> _extraItems = [];
 
     public CartPage()
     {
         InitializeComponent();
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         Refresh();
+        await LoadExtrasAsync();
+    }
+
+    // Loaded once per cart visit, not re-fetched on every "+Extra" tap -
+    // same tradeoff as the cashier side's own OrderTakingPage.
+    private async Task LoadExtrasAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(ExtrasCategorySettingKey);
+        _extraItems = int.TryParse(value, out var categoryId)
+            ? await _apiClient.GetItemsAsync(categoryId)
+            : [];
     }
 
     private void Refresh()
@@ -51,6 +68,32 @@ public partial class CartPage : ContentPage
         Refresh();
     }
 
+    // An extra always attaches to the ONE specific line it was requested
+    // for - never to the cart generally - so two separate occurrences of
+    // the same base item can carry two different extras without either
+    // the in-app cart or the kitchen ticket being ambiguous about which
+    // extra belongs to which.
+    private async void OnAddExtraClicked(object? sender, EventArgs e)
+    {
+        if ((sender as Button)?.BindingContext is not CartLine line) return;
+
+        if (_extraItems.Count == 0)
+        {
+            await DisplayAlert("Extras", "No extras are available right now.", "OK");
+            return;
+        }
+
+        var labels = _extraItems.Select(i => $"{i.ItemName} ({i.Price:0.00})").ToArray();
+        var choice = await DisplayActionSheet($"Add extra to {line.ItemName}", "Cancel", null, labels);
+        if (choice is null || choice == "Cancel") return;
+
+        var index = Array.IndexOf(labels, choice);
+        if (index < 0) return;
+
+        Cart.AddExtra(line, _extraItems[index]);
+        Refresh();
+    }
+
     private async void OnCommentClicked(object? sender, EventArgs e)
     {
         if ((sender as Button)?.BindingContext is not CartLine line) return;
@@ -66,7 +109,13 @@ public partial class CartPage : ContentPage
         ErrorLabel.IsVisible = false;
         PlaceOrderButton.IsEnabled = false;
 
-        var items = Cart.Lines.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
+        // Flattened, not just Cart.Lines - each base item's own extras need
+        // to travel to the server as their own order-item rows too, sent
+        // immediately after their parent (not grouped by item) so the
+        // order they come back in later (My Orders, the kitchen ticket)
+        // still reads unambiguously which extra was for which specific
+        // item, with no new field needed anywhere.
+        var items = Cart.Flattened.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
         var useSavedCard = SavedCardLayout.IsVisible && SavedCardCheckBox.IsChecked;
         var (result, error, unavailableItems) = await _apiClient.PlaceOrderAsync(items, useSavedCard);
 
@@ -78,7 +127,7 @@ public partial class CartPage : ContentPage
                 // student hunt through the cart for what was rejected - the
                 // server told us precisely which items and why.
                 var unavailableIds = unavailableItems.Select(i => i.ItemId).ToHashSet();
-                Cart.Lines.RemoveAll(l => unavailableIds.Contains(l.ItemId));
+                Cart.RemoveAllWhere(l => unavailableIds.Contains(l.ItemId));
 
                 var names = string.Join(", ", unavailableItems.Select(i => $"{i.ItemName} ({i.Reason})"));
                 ErrorLabel.Text = $"Removed from your cart - {names}. Review your cart and try again.";

@@ -51,11 +51,25 @@
                                 </Grid>
                             </Frame>
                             <VerticalStackLayout Grid.Column="1" Spacing="4">
-                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6">
                                     <Label Grid.Column="0" Text="{Binding ItemName}" TextColor="{StaticResource TextOnCard}" FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
                                     <Label Grid.Column="1" Text="{Binding Subtotal, StringFormat='{0:0.00}'}" TextColor="{StaticResource Coral}" FontAttributes="Bold" FontSize="15" VerticalOptions="Center" />
+                                    <!-- Hidden on an extra's own row - one level of nesting only,
+                                         an extra can't itself carry further extras. -->
                                     <Button
                                         Grid.Column="2"
+                                        Text="+Extra"
+                                        IsVisible="{Binding CanAddExtra}"
+                                        WidthRequest="48"
+                                        HeightRequest="32"
+                                        Padding="0"
+                                        FontSize="10"
+                                        CornerRadius="10"
+                                        BackgroundColor="{StaticResource TextOnCard}"
+                                        TextColor="{StaticResource Yellow}"
+                                        Clicked="OnAddExtraClicked" />
+                                    <Button
+                                        Grid.Column="3"
                                         Text="+1"
                                         WidthRequest="36"
                                         HeightRequest="32"
@@ -66,7 +80,7 @@
                                         TextColor="{StaticResource Yellow}"
                                         Clicked="OnAddAnotherClicked" />
                                     <Button
-                                        Grid.Column="3"
+                                        Grid.Column="4"
                                         Text="✕"
                                         WidthRequest="32"
                                         HeightRequest="32"
@@ -81,6 +95,41 @@
                                     <Label Grid.Column="0" Text="{Binding DisplayComment}" TextColor="{Binding CommentTextColor}" FontSize="12.5" VerticalOptions="Center" />
                                     <Button Grid.Column="1" Text="{Binding CommentButtonText}" Clicked="OnCommentClicked" BackgroundColor="Transparent" TextColor="{StaticResource Coral}" FontSize="12.5" Padding="0" MinimumHeightRequest="0" />
                                 </Grid>
+
+                                <!-- Indented and nested directly under its parent - reads as
+                                     "belonging to" this specific item, not a separate cart entry. -->
+                                <VerticalStackLayout Margin="16,2,0,0" Spacing="4" BindableLayout.ItemsSource="{Binding Extras}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="session:CartLine">
+                                            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                                <Label Grid.Column="0" Text="{Binding ItemName, StringFormat='+ {0}'}" TextColor="{StaticResource TextOnCard}" FontSize="13" VerticalOptions="Center" />
+                                                <Label Grid.Column="1" Text="{Binding Subtotal, StringFormat='{0:0.00}'}" TextColor="{StaticResource Coral}" FontSize="13" VerticalOptions="Center" />
+                                                <Button
+                                                    Grid.Column="2"
+                                                    Text="+1"
+                                                    WidthRequest="30"
+                                                    HeightRequest="28"
+                                                    Padding="0"
+                                                    FontSize="10"
+                                                    CornerRadius="8"
+                                                    BackgroundColor="{StaticResource TextOnCard}"
+                                                    TextColor="{StaticResource Yellow}"
+                                                    Clicked="OnAddAnotherClicked" />
+                                                <Button
+                                                    Grid.Column="3"
+                                                    Text="✕"
+                                                    WidthRequest="28"
+                                                    HeightRequest="28"
+                                                    Padding="0"
+                                                    FontSize="10"
+                                                    CornerRadius="8"
+                                                    BackgroundColor="#FFE7EE"
+                                                    TextColor="{StaticResource Coral}"
+                                                    Clicked="OnRemoveClicked" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
                             </VerticalStackLayout>
                         </Grid>
                     </Frame>

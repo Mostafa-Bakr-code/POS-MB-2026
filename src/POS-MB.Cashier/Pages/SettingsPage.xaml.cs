@@ -1,6 +1,7 @@
 using System.Globalization;
 using POS_MB.Cashier.Api;
 using POS_MB.Cashier.Controls;
+using POS_MB.Cashier.Models;
 using POS_MB.Printing;
 
 namespace POS_MB.Cashier.Pages;
@@ -24,6 +25,10 @@ public partial class SettingsPage : ContentPage
     // as every other setting key this app keeps its own copy of.
     private const string AutoCancelMinutesKey = "MobileOrderAutoCancelMinutes";
     private const decimal FallbackAutoCancelMinutes = 10m;
+
+    // Matches OrderTakingPage's own copy - the category whose items appear
+    // behind a cart line's "+Extra" button.
+    private const string ExtrasCategoryKey = "ExtrasCategoryId";
 
     private readonly ApiClient _apiClient = new();
 
@@ -56,6 +61,14 @@ public partial class SettingsPage : ContentPage
             ? autoCancelMinutes
             : FallbackAutoCancelMinutes;
 
+        var categories = await _apiClient.GetCategoriesAsync();
+        ExtrasCategoryPicker.ItemsSource = categories;
+
+        var extrasCategoryValue = await _apiClient.GetSettingValueAsync(ExtrasCategoryKey);
+        ExtrasCategoryPicker.SelectedItem = int.TryParse(extrasCategoryValue, out var extrasCategoryId)
+            ? categories.FirstOrDefault(c => c.CategoryId == extrasCategoryId)
+            : null;
+
         var printerSettings = PrinterSettings.Load();
         ClientIpEntry.Text = printerSettings.ClientPrinterIp;
         ClientPortStepper.Value = printerSettings.ClientPrinterPort;
@@ -78,7 +91,14 @@ public partial class SettingsPage : ContentPage
             var (offsetOk, offsetError) = await _apiClient.SetSettingValueAsync(TimeZoneOffsetKey, TimeZoneOffsetStepper.Value.ToString(CultureInfo.InvariantCulture));
             var (autoCancelOk, autoCancelError) = await _apiClient.SetSettingValueAsync(AutoCancelMinutesKey, ((int)AutoCancelMinutesStepper.Value).ToString(CultureInfo.InvariantCulture));
 
-            if (taxOk && offsetOk && autoCancelOk)
+            // No extras category picked is a valid choice (restaurants
+            // without add-ons don't need one) - saved as an empty value
+            // rather than skipped, so a previously-picked category can be
+            // explicitly cleared too.
+            var selectedExtrasCategory = ExtrasCategoryPicker.SelectedItem as CategoryDto;
+            var (extrasOk, extrasError) = await _apiClient.SetSettingValueAsync(ExtrasCategoryKey, selectedExtrasCategory?.CategoryId.ToString() ?? "");
+
+            if (taxOk && offsetOk && autoCancelOk && extrasOk)
             {
                 SharedStatusLabel.TextColor = Color.FromArgb("#28C882");
                 SharedStatusLabel.Text = "Saved.";
@@ -86,7 +106,7 @@ public partial class SettingsPage : ContentPage
             else
             {
                 SharedStatusLabel.TextColor = Color.FromArgb("#FF8C8C");
-                SharedStatusLabel.Text = $"Could not save: {taxError ?? offsetError ?? autoCancelError}";
+                SharedStatusLabel.Text = $"Could not save: {taxError ?? offsetError ?? autoCancelError ?? extrasError}";
             }
         }
         finally
