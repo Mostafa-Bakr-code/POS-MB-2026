@@ -22,7 +22,13 @@ public class FormTextInputDialog : Form
         Font = new Font("Segoe UI", 12F);
 
         var lbl = new Label { Text = label, Location = new Point(20, 20), Size = new Size(360, 28) };
-        _txtValue = new TextBox { Text = initialValue, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = maxLength };
+        // RightToLeft.Yes - a plain TextBox in its default (No) mode isn't
+        // Unicode-bidi-aware: typing Arabic into it can look fine on screen
+        // while actually storing the characters in the wrong order, which
+        // the printer's own (correct) RTL reordering then flips again,
+        // printing it backwards. This is used for cart/order comments,
+        // where Arabic is a real, common case.
+        _txtValue = new TextBox { Text = initialValue, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = maxLength, RightToLeft = RightToLeft.Yes };
 
         var btnSave = new Button
         {

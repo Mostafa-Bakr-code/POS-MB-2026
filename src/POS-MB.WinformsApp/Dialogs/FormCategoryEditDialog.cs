@@ -32,7 +32,10 @@ public class FormCategoryEditDialog : Form
         var lblName = new Label { Text = "Category Name", Location = new Point(20, 20), Size = new Size(360, 28) };
         // Matches Categories.CategoryName NVARCHAR(20) in schema.sql - same
         // reasoning as FormTextInputDialog's maxLength parameter.
-        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 20 };
+        // RightToLeft.Yes - see FormTextInputDialog's own comment on this;
+        // an Arabic category name typed into a plain (non-bidi-aware)
+        // TextBox can end up stored in the wrong character order.
+        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 20, RightToLeft = RightToLeft.Yes };
 
         var lblPhoto = new Label { Text = "Photo", Location = new Point(20, 96), Size = new Size(360, 28) };
         _picPreview = new PictureBox

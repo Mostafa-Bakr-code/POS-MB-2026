@@ -41,7 +41,10 @@ public class FormItemEditDialog : Form
         Font = new Font("Segoe UI", 12F);
 
         var lblName = new Label { Text = "Item Name", Location = new Point(20, 20), Size = new Size(360, 28) };
-        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 50 };
+        // RightToLeft.Yes - see FormTextInputDialog's own comment on this;
+        // an Arabic item name typed into a plain (non-bidi-aware) TextBox
+        // can end up stored in the wrong character order.
+        _txtName = new TextBox { Text = initialName, Location = new Point(20, 52), Size = new Size(360, 36), Font = new Font("Segoe UI", 14F), MaxLength = 50, RightToLeft = RightToLeft.Yes };
 
         var lblCategory = new Label { Text = "Category", Location = new Point(20, 96), Size = new Size(360, 28) };
         _cboCategory = new ComboBox
@@ -78,7 +81,8 @@ public class FormItemEditDialog : Form
             Font = new Font("Segoe UI", 11F),
             MaxLength = 500,
             Multiline = true,
-            AcceptsReturn = true
+            AcceptsReturn = true,
+            RightToLeft = RightToLeft.Yes
         };
 
         var lblPhoto = new Label { Text = "Photo", Location = new Point(20, 338), Size = new Size(360, 28) };
