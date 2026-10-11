@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using SkiaSharp;
 using SkiaSharp.HarfBuzz;
@@ -143,10 +144,32 @@ public class EscPosDocument
 
             for (var i = 0; i < lines.Count; i++)
             {
-                var lineWidth = font.MeasureText(lines[i]);
+                // Found live: a line is never pure Arabic in practice - it's
+                // always something like "1 x طبق كرسبي" (an ASCII quantity/
+                // prefix glued to the name) or ">> <comment>". Shaping that
+                // whole mixed string in one SKShaper call let HarfBuzz guess
+                // a single direction for the entire buffer; guessing LTR
+                // (because of the leading ASCII) meant the Arabic portion
+                // never got reordered into correct RTL visual order at all,
+                // printing it in raw logical (reversed-looking) order - even
+                // though a STANDALONE Arabic phrase, with no ASCII prefix,
+                // shapes and reorders correctly on its own. Splitting into
+                // same-direction runs first and shaping/drawing each one
+                // separately - left to right, in the order they already
+                // appear - sidesteps the bad guess entirely without needing
+                // a full bidi implementation, since this app's text only
+                // ever mixes direction at one clean boundary like this, never
+                // deeply interleaved within a single name/comment.
+                var runs = SplitIntoDirectionalRuns(lines[i]);
+                var lineWidth = runs.Sum(r => font.MeasureText(r));
                 var x = _centered ? Math.Max(0, (RasterWidthDots - lineWidth) / 2) : 0;
                 var baselineY = i * lineHeight - metrics.Ascent;
-                canvas.DrawShapedText(shaper, lines[i], x, baselineY, font, paint);
+
+                foreach (var run in runs)
+                {
+                    canvas.DrawShapedText(shaper, run, x, baselineY, font, paint);
+                    x += font.MeasureText(run);
+                }
             }
         }
 
@@ -203,6 +226,35 @@ public class EscPosDocument
         if (current.Length > 0 || lines.Count == 0) lines.Add(current);
 
         return lines;
+    }
+
+    // Splits a line at every transition between ASCII and non-ASCII
+    // characters - e.g. "1 x طبق كرسبي" becomes ["1 x ", "طبق كرسبي"] - so
+    // each run handed to the shaper is direction-homogeneous. See
+    // RenderTextAsRaster's own comment for why this matters: a mixed-
+    // direction run shapes/reorders incorrectly, a pure one doesn't.
+    private static List<string> SplitIntoDirectionalRuns(string line)
+    {
+        var runs = new List<string>();
+        if (line.Length == 0) return runs;
+
+        var current = new StringBuilder();
+        bool? currentIsNonAscii = null;
+
+        foreach (var c in line)
+        {
+            var isNonAscii = c > 0x7F;
+            if (currentIsNonAscii is not null && isNonAscii != currentIsNonAscii)
+            {
+                runs.Add(current.ToString());
+                current.Clear();
+            }
+            current.Append(c);
+            currentIsNonAscii = isNonAscii;
+        }
+        runs.Add(current.ToString());
+
+        return runs;
     }
 
     // GS v 0 m xL xH yL yH d1...dk - prints a monochrome bitmap directly,
