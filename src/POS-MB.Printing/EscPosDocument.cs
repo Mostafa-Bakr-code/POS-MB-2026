@@ -243,6 +243,20 @@ public class EscPosDocument
 
         foreach (var c in line)
         {
+            // Whitespace is direction-neutral and stays glued to whatever
+            // run it's already in - without this, a multi-word Arabic
+            // phrase like "طبق كرسبي كبير" gets sliced into one run per
+            // word at every space, each shaped and drawn separately in
+            // original left-to-right order, which throws away HarfBuzz's
+            // own word-order reversal for the phrase as a whole (letters
+            // within each word still look right, but the words themselves
+            // end up in logical/typing order instead of visual RTL order).
+            if (char.IsWhiteSpace(c))
+            {
+                current.Append(c);
+                continue;
+            }
+
             var isNonAscii = c > 0x7F;
             if (currentIsNonAscii is not null && isNonAscii != currentIsNonAscii)
             {
