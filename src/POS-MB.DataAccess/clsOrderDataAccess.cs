@@ -14,7 +14,7 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
     // numbered as part of the *previous* local day's sequence - e.g. orders
     // #10/#11 at 2 AM local time, followed by #1 at 10 PM the same local
     // day, because #10/#11 were still "yesterday" in UTC terms.
-    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items, decimal offsetHours = 0)
+    public async Task<int> CreateOrderAsync(OrderSource orderSource, int? userId, int? studentId, bool isComplimentary, IReadOnlyList<NewOrderItem> items, decimal offsetHours = 0, decimal serviceFee = 0)
     {
         if (items.Count == 0)
             throw new ArgumentException("An order must have at least one item.", nameof(items));
@@ -83,13 +83,14 @@ public class clsOrderDataAccess(ISqlConnectionFactory connectionFactory)
             var initialStatus = orderSource == OrderSource.Cashier ? OrderStatus.Completed : OrderStatus.Placed;
 
             const string insertOrderQuery = @"
-                INSERT INTO Orders (Date, Total, SerialNumber, LocalOrderDate, UserId, StudentId, OrderSource, Status, IsComplimentary)
+                INSERT INTO Orders (Date, Total, ServiceFee, SerialNumber, LocalOrderDate, UserId, StudentId, OrderSource, Status, IsComplimentary)
                 OUTPUT INSERTED.OrderId
-                VALUES (@Date, @Total, @SerialNumber, @LocalOrderDate, @UserId, @StudentId, @OrderSource, @Status, @IsComplimentary);";
+                VALUES (@Date, @Total, @ServiceFee, @SerialNumber, @LocalOrderDate, @UserId, @StudentId, @OrderSource, @Status, @IsComplimentary);";
             var orderId = await connection.ExecuteScalarAsync<int>(insertOrderQuery, new
             {
                 Date = date,
                 Total = total,
+                ServiceFee = serviceFee,
                 SerialNumber = serialNumber,
                 LocalOrderDate = localOrderDate,
                 UserId = userId,

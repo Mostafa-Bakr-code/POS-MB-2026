@@ -89,7 +89,22 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
         // few hours after local midnight gets numbered as part of the
         // previous local day's sequence instead of the new one.
         var offsetHours = await TimeZoneHelper.GetOffsetHoursAsync(settingsBusiness);
-        return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items, offsetHours);
+
+        // Cashier orders never carry this fee - only resolve/spend a settings
+        // lookup for the case that can actually have one.
+        var serviceFee = orderSource == OrderSource.Mobile
+            ? await GetMobileOrderServiceFeeAsync()
+            : 0m;
+
+        return await dataAccess.CreateOrderAsync(orderSource, userId, studentId, isComplimentary, items, offsetHours, serviceFee);
+    }
+
+    private async Task<decimal> GetMobileOrderServiceFeeAsync()
+    {
+        var setting = await settingsBusiness.GetByKeyAsync(MobileOrderServiceFeeSettingKey);
+        return setting?.Value is not null && decimal.TryParse(setting.Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) && parsed >= 0
+            ? parsed
+            : DefaultServiceFee;
     }
 
     // Single source of truth for "can a mobile order be placed right now" -
@@ -244,7 +259,18 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             .Select(oi => new PaymobItemLine(oi.ItemName ?? $"Item #{oi.ItemId}", oi.Price, oi.Quantity, oi.Comment ?? ""))
             .ToList();
 
-        var intention = await paymobClient.CreateIntentionAsync(order.Total, reference, studentEmail, PaymentExpirationSeconds, itemLines, savedCardToken);
+        // Paymob validates sum(item.amount * item.quantity) == amount and
+        // rejects the request (406 "unmatched_item_prices") otherwise - so
+        // the moment ServiceFee is added into the charged amount below, it
+        // must also appear as its own item line, or every real mobile
+        // checkout would start failing this validation. Skipped entirely
+        // when there's no fee (order placed before a fee existed, or the
+        // setting is 0) to leave that older/no-fee item breakdown unchanged.
+        if (order.ServiceFee > 0)
+            itemLines.Add(new PaymobItemLine("Service Fee", order.ServiceFee, 1, ""));
+
+        var amountToCharge = order.Total + order.ServiceFee;
+        var intention = await paymobClient.CreateIntentionAsync(amountToCharge, reference, studentEmail, PaymentExpirationSeconds, itemLines, savedCardToken);
 
         // Appended (not overwritten) so a future check can ask Paymob about
         // every attempt this order has ever made, not just this one - see
@@ -366,8 +392,11 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             // that it's reporting the amount we actually asked for - this is
             // a cheap extra check that the two agree before treating the
             // order as real, rather than trusting "success: true" alone.
-            if (Math.Abs(amountEgpPaid - order.Total) > 0.01m)
-                throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match order total {order.Total} for OrderId={orderId}.");
+            // Total + ServiceFee, not Total alone - that's what StartPaymobCheckoutAsync
+            // actually asked Paymob to charge.
+            var expectedAmount = order.Total + order.ServiceFee;
+            if (Math.Abs(amountEgpPaid - expectedAmount) > 0.01m)
+                throw new InvalidOperationException($"Paid amount {amountEgpPaid} does not match expected order total {expectedAmount} for OrderId={orderId}.");
 
             // obj.id is one of the fields HMAC-verified as part of the
             // callback itself, so a genuine successful callback always
@@ -520,10 +549,10 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // no-op for anything never paid through Paymob (Cashier orders, or a
     // Mobile order that never completed checkout) or already refunded.
     // amountEgpOverride: when refunding an order the normal way (cancelled
-    // via CancelAsync/CancelForStudentAsync), order.Total is exactly what
-    // was validated against the original payment when it was first marked
-    // paid (see the AwaitingPayment branch of MarkOrderPaymentResultAsync),
-    // so it's safe to trust here. The late-arrival caller passes the
+    // via CancelAsync/CancelForStudentAsync), order.Total + order.ServiceFee
+    // is exactly what was validated against the original payment when it
+    // was first marked paid (see the AwaitingPayment branch of
+    // MarkOrderPaymentResultAsync), so it's safe to trust here. The late-arrival caller passes the
     // callback's own reported amount instead, since order.Total is only an
     // expectation there, never actually verified against this particular
     // transaction.
@@ -531,7 +560,10 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     {
         if (order.PaymobTransactionId is null || order.RefundedAt is not null) return;
 
-        var amountEgp = amountEgpOverride ?? order.Total;
+        // Total + ServiceFee, not Total alone - that's what was actually
+        // charged via Paymob (see StartPaymobCheckoutAsync), so refunding
+        // only Total would leave the fee uncollected-but-also-unrefunded.
+        var amountEgp = amountEgpOverride ?? (order.Total + order.ServiceFee);
 
         try
         {
@@ -555,6 +587,14 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     // same "no seeding needed" reasoning as the other resilience settings.
     public const string MobileOrderAutoCancelMinutesSettingKey = "MobileOrderAutoCancelMinutes";
     private const int DefaultAutoCancelMinutes = 10;
+
+    // Same "no seeding needed" fallback as above - admin hasn't set a fee yet
+    // means no fee is charged, not a crash. Read once per order at creation
+    // (CreateOrderAsync, Mobile-only) and stamped onto Order.ServiceFee for
+    // good - a later change to this setting never retroactively changes what
+    // an already-placed order shows or was charged.
+    public const string MobileOrderServiceFeeSettingKey = "MobileOrderServiceFee";
+    private const decimal DefaultServiceFee = 0m;
 
     // The safety net that catches whatever slips past the manual toggle and
     // heartbeat check above: a mobile order that's sat at Placed too long,

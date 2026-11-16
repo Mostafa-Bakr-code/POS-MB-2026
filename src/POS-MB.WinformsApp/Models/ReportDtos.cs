@@ -5,7 +5,8 @@ public enum ReportType
     SalesSummary,
     ItemSales,
     TopSellers,
-    StaffPerformance
+    StaffPerformance,
+    ServiceFeesCollected
 }
 
 public enum TopSellersSortBy
@@ -52,4 +53,13 @@ public class StaffPerformanceRowDto
     public decimal Revenue { get; set; }
     public decimal Tax { get; set; }
     public decimal RevenueExcludingTax { get; set; }
+}
+
+// Deliberately separate from SalesSummaryDto - see the server-side
+// ServiceFeeSummary's own comment for why this must never get mixed into
+// any revenue figure.
+public class ServiceFeeSummaryDto
+{
+    public int OrdersWithFeeCount { get; set; }
+    public decimal TotalServiceFeesCollected { get; set; }
 }

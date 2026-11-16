@@ -30,6 +30,12 @@ public partial class SettingsPage : ContentPage
     // behind a cart line's "+Extra" button.
     private const string ExtrasCategoryKey = "ExtrasCategoryId";
 
+    // Matches clsOrderBusiness.MobileOrderServiceFeeSettingKey and
+    // SettingsControl's own copy - Mobile-only surcharge, never charged on
+    // Cashier orders.
+    private const string ServiceFeeKey = "MobileOrderServiceFee";
+    private const decimal FallbackServiceFee = 0m;
+
     private readonly ApiClient _apiClient = new();
 
     public SettingsPage()
@@ -70,6 +76,11 @@ public partial class SettingsPage : ContentPage
             ? categories.FirstOrDefault(c => c.CategoryId == extrasCategoryId)
             : null;
 
+        var serviceFeeValue = await _apiClient.GetSettingValueAsync(ServiceFeeKey);
+        ServiceFeeStepper.Value = serviceFeeValue is not null && decimal.TryParse(serviceFeeValue, NumberStyles.Number, CultureInfo.InvariantCulture, out var serviceFee)
+            ? serviceFee
+            : FallbackServiceFee;
+
         var printerSettings = PrinterSettings.Load();
         ClientIpEntry.Text = printerSettings.ClientPrinterIp;
         ClientPortStepper.Value = printerSettings.ClientPrinterPort;
@@ -99,7 +110,9 @@ public partial class SettingsPage : ContentPage
             var selectedExtrasCategory = ExtrasCategoryPicker.SelectedItem as CategoryDto;
             var (extrasOk, extrasError) = await _apiClient.SetSettingValueAsync(ExtrasCategoryKey, selectedExtrasCategory?.CategoryId.ToString() ?? "");
 
-            if (taxOk && offsetOk && autoCancelOk && extrasOk)
+            var (serviceFeeOk, serviceFeeError) = await _apiClient.SetSettingValueAsync(ServiceFeeKey, ServiceFeeStepper.Value.ToString(CultureInfo.InvariantCulture));
+
+            if (taxOk && offsetOk && autoCancelOk && extrasOk && serviceFeeOk)
             {
                 SharedStatusLabel.TextColor = Color.FromArgb("#28C882");
                 SharedStatusLabel.Text = "Saved.";
@@ -107,7 +120,7 @@ public partial class SettingsPage : ContentPage
             else
             {
                 SharedStatusLabel.TextColor = Color.FromArgb("#FF8C8C");
-                SharedStatusLabel.Text = $"Could not save: {taxError ?? offsetError ?? autoCancelError ?? extrasError}";
+                SharedStatusLabel.Text = $"Could not save: {taxError ?? offsetError ?? autoCancelError ?? extrasError ?? serviceFeeError}";
             }
         }
         finally

@@ -4,7 +4,20 @@ public class Order
 {
     public int OrderId { get; set; }
     public DateTime Date { get; set; }
+    // Pure item/food total only, tax-inclusive - NEVER includes ServiceFee.
+    // Every sales report sums this column specifically so it keeps meaning
+    // "food revenue" with zero report changes. See ServiceFee below.
     public decimal Total { get; set; }
+
+    // Mobile-only surcharge (covers Azure/Paymob running costs) - always 0
+    // for Cashier orders. Deliberately kept separate from Total: the amount
+    // actually charged via Paymob is Total + ServiceFee, computed at charge
+    // time in clsOrderBusiness.StartPaymobCheckoutAsync, never stored as its
+    // own combined number. Surfaced only via its own "Service Fees
+    // Collected" report (clsReportingDataAccess.GetServiceFeesCollectedAsync),
+    // never folded into TotalRevenue/CashierRevenue/MobileRevenue.
+    public decimal ServiceFee { get; set; }
+
     public int? SerialNumber { get; set; }
 
     // The shop's LOCAL calendar day at creation time (TimeZoneOffsetHours-

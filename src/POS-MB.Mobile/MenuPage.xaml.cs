@@ -151,7 +151,7 @@ public partial class MenuPage : ContentPage
         var categories = await _apiClient.GetCategoriesAsync();
         CategoriesView.ItemsSource = categories;
 
-        // Items only load once a category is picked (see OnCategorySelected) -
+        // Items only load once a category is picked (see OnCategoryTapped) -
         // reloading (e.g. pull-to-refresh) drops back to the same empty,
         // no-category-selected state rather than guessing which one to keep.
         CategoriesView.SelectedItem = null;
@@ -159,26 +159,37 @@ public partial class MenuPage : ContentPage
         PlaceholderLabel.IsVisible = true;
     }
 
-    private async void OnCategorySelected(object? sender, SelectionChangedEventArgs e)
+    // Replaces CollectionView.SelectionChanged - that event proved unreliable
+    // on real Android hardware with this Frame-based custom item template
+    // (worked fine in Windows/simulator testing, silently never fired on a
+    // real device), so category taps are now driven directly by a
+    // TapGestureRecognizer on each chip instead of relying on the
+    // CollectionView's own selection system. CategoriesView.SelectedItem is
+    // still set manually below purely so the chip's "Selected" VisualState
+    // (the yellow highlight) keeps working.
+    private async void OnCategoryTapped(object? sender, EventArgs e)
     {
-        var selected = e.CurrentSelection.FirstOrDefault() as CategoryDto;
-        if (selected is null)
-        {
-            ItemsView.ItemsSource = null;
-            PlaceholderLabel.IsVisible = true;
-            return;
-        }
+        if ((sender as Frame)?.BindingContext is not CategoryDto selected) return;
 
+        CategoriesView.SelectedItem = selected;
         PlaceholderLabel.IsVisible = false;
-        // availableOnly: false - an out-of-stock item now stays visible
-        // (greyed out, "Currently Unavailable") instead of disappearing
-        // from the menu entirely, so a student knows it exists rather than
-        // wondering if it was ever offered at all. includeInactive stays
-        // at its default (false) - a genuinely retired item is a different
-        // thing from a temporarily out-of-stock one, and should still
-        // disappear.
-        var items = await _apiClient.GetItemsAsync(selected.CategoryId, availableOnly: false);
-        ItemsView.ItemsSource = items;
+        try
+        {
+            // availableOnly: false - an out-of-stock item now stays visible
+            // (greyed out, "Currently Unavailable") instead of disappearing
+            // from the menu entirely, so a student knows it exists rather than
+            // wondering if it was ever offered at all. includeInactive stays
+            // at its default (false) - a genuinely retired item is a different
+            // thing from a temporarily out-of-stock one, and should still
+            // disappear.
+            var items = await _apiClient.GetItemsAsync(selected.CategoryId, availableOnly: false);
+            ItemsView.ItemsSource = items;
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlert("Could not load items", ex.Message, "OK");
+            PlaceholderLabel.IsVisible = true;
+        }
     }
 
     private async void OnRefreshing(object? sender, EventArgs e)

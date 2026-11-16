@@ -53,11 +53,22 @@ public class FormOrderDetailDialog : Form
             Dock = DockStyle.Top,
             Height = 150 + (string.IsNullOrEmpty(paymentInfo) ? 0 : 40) + (string.IsNullOrEmpty(cancelInfo) ? 0 : 30),
             Padding = new Padding(20, 15, 20, 0),
+            // ServiceFee is never folded into Total (see Order.ServiceFee's
+            // own comment) - but hiding it here entirely would make this
+            // screen's Total silently disagree with what Paymob's own
+            // dashboard shows as actually charged for the order (Total +
+            // ServiceFee), which would look like a bug to anyone
+            // reconciling the two. Only shown at all once there's an
+            // actual fee on this order - an order with none (placed
+            // before this feature existed, or while the fee was 0) still
+            // reads exactly as it always did.
             Text =
                 $"Date: {AppSession.ToLocalDisplay(order.Date):yyyy-MM-dd HH:mm}\n" +
                 $"Source: {order.OrderSource}{placedBy}\n" +
                 $"Status: {order.Status}{(order.IsComplimentary ? "  (Complimentary)" : "")}\n" +
-                $"Total: {order.Total:0.00}" +
+                (order.ServiceFee > 0
+                    ? $"Item Total: {order.Total:0.00}\nService Fee: {order.ServiceFee:0.00}\nTotal Charged: {order.Total + order.ServiceFee:0.00}"
+                    : $"Total: {order.Total:0.00}") +
                 paymentInfo +
                 cancelInfo
         };

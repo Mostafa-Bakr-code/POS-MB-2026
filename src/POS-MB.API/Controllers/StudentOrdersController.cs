@@ -50,7 +50,7 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
         var orderItems = await orderBusiness.GetItemsByOrderIdAsync(id);
         return Ok(new
         {
-            order.OrderId, order.Date, order.Total, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt,
+            order.OrderId, order.Date, order.Total, order.ServiceFee, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt,
             Items = orderItems,
             CheckoutUrl = checkoutUrl
         });
@@ -87,7 +87,7 @@ public class StudentOrdersController(clsOrderBusiness orderBusiness, ILogger<Stu
         order = await orderBusiness.ReconcileIfAwaitingPaymentAsync(order);
 
         var items = await orderBusiness.GetItemsByOrderIdAsync(id);
-        return Ok(new { order.OrderId, order.Date, order.Total, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt, Items = items });
+        return Ok(new { order.OrderId, order.Date, order.Total, order.ServiceFee, order.SerialNumber, order.Status, order.CreatedAt, order.UpdatedAt, Items = items });
     }
 }
 

@@ -17,7 +17,7 @@ public static class ApiConfig
     // installing it just for a look-and-feel test isn't worth the extra
     // setup - fine for local testing, never for anything real.
 #if ANDROID || IOS
-    public const string BaseUrl = "http://192.168.1.3:5098/";
+    public const string BaseUrl = "https://posmb-api-2026-cbe4ceb0dxgvfne6.uaenorth-01.azurewebsites.net/";
 #else
     public const string BaseUrl = "https://localhost:7295/";
 #endif

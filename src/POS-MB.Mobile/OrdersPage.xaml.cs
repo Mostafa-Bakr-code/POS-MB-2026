@@ -159,11 +159,13 @@ public partial class OrdersPage : ContentPage
         return false;
     }
 
-    private async void OnOrderSelected(object? sender, SelectionChangedEventArgs e)
+    // Replaces CollectionView.SelectionChanged - same reliability gap on real
+    // Android hardware as MenuPage's category chips (see OnCategoryTapped),
+    // so this row is tapped directly instead of going through the
+    // CollectionView's own selection system.
+    private async void OnOrderTapped(object? sender, EventArgs e)
     {
-        OrdersView.SelectedItem = null; // reset so the same row can be tapped again later
-
-        if (e.CurrentSelection.FirstOrDefault() is not OrderSummaryDto order) return;
+        if ((sender as Frame)?.BindingContext is not OrderSummaryDto order) return;
 
         await Navigation.PushAsync(new OrderDetailPage(order.OrderId));
     }

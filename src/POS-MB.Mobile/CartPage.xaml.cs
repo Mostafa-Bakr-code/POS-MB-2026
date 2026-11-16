@@ -11,8 +11,20 @@ public partial class CartPage : ContentPage
     // button.
     private const string ExtrasCategorySettingKey = "ExtrasCategoryId";
 
+    // Matches clsOrderBusiness.MobileOrderServiceFeeSettingKey server-side -
+    // deliberately duplicated as its own string, same "no shared project
+    // reference for a setting key" convention as ExtrasCategorySettingKey
+    // above. Shown here purely so the student sees the real total they're
+    // about to be charged BEFORE tapping Place Order - the server resolves
+    // and stamps its own authoritative copy onto the order independently at
+    // creation time (see clsOrderBusiness.CreateOrderAsync), so a stale/
+    // never-refreshed value here can only ever mislead the preview, never
+    // actually undercharge or overcharge anyone.
+    private const string ServiceFeeSettingKey = "MobileOrderServiceFee";
+
     private readonly ApiClient _apiClient = new();
     private List<ItemDto> _extraItems = [];
+    private decimal _serviceFee;
 
     public CartPage()
     {
@@ -24,6 +36,7 @@ public partial class CartPage : ContentPage
         base.OnAppearing();
         Refresh();
         await LoadExtrasAsync();
+        await LoadServiceFeeAsync();
     }
 
     // Loaded once per cart visit, not re-fetched on every "+Extra" tap -
@@ -36,11 +49,31 @@ public partial class CartPage : ContentPage
             : [];
     }
 
+    private async Task LoadServiceFeeAsync()
+    {
+        var value = await _apiClient.GetSettingValueAsync(ServiceFeeSettingKey);
+        _serviceFee = decimal.TryParse(value, out var fee) && fee > 0 ? fee : 0;
+        Refresh();
+    }
+
     private void Refresh()
     {
         CartView.ItemsSource = null;
         CartView.ItemsSource = Cart.Lines;
-        TotalLabel.Text = $"Total: {Cart.Total:0.00}";
+
+        // The breakdown lines only appear once there's an actual fee to show -
+        // a student never sees "Item Total" / "Service Fee" / "Total" as three
+        // redundant lines when the fee is 0, just the one plain total exactly
+        // as before this feature existed.
+        var grandTotal = Cart.Total + _serviceFee;
+        ItemTotalLabel.IsVisible = _serviceFee > 0;
+        ServiceFeeLabel.IsVisible = _serviceFee > 0;
+        if (_serviceFee > 0)
+        {
+            ItemTotalLabel.Text = $"Item Total: {Cart.Total:0.00}";
+            ServiceFeeLabel.Text = $"Service Fee: {_serviceFee:0.00}";
+        }
+        TotalLabel.Text = $"Total: {grandTotal:0.00}";
         PlaceOrderButton.IsEnabled = Cart.Lines.Count > 0;
 
         var maskedPan = AppSession.CurrentStudent?.SavedCardMaskedPan;

@@ -14,13 +14,18 @@ public record PlaceOrderRequest(List<OrderItemLineDto> Items, bool UseSavedCard 
 
 public record UnavailableItemDto(int ItemId, string ItemName, string Reason);
 
-public record OrderSummaryDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status);
+public record OrderSummaryDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status, decimal ServiceFee = 0);
 
 public record OrderItemDetailDto(int ItemId, int Quantity, decimal Price, decimal TotalItemsPrice, string? Comment);
 // CheckoutUrl is only ever populated on the response to creating an order -
 // null everywhere else (GetById, order history, ...), since it's a one-time
 // checkout session, not a durable property of the order itself.
-public record OrderDetailDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status, List<OrderItemDetailDto> Items, string? CheckoutUrl = null);
+// ServiceFee: a Mobile-only surcharge the server stamped onto the order at
+// creation time (always 0 for an order placed before this feature existed,
+// or whenever the fee setting is unset/0) - the amount actually charged via
+// Paymob was Total + ServiceFee, never Total alone. See the matching
+// Order.ServiceFee comment server-side (POS_MB.DataAccess.Models.Order).
+public record OrderDetailDto(int OrderId, DateTime Date, decimal Total, int? SerialNumber, OrderStatus Status, List<OrderItemDetailDto> Items, string? CheckoutUrl = null, decimal ServiceFee = 0);
 
 // Display-ready version of OrderItemDetailDto with the item name already
 // resolved (OrderItemDetailDto only has ItemId) - built in OrderDetailPage's

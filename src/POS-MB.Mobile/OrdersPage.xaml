@@ -21,7 +21,7 @@
             IsVisible="False" />
 
         <RefreshView Grid.Row="1" x:Name="OrdersRefreshView" Refreshing="OnRefreshing">
-            <CollectionView x:Name="OrdersView" IsGrouped="True" SelectionMode="Single" SelectionChanged="OnOrderSelected">
+            <CollectionView x:Name="OrdersView" IsGrouped="True">
                 <CollectionView.GroupHeaderTemplate>
                     <DataTemplate x:DataType="local:OrderGroup">
                         <Label
@@ -35,6 +35,9 @@
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="models:OrderSummaryDto">
                         <Frame Padding="14,12" Margin="0,0,0,10" CornerRadius="16" HasShadow="False" BackgroundColor="{StaticResource CardSurface}" BorderColor="Transparent">
+                            <Frame.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnOrderTapped" />
+                            </Frame.GestureRecognizers>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
                                 <Label Grid.Column="0" Text="{Binding SerialNumber, StringFormat='#{0}'}" TextColor="{StaticResource TextOnCard}" FontAttributes="Bold" VerticalOptions="Center" />
                                 <Label Grid.Column="1" Text="{Binding Date, StringFormat='{0:HH:mm}'}" TextColor="{StaticResource TextOnCardMuted}" VerticalOptions="Center" />

@@ -22,7 +22,10 @@
             <Label Text="Extras category - which category's items show up behind a cart line's &quot;+Extra&quot; button (e.g. Extra Cheese, Extra Tomato)" Margin="0,12,0,0" />
             <Picker x:Name="ExtrasCategoryPicker" ItemDisplayBinding="{Binding CategoryName}" WidthRequest="260" HorizontalOptions="Start" />
 
-            <Button x:Name="SaveSharedButton" Text="Save Tax Rate, Time Zone, Auto-Cancel &amp; Extras Category" Clicked="OnSaveSharedClicked" FontAttributes="Bold" Margin="0,16,0,0" HorizontalOptions="Start" />
+            <Label Text="Mobile order service fee - added on top of the item total for Mobile orders only, to help cover running costs (Cashier orders are never charged this)" Margin="0,12,0,0" />
+            <controls:NumericStepper x:Name="ServiceFeeStepper" Minimum="0" Maximum="1000" Increment="1" DecimalPlaces="2" WidthRequest="200" HorizontalOptions="Start" />
+
+            <Button x:Name="SaveSharedButton" Text="Save Tax Rate, Time Zone, Auto-Cancel, Extras Category &amp; Service Fee" Clicked="OnSaveSharedClicked" FontAttributes="Bold" Margin="0,16,0,0" HorizontalOptions="Start" />
             <Label x:Name="SharedStatusLabel" TextColor="#28C882" />
 
             <BoxView HeightRequest="1" BackgroundColor="#DEE2E6" Margin="0,20,0,20" />

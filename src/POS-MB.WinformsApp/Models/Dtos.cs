@@ -66,6 +66,12 @@ public class OrderDto
     public int OrderId { get; set; }
     public DateTime Date { get; set; }
     public decimal Total { get; set; }
+
+    // Mobile-only surcharge, always 0 for Cashier orders - kept separate
+    // from Total (never added into it) so existing revenue figures never
+    // change meaning. See the server-side Order.ServiceFee comment.
+    public decimal ServiceFee { get; set; }
+
     public int? SerialNumber { get; set; }
     public int? UserId { get; set; }
     public int? StudentId { get; set; }

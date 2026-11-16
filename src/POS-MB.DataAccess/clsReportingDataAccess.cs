@@ -161,4 +161,28 @@ public class clsReportingDataAccess(ISqlConnectionFactory connectionFactory)
         return await connection.QueryAsync<StaffPerformanceRow>(
             query, new { UtcStart = utcStart, UtcEndExclusive = utcEndExclusive });
     }
+
+    // Sums Orders.ServiceFee directly - no OrderItems join needed at all,
+    // since the fee is order-level, not per line item. Status <> 4 (not
+    // Cancelled) matters more here than on any other report: a cancelled
+    // Mobile order has its fee refunded in full (see
+    // clsOrderBusiness.RefundIfPaidAsync), so it was never actually kept,
+    // and must not count as "collected".
+    public async Task<ServiceFeeSummary> GetServiceFeesCollectedAsync(DateTime? utcStart = null, DateTime? utcEndExclusive = null)
+    {
+        using var connection = connectionFactory.CreateConnection();
+
+        var query = @"
+            SELECT
+                ISNULL(SUM(CASE WHEN ServiceFee > 0 THEN 1 ELSE 0 END), 0) AS OrdersWithFeeCount,
+                ISNULL(SUM(ServiceFee), 0) AS TotalServiceFeesCollected
+            FROM Orders
+            WHERE Status <> 4
+              AND OrderSource = 1";
+        if (utcStart is not null) query += " AND Date >= @UtcStart";
+        if (utcEndExclusive is not null) query += " AND Date < @UtcEndExclusive";
+
+        return await connection.QuerySingleAsync<ServiceFeeSummary>(
+            query, new { UtcStart = utcStart, UtcEndExclusive = utcEndExclusive });
+    }
 }

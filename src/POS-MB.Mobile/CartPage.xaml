@@ -137,12 +137,29 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <Label
-            Grid.Row="1"
-            x:Name="TotalLabel"
-            FontSize="19"
-            FontAttributes="Bold"
-            HorizontalOptions="End" />
+        <!-- A VerticalStackLayout here (not a second Grid row) so adding this
+             breakdown never shifts the Grid.Row index of anything below it
+             (SavedCardLayout/ErrorLabel/PlaceOrderButton stay exactly as they
+             were). ItemTotalLabel/ServiceFeeLabel only show up at all once a
+             fee is actually in play (see CartPage.xaml.cs's Refresh()) - a
+             student who's never charged one sees the exact same single total
+             line as before. -->
+        <VerticalStackLayout Grid.Row="1" Spacing="2" HorizontalOptions="End">
+            <Label
+                x:Name="ItemTotalLabel"
+                FontSize="14"
+                TextColor="{StaticResource TextOnDarkMuted}"
+                IsVisible="False" />
+            <Label
+                x:Name="ServiceFeeLabel"
+                FontSize="14"
+                TextColor="{StaticResource TextOnDarkMuted}"
+                IsVisible="False" />
+            <Label
+                x:Name="TotalLabel"
+                FontSize="19"
+                FontAttributes="Bold" />
+        </VerticalStackLayout>
 
         <Frame
             Grid.Row="2"

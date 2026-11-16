@@ -308,6 +308,12 @@ public class ApiClient
         return result ?? [];
     }
 
+    public async Task<ServiceFeeSummaryDto> GetServiceFeesCollectedAsync(DateTime? startDate, DateTime? endDate)
+    {
+        var url = "api/reports/service-fees-collected" + DateQuery(startDate, endDate);
+        return (await _httpClient.GetFromJsonAsync<ServiceFeeSummaryDto>(url))!;
+    }
+
     public async Task<byte[]> DownloadReportExcelAsync(string reportPath, DateTime? startDate, DateTime? endDate, string extraParams = "")
     {
         var url = $"api/reports/{reportPath}" + DateQuery(startDate, endDate) + "&format=excel" + extraParams;

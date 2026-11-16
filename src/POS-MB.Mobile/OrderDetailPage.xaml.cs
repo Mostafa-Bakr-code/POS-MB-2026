@@ -132,11 +132,22 @@ public partial class OrderDetailPage : ContentPage
     {
         if (_order is null) return;
 
+        // ServiceFee is only ever non-zero for an order that actually had one
+        // stamped on it at creation time (see Order.ServiceFee server-side) -
+        // an order placed before this feature existed, or while the fee
+        // setting was 0, just shows the plain "Total" line exactly as before,
+        // same reasoning as CartPage's breakdown.
+        var totalLine = _order.ServiceFee > 0
+            ? $"Item Total: {_order.Total:0.00}\n" +
+              $"Service Fee: {_order.ServiceFee:0.00}\n" +
+              $"Total: {_order.Total + _order.ServiceFee:0.00}"
+            : $"Total: {_order.Total:0.00}";
+
         HeaderLabel.Text =
             $"Order #{_order.SerialNumber ?? _order.OrderId}\n" +
             $"Date: {AppSession.ToLocalDisplay(_order.Date):yyyy-MM-dd HH:mm}\n" +
             $"Status: {DisplayStatus(_order.Status)}\n" +
-            $"Total: {_order.Total:0.00}";
+            totalLine;
 
         // Self-cancel while AwaitingPayment too - a student who backed out of
         // the payment screen shouldn't be forced to wait out the auto-cancel

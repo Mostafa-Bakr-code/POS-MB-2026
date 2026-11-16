@@ -101,6 +101,26 @@ public class ReportsController(clsReportingBusiness reportingBusiness) : Control
         return ExportToExcel("Staff Performance", headers, rows, "staff-performance.xlsx");
     }
 
+    // Deliberately its own endpoint/report, not a field tacked onto
+    // sales-summary - see ServiceFeeSummary's own comment for why this must
+    // never get mixed into TotalRevenue/CashierRevenue/MobileRevenue.
+    [HttpGet("service-fees-collected")]
+    [RequirePermission(Permission.Reports)]
+    public async Task<IActionResult> GetServiceFeesCollected(
+        [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null, [FromQuery] string format = "json")
+    {
+        var summary = await reportingBusiness.GetServiceFeesCollectedAsync(startDate, endDate);
+
+        if (!IsExcel(format)) return Ok(summary);
+
+        var rows = new object[][]
+        {
+            new object[] { "Mobile Orders With Fee", summary.OrdersWithFeeCount },
+            new object[] { "Total Service Fees Collected", summary.TotalServiceFeesCollected },
+        };
+        return ExportToExcel("Service Fees Collected", ["Metric", "Value"], rows, "service-fees-collected.xlsx");
+    }
+
     private static bool IsExcel(string format) =>
         format.Equals("excel", StringComparison.OrdinalIgnoreCase);
 

@@ -92,7 +92,8 @@ CREATE TABLE dbo.Orders
 (
     OrderId         INT IDENTITY(1,1) NOT NULL,
     Date            DATETIME2(3)      NOT NULL CONSTRAINT DF_Orders_Date DEFAULT (SYSUTCDATETIME()),
-    Total           DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Orders_Total DEFAULT (0),
+    Total           DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Orders_Total DEFAULT (0), -- pure item/food total only, tax-inclusive - NEVER includes ServiceFee. Every sales report sums this column specifically so it can keep meaning "food revenue" with zero report changes; the amount actually charged via Paymob is Total + ServiceFee, computed at charge time, not stored anywhere as its own number.
+    ServiceFee      DECIMAL(18,4)     NOT NULL CONSTRAINT DF_Orders_ServiceFee DEFAULT (0), -- Mobile-only surcharge (covers Azure/Paymob running costs), set once at order creation from the MobileOrderServiceFee setting. Always 0 for Cashier orders. Deliberately kept separate from Total (see comment above) - tracked here so it's reconcilable against what Paymob actually shows, and surfaced only via its own dedicated "Service Fees Collected" report, never folded into existing revenue figures.
     SerialNumber    INT               NULL,
     OrderDate AS (CAST(Date AS DATE)) PERSISTED,
     LocalOrderDate  DATE              NOT NULL, -- the shop's LOCAL calendar day (TimeZoneOffsetHours-shifted) at creation time, stamped explicitly in C# rather than SQL-computed since the offset is a runtime Settings value, not something a computed column can reference. Backs SerialNumber's daily uniqueness and the Paymob-facing order reference (PaymobOrderReference) - see UQ_Orders_Date_SerialNumber. OrderDate (above) stays UTC-day only, unused for either of those now.

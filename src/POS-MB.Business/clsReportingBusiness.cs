@@ -29,4 +29,10 @@ public class clsReportingBusiness(clsReportingDataAccess dataAccess, clsSettings
         var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
         return await dataAccess.GetStaffPerformanceAsync(utcStart, utcEndExclusive);
     }
+
+    public async Task<ServiceFeeSummary> GetServiceFeesCollectedAsync(DateTime? startDate = null, DateTime? endDate = null)
+    {
+        var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
+        return await dataAccess.GetServiceFeesCollectedAsync(utcStart, utcEndExclusive);
+    }
 }

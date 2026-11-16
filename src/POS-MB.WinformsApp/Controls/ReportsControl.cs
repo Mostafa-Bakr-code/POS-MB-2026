@@ -27,7 +27,7 @@ public class ReportsControl : UserControl
         var toolbar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 110, Padding = new Padding(10), AutoScroll = true };
 
         _cboReportType = new ComboBox { Width = 200, Height = 36, Font = new Font("Segoe UI", 11F), DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 6, 20, 6) };
-        _cboReportType.Items.AddRange(["Sales Summary", "Item Sales", "Top Sellers", "Staff Performance"]);
+        _cboReportType.Items.AddRange(["Sales Summary", "Item Sales", "Top Sellers", "Staff Performance", "Service Fees Collected"]);
         _cboReportType.SelectedIndex = 0;
         _cboReportType.SelectedIndexChanged += (_, _) => UpdateVisibleOptions();
 
@@ -134,6 +134,11 @@ public class ReportsControl : UserControl
                     var staff = await _apiClient.GetStaffPerformanceAsync(start, end);
                     BindStaffRows(staff);
                     break;
+
+                case ReportType.ServiceFeesCollected:
+                    var fees = await _apiClient.GetServiceFeesCollectedAsync(start, end);
+                    BindGrid(ServiceFeeSummaryToRows(fees), ["Metric", "Value"]);
+                    break;
             }
         }
         catch (Exception ex)
@@ -159,6 +164,12 @@ public class ReportsControl : UserControl
         ["Total Tax", s.TotalTax.ToString("0.00")],
         ["Complimentary Value", s.ComplimentaryValue.ToString("0.00")],
         ["Average Order Value", s.AverageOrderValue.ToString("0.00")],
+    ];
+
+    private static List<string[]> ServiceFeeSummaryToRows(ServiceFeeSummaryDto s) =>
+    [
+        ["Mobile Orders With Fee", s.OrdersWithFeeCount.ToString()],
+        ["Total Service Fees Collected", s.TotalServiceFeesCollected.ToString("0.00")],
     ];
 
     private void BindGrid(List<string[]> rows, string[] headers)
@@ -212,6 +223,7 @@ public class ReportsControl : UserControl
             ReportType.ItemSales => ("item-sales", $"&groupByDay={_chkGroupByDay.Checked}&groupByPrice={_chkGroupByPrice.Checked}&groupBySource={_chkGroupBySource.Checked}", "item-sales.xlsx"),
             ReportType.TopSellers => ("top-sellers", $"&sortBy={(TopSellersSortBy)_cboSortBy.SelectedIndex}&take={(int)_numTake.Value}", "top-sellers.xlsx"),
             ReportType.StaffPerformance => ("staff-performance", "", "staff-performance.xlsx"),
+            ReportType.ServiceFeesCollected => ("service-fees-collected", "", "service-fees-collected.xlsx"),
             _ => throw new InvalidOperationException()
         };
 
