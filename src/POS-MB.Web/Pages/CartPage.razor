@@ -1,0 +1,123 @@
+@page "/cart"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Cart - POS-MB</PageTitle>
+
+<h1>Your Cart</h1>
+
+@if (Cart.Lines.Count == 0)
+{
+    <p>Your cart is empty.</p>
+    <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/menu")'>Back to Menu</button>
+}
+else
+{
+    @foreach (var line in Cart.Lines)
+    {
+        <div class="cart-line">
+            <div class="cart-line-main">
+                <span class="cart-line-name">@line.ItemName</span>
+                <span class="cart-line-price">@line.Subtotal.ToString("0.00") EGP</span>
+            </div>
+            <div class="cart-line-controls">
+                <span>Qty: @line.Quantity</span>
+                <button class="btn-link" @onclick="() => AddAnother(line)">+1</button>
+                <button class="btn-link" @onclick="() => RemoveLine(line)">Remove</button>
+            </div>
+            @foreach (var extra in line.Extras)
+            {
+                <div class="cart-line-extra">
+                    <span>+ @extra.ItemName (@extra.Subtotal.ToString("0.00") EGP)</span>
+                    <button class="btn-link" @onclick="() => RemoveLine(extra)">Remove</button>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="cart-total">
+        <div>Item Total: @Cart.Total.ToString("0.00") EGP</div>
+        @if (_serviceFee > 0)
+        {
+            <div>Service Fee: @_serviceFee.ToString("0.00") EGP</div>
+            <div class="cart-total-final">Total: @((Cart.Total + _serviceFee).ToString("0.00")) EGP</div>
+        }
+        else
+        {
+            <div class="cart-total-final">Total: @Cart.Total.ToString("0.00") EGP</div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    @if (_checkoutUrl is not null)
+    {
+        <div class="banner-warning">
+            Order placed - payment checkout is not yet fully wired up for the web app (Paymob's post-payment
+            redirect still needs a dedicated return page). For now you can open the checkout link below to test
+            payment creation only.
+            <br />
+            <a href="@_checkoutUrl" target="_blank" rel="noopener">Open Paymob Checkout (test)</a>
+        </div>
+    }
+    else
+    {
+        <button class="btn btn-primary" @onclick="PlaceOrder" disabled="@_placing">
+            @(_placing ? "Placing order..." : "Place Order")
+        </button>
+    }
+}
+
+@code {
+    private string? _errorMessage;
+    private bool _placing;
+    private string? _checkoutUrl;
+    private decimal _serviceFee;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppSession.Token is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        var feeValue = await Api.GetSettingValueAsync("MobileOrderServiceFee");
+        _serviceFee = feeValue is not null
+            && decimal.TryParse(feeValue, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var fee)
+                ? fee
+                : 0m;
+    }
+
+    private void AddAnother(CartLine line) => Cart.AddAnother(line);
+    private void RemoveLine(CartLine line) => Cart.Remove(line);
+
+    private async Task PlaceOrder()
+    {
+        _errorMessage = null;
+        _placing = true;
+        try
+        {
+            var items = Cart.Flattened.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
+            var (result, error, unavailableItems) = await Api.PlaceOrderAsync(items);
+
+            if (result is null)
+            {
+                _errorMessage = error ?? "Something went wrong.";
+                if (unavailableItems.Count > 0)
+                    Cart.RemoveAllWhere(l => unavailableItems.Any(u => u.ItemId == l.ItemId));
+                return;
+            }
+
+            _checkoutUrl = result.CheckoutUrl;
+            Cart.Clear();
+        }
+        finally
+        {
+            _placing = false;
+        }
+    }
+}

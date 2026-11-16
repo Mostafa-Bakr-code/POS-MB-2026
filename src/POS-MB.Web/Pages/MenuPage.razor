@@ -1,0 +1,93 @@
+@page "/menu"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Menu - POS-MB</PageTitle>
+
+@if (_loading)
+{
+    <p class="status-text">Loading menu...</p>
+}
+else
+{
+    @if (_closedReason is not null)
+    {
+        <div class="banner-warning">@_closedReason</div>
+    }
+
+    <div class="category-bar">
+        <button class="chip @(_selectedCategoryId is null ? "chip-selected" : "")" @onclick="() => SelectCategory(null)">All</button>
+        @foreach (var category in _categories)
+        {
+            <button class="chip @(_selectedCategoryId == category.CategoryId ? "chip-selected" : "")" @onclick="() => SelectCategory(category.CategoryId)">
+                @category.CategoryName
+            </button>
+        }
+    </div>
+
+    <div class="item-grid">
+        @foreach (var item in FilteredItems)
+        {
+            <div class="item-card @(item.IsAvailable ? "" : "item-unavailable")">
+                @if (item.FullImageUrl is not null)
+                {
+                    <img src="@item.FullImageUrl" alt="@item.ItemName" class="item-image" />
+                }
+                <div class="item-name">@item.ItemName</div>
+                <div class="item-price">@item.Price.ToString("0.00") EGP</div>
+                @if (item.HasDescription)
+                {
+                    <div class="item-description">@item.Description</div>
+                }
+                @if (item.IsAvailable)
+                {
+                    <button class="btn btn-small" @onclick="() => AddToCart(item)">Add</button>
+                }
+                else
+                {
+                    <span class="unavailable-label">Unavailable</span>
+                }
+            </div>
+        }
+    </div>
+}
+
+@if (Cart.TotalItemCount > 0)
+{
+    <div class="cart-bar" @onclick='() => Nav.NavigateTo("/cart")'>
+        <span>@Cart.TotalItemCount item(s) - @Cart.Total.ToString("0.00") EGP</span>
+        <span class="cart-bar-action">View Cart &rarr;</span>
+    </div>
+}
+
+@code {
+    private List<CategoryDto> _categories = [];
+    private List<ItemDto> _items = [];
+    private int? _selectedCategoryId;
+    private bool _loading = true;
+    private string? _closedReason;
+
+    private IEnumerable<ItemDto> FilteredItems =>
+        _selectedCategoryId is null ? _items : _items.Where(i => i.CategoryId == _selectedCategoryId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppSession.Token is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        var (isAccepting, reason) = await Api.GetAcceptingOnlineOrdersStatusAsync();
+        if (!isAccepting)
+            _closedReason = reason ?? "Not currently accepting online orders.";
+
+        _categories = await Api.GetCategoriesAsync();
+        _items = await Api.GetItemsAsync();
+        _loading = false;
+    }
+
+    private void SelectCategory(int? categoryId) => _selectedCategoryId = categoryId;
+
+    private void AddToCart(ItemDto item) => Cart.Add(item);
+}

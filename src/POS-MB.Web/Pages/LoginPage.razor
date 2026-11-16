@@ -1,0 +1,128 @@
+@page "/"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>Log In - POS-MB</PageTitle>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <h1>@(_isSignUpMode ? "Create a new account" : "Log in to your account")</h1>
+
+        @if (_checkingAutoLogin)
+        {
+            <p class="status-text">Signing you in...</p>
+        }
+        else
+        {
+            <EditForm Model="this" OnValidSubmit="OnPrimaryButtonClicked">
+                <div class="form-group">
+                    <label>Email</label>
+                    <InputText @bind-Value="_email" class="form-control" placeholder="you@example.com" />
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <InputText @bind-Value="_password" type="password" class="form-control" placeholder="••••••••" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <p class="error-text">@_errorMessage</p>
+                }
+
+                <button type="submit" class="btn btn-primary" disabled="@_busy">
+                    @(_busy ? "Please wait..." : (_isSignUpMode ? "Sign Up" : "Log In"))
+                </button>
+            </EditForm>
+
+            <button class="btn-link" @onclick="ToggleMode">
+                @(_isSignUpMode ? "Already have an account? Log in" : "Don't have an account? Sign up")
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private string _email = "";
+    private string _password = "";
+    private string? _errorMessage;
+    private bool _busy;
+    private bool _isSignUpMode;
+    private bool _checkingAutoLogin = true;
+
+    // Mirrors LoginPage.xaml.cs's OnAppearing auto-login attempt - tries a
+    // saved refresh token before showing the form at all, so a returning
+    // student doesn't have to log in again every page load.
+    protected override async Task OnInitializedAsync()
+    {
+        var savedRefreshToken = await AppSession.GetPersistedRefreshTokenAsync(Js);
+        if (savedRefreshToken is null)
+        {
+            _checkingAutoLogin = false;
+            return;
+        }
+
+        var result = await Api.RefreshTokenAsync(savedRefreshToken);
+        if (result is null)
+        {
+            await AppSession.ClearPersistedAsync(Js);
+            _checkingAutoLogin = false;
+            return;
+        }
+
+        await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
+        Nav.NavigateTo("/menu");
+    }
+
+    private void ToggleMode()
+    {
+        _isSignUpMode = !_isSignUpMode;
+        _errorMessage = null;
+    }
+
+    private async Task OnPrimaryButtonClicked()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _errorMessage = "Enter an email and password.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (result, error) = _isSignUpMode
+                ? await Api.SignUpAsync(_email.Trim(), _password)
+                : await Api.LoginAsync(_email.Trim(), _password);
+
+            if (result is null)
+            {
+                _errorMessage = error ?? "Something went wrong.";
+                return;
+            }
+
+            await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
+            Nav.NavigateTo("/menu");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApplySessionAsync(string token, string refreshToken, StudentDto student)
+    {
+        AppSession.Token = token;
+        AppSession.RefreshToken = refreshToken;
+        AppSession.CurrentStudent = student;
+        await AppSession.PersistRefreshTokenAsync(Js);
+
+        var offsetValue = await Api.GetSettingValueAsync("TimeZoneOffsetHours");
+        AppSession.TimeZoneOffsetHours = offsetValue is not null
+            && decimal.TryParse(offsetValue, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var offset)
+                ? offset
+                : 0m;
+    }
+}

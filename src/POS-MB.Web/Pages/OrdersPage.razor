@@ -1,0 +1,46 @@
+@page "/orders"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>My Orders - POS-MB</PageTitle>
+
+<h1>My Orders</h1>
+
+@if (_loading)
+{
+    <p class="status-text">Loading orders...</p>
+}
+else if (_orders.Count == 0)
+{
+    <p>You haven't placed any orders yet.</p>
+}
+else
+{
+    @foreach (var order in _orders)
+    {
+        <div class="order-row" @onclick='() => Nav.NavigateTo($"/orders/{order.OrderId}")'>
+            <span>Order #@(order.SerialNumber ?? order.OrderId)</span>
+            <span>@AppSession.ToLocalDisplay(order.Date).ToString("yyyy-MM-dd HH:mm")</span>
+            <span>@order.Status</span>
+            <span>@((order.Total + order.ServiceFee).ToString("0.00")) EGP</span>
+        </div>
+    }
+}
+
+@code {
+    private List<OrderSummaryDto> _orders = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppSession.Token is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        _orders = await Api.GetMyOrdersAsync();
+        _orders = _orders.OrderByDescending(o => o.Date).ToList();
+        _loading = false;
+    }
+}

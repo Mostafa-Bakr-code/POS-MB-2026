@@ -1,0 +1,113 @@
+@page "/orders/{OrderId:int}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Order Detail - POS-MB</PageTitle>
+
+@if (_loading)
+{
+    <p class="status-text">Loading order...</p>
+}
+else if (_order is null)
+{
+    <p>Order not found.</p>
+}
+else
+{
+    <h1>Order #@(_order.SerialNumber ?? _order.OrderId)</h1>
+    <p>Date: @AppSession.ToLocalDisplay(_order.Date).ToString("yyyy-MM-dd HH:mm")</p>
+    <p>Status: @_order.Status</p>
+
+    <table class="order-items-table">
+        <thead>
+            <tr><th>Item</th><th>Qty</th><th>Line Total</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var line in _order.Items)
+            {
+                <tr>
+                    <td>@ResolveItemName(line.ItemId)</td>
+                    <td>@line.Quantity</td>
+                    <td>@line.TotalItemsPrice.ToString("0.00") EGP</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="cart-total">
+        @if (_order.ServiceFee > 0)
+        {
+            <div>Item Total: @_order.Total.ToString("0.00") EGP</div>
+            <div>Service Fee: @_order.ServiceFee.ToString("0.00") EGP</div>
+            <div class="cart-total-final">Total Charged: @((_order.Total + _order.ServiceFee).ToString("0.00")) EGP</div>
+        }
+        else
+        {
+            <div class="cart-total-final">Total: @_order.Total.ToString("0.00") EGP</div>
+        }
+    </div>
+
+    @if (_order.Status == OrderStatus.Placed || _order.Status == OrderStatus.AwaitingPayment)
+    {
+        <button class="btn btn-danger" @onclick="CancelOrder" disabled="@_cancelling">
+            @(_cancelling ? "Cancelling..." : "Cancel Order")
+        </button>
+    }
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+}
+
+@code {
+    [Parameter] public int OrderId { get; set; }
+
+    private OrderDetailDto? _order;
+    private Dictionary<int, string> _itemNamesById = [];
+    private bool _loading = true;
+    private bool _cancelling;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AppSession.Token is null)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        // includeInactive: true - a past order can reference an item that's
+        // since gone unavailable or been retired, same reasoning as Mobile's
+        // ApiClient.GetItemsAsync default for order-history name resolution.
+        var itemsTask = Api.GetItemsAsync(includeInactive: true);
+        _order = await Api.GetMyOrderAsync(OrderId);
+        var items = await itemsTask;
+        _itemNamesById = items.ToDictionary(i => i.ItemId, i => i.ItemName);
+
+        _loading = false;
+    }
+
+    private string ResolveItemName(int itemId) => _itemNamesById.GetValueOrDefault(itemId, $"Item #{itemId}");
+
+    private async Task CancelOrder()
+    {
+        _errorMessage = null;
+        _cancelling = true;
+        try
+        {
+            var (success, error) = await Api.CancelOrderAsync(OrderId);
+            if (!success)
+            {
+                _errorMessage = error;
+                return;
+            }
+
+            _order = await Api.GetMyOrderAsync(OrderId);
+        }
+        finally
+        {
+            _cancelling = false;
+        }
+    }
+}
