@@ -38,6 +38,13 @@
             <button class="btn-link" @onclick="ToggleMode">
                 @(_isSignUpMode ? "Already have an account? Log in" : "Don't have an account? Sign up")
             </button>
+
+            @if (!_isSignUpMode)
+            {
+                <button class="btn-link" @onclick='() => Nav.NavigateTo("/forgot-password")'>
+                    Forgot password?
+                </button>
+            }
         }
     </div>
 </div>

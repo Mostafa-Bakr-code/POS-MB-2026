@@ -11,6 +11,7 @@
             <a href="/menu">Menu</a>
             <a href="/cart">Cart @(Cart.TotalItemCount > 0 ? $"({Cart.TotalItemCount})" : "")</a>
             <a href="/orders">My Orders</a>
+            <a href="/profile">My Account</a>
             <button class="btn-link top-nav-logout" @onclick="Logout">Log Out</button>
         </nav>
     }

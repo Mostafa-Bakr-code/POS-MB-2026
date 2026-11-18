@@ -1,0 +1,93 @@
+@page "/profile"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>My Account - POS-MB</PageTitle>
+
+<h1>My Account</h1>
+<p>@AppSession.CurrentStudent?.Email</p>
+
+<div class="auth-card" style="max-width: 400px; margin: 1.5rem 0;">
+    <h1 style="font-size: 1.3rem;">Change Password</h1>
+
+    <div class="form-group">
+        <label>Current password</label>
+        <InputText @bind-Value="_currentPassword" type="password" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label>New password</label>
+        <InputText @bind-Value="_newPassword" type="password" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label>Confirm new password</label>
+        <InputText @bind-Value="_confirmPassword" type="password" class="form-control" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <p class="error-text">@_errorMessage</p>
+    }
+
+    <button class="btn btn-primary" @onclick="ChangePassword" disabled="@_busy">
+        @(_busy ? "Please wait..." : "Change Password")
+    </button>
+</div>
+
+@code {
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _confirmPassword = "";
+    private string? _errorMessage;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (AppSession.Token is null)
+            Nav.NavigateTo("/");
+    }
+
+    private async Task ChangePassword()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword) || string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _errorMessage = "Enter your current password and a new one.";
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            _errorMessage = "New passwords don't match.";
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (success, error) = await Api.ChangePasswordAsync(_currentPassword, _newPassword);
+            if (!success)
+            {
+                _errorMessage = error ?? "Something went wrong.";
+                return;
+            }
+
+            // A successful change revokes every session, including this one
+            // (see clsStudentBusiness.ChangePasswordAsync) - must not keep
+            // acting as if still logged in, same as Mobile's own handling.
+            if (AppSession.RefreshToken is not null)
+                await Api.LogoutAsync(AppSession.RefreshToken);
+
+            AppSession.Clear();
+            await AppSession.ClearPersistedAsync(Js);
+            Cart.Clear();
+
+            Nav.NavigateTo("/");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
