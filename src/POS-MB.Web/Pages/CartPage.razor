@@ -1,6 +1,7 @@
 @page "/cart"
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 
 <PageTitle>Cart - POS-MB</PageTitle>
 
@@ -53,28 +54,16 @@ else
         <p class="error-text">@_errorMessage</p>
     }
 
-    @if (_checkoutUrl is not null)
-    {
-        <div class="banner-warning">
-            Order placed - payment checkout is not yet fully wired up for the web app (Paymob's post-payment
-            redirect still needs a dedicated return page). For now you can open the checkout link below to test
-            payment creation only.
-            <br />
-            <a href="@_checkoutUrl" target="_blank" rel="noopener">Open Paymob Checkout (test)</a>
-        </div>
-    }
-    else
-    {
-        <button class="btn btn-primary" @onclick="PlaceOrder" disabled="@_placing">
-            @(_placing ? "Placing order..." : "Place Order")
-        </button>
-    }
+    <button class="btn btn-primary" @onclick="PlaceOrder" disabled="@_placing">
+        @(_placing ? "Placing order..." : "Place Order")
+    </button>
 }
 
 @code {
+    private const string LastOrderIdKey = "last_placed_order_id";
+
     private string? _errorMessage;
     private bool _placing;
-    private string? _checkoutUrl;
     private decimal _serviceFee;
 
     protected override async Task OnInitializedAsync()
@@ -112,8 +101,18 @@ else
                 return;
             }
 
-            _checkoutUrl = result.CheckoutUrl;
             Cart.Clear();
+
+            // Stashed so PaymentCompletePage knows which order to show once
+            // Paymob redirects back - the real status still only ever comes
+            // from the server (see that page's own comment), this is purely
+            // "which order was this" continuity across the redirect.
+            await Js.InvokeVoidAsync("localStorage.setItem", LastOrderIdKey, result.OrderId.ToString());
+
+            if (result.CheckoutUrl is not null)
+                Nav.NavigateTo(result.CheckoutUrl, forceLoad: true); // external redirect to Paymob's hosted checkout
+            else
+                Nav.NavigateTo($"/orders/{result.OrderId}");
         }
         finally
         {

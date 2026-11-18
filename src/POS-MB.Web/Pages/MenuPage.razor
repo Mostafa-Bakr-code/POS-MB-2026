@@ -1,4 +1,5 @@
 @page "/menu"
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Nav
 
@@ -61,11 +62,15 @@ else
 }
 
 @code {
+    private static readonly TimeSpan AcceptingOrdersPollInterval = TimeSpan.FromSeconds(15);
+
     private List<CategoryDto> _categories = [];
     private List<ItemDto> _items = [];
     private int? _selectedCategoryId;
     private bool _loading = true;
     private string? _closedReason;
+    private string? _lastKnownReason = "not yet loaded"; // forces the very first check to always apply
+    private CancellationTokenSource? _pollCts;
 
     private IEnumerable<ItemDto> FilteredItems =>
         _selectedCategoryId is null ? _items : _items.Where(i => i.CategoryId == _selectedCategoryId);
@@ -78,16 +83,64 @@ else
             return;
         }
 
-        var (isAccepting, reason) = await Api.GetAcceptingOnlineOrdersStatusAsync();
-        if (!isAccepting)
-            _closedReason = reason ?? "Not currently accepting online orders.";
+        await RefreshAcceptingOrdersBannerAsync();
 
         _categories = await Api.GetCategoriesAsync();
         _items = await Api.GetItemsAsync();
         _loading = false;
+
+        StartAcceptingOrdersPolling();
     }
 
     private void SelectCategory(int? categoryId) => _selectedCategoryId = categoryId;
 
     private void AddToCart(ItemDto item) => Cart.Add(item);
+
+    // A staff member can flip the "accepting online orders" toggle from an
+    // entirely different device (WinForms) while a student is just sitting
+    // on this menu - mirrors Mobile's MenuPage polling for the same reason.
+    private void StartAcceptingOrdersPolling()
+    {
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(AcceptingOrdersPollInterval, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            try
+            {
+                await RefreshAcceptingOrdersBannerAsync();
+            }
+            catch (Exception)
+            {
+                // transient blip - keep showing the last known state, try again next tick
+            }
+        }
+    }
+
+    private async Task RefreshAcceptingOrdersBannerAsync()
+    {
+        var (isAccepting, reason) = await Api.GetAcceptingOnlineOrdersStatusAsync();
+
+        if (_lastKnownReason == reason) return; // nothing changed - don't touch the UI
+        _lastKnownReason = reason;
+
+        _closedReason = isAccepting ? null : (reason ?? "Not currently accepting online orders.");
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _pollCts?.Cancel();
 }

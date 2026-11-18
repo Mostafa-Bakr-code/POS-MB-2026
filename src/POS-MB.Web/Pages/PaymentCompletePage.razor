@@ -1,0 +1,27 @@
+@page "/payment-complete"
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>Payment Complete - POS-MB</PageTitle>
+
+<div class="auth-page">
+    <div class="auth-card">
+        <h1>Thanks!</h1>
+        <p class="status-text">Taking you to your order...</p>
+    </div>
+</div>
+
+@code {
+    private const string LastOrderIdKey = "last_placed_order_id";
+
+    // Paymob's redirect query string is never trusted as proof of payment -
+    // only the HMAC-verified webhook (PaymentsController.PaymobWebhook)
+    // updates an order's real status. This page is purely a UX hop back
+    // into the app; OrderDetailPage always shows the true, server-confirmed
+    // state regardless of what this redirect's own query string claims.
+    protected override async Task OnInitializedAsync()
+    {
+        var orderIdText = await Js.InvokeAsync<string?>("localStorage.getItem", LastOrderIdKey);
+        Nav.NavigateTo(int.TryParse(orderIdText, out var orderId) ? $"/orders/{orderId}" : "/orders", replace: true);
+    }
+}

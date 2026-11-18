@@ -1,6 +1,8 @@
 @page "/orders/{OrderId:int}"
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Nav
+@inject IJSRuntime Js
 
 <PageTitle>Order Detail - POS-MB</PageTitle>
 
@@ -47,6 +49,13 @@ else
         }
     </div>
 
+    @if (_order.Status == OrderStatus.AwaitingPayment)
+    {
+        <button class="btn btn-primary" @onclick="ResumeCheckout" disabled="@_resuming">
+            @(_resuming ? "Please wait..." : "Complete Payment")
+        </button>
+    }
+
     @if (_order.Status == OrderStatus.Placed || _order.Status == OrderStatus.AwaitingPayment)
     {
         <button class="btn btn-danger" @onclick="CancelOrder" disabled="@_cancelling">
@@ -61,13 +70,18 @@ else
 }
 
 @code {
+    private const string LastOrderIdKey = "last_placed_order_id";
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+
     [Parameter] public int OrderId { get; set; }
 
     private OrderDetailDto? _order;
     private Dictionary<int, string> _itemNamesById = [];
     private bool _loading = true;
     private bool _cancelling;
+    private bool _resuming;
     private string? _errorMessage;
+    private CancellationTokenSource? _pollCts;
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,7 +100,52 @@ else
         _itemNamesById = items.ToDictionary(i => i.ItemId, i => i.ItemName);
 
         _loading = false;
+        StartPolling();
     }
+
+    // Mirrors Mobile's OrderDetailPage polling - a student staring at this
+    // page right after paying (or while the kitchen works on it) should see
+    // status changes land on their own, not require a manual refresh.
+    private void StartPolling()
+    {
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(PollInterval, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            OrderDetailDto? updated;
+            try
+            {
+                updated = await Api.GetMyOrderAsync(OrderId);
+            }
+            catch (Exception)
+            {
+                continue; // transient blip - keep showing the last known state, try again next tick
+            }
+
+            if (updated is null || _order is null) continue;
+            if (updated.Status == _order.Status && updated.Total == _order.Total) continue;
+
+            _order = updated;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => _pollCts?.Cancel();
 
     private string ResolveItemName(int itemId) => _itemNamesById.GetValueOrDefault(itemId, $"Item #{itemId}");
 
@@ -108,6 +167,41 @@ else
         finally
         {
             _cancelling = false;
+        }
+    }
+
+    // No saved-card option built for Web yet (useSavedCard: false always) -
+    // see Mobile's OnContinuePaymentClicked for the saved-card re-offer this
+    // doesn't yet have.
+    private async Task ResumeCheckout()
+    {
+        _errorMessage = null;
+        _resuming = true;
+        try
+        {
+            var (checkoutUrl, alreadyPaid, error) = await Api.ResumeCheckoutAsync(OrderId);
+
+            // Not an error - the payment actually already succeeded (e.g. the
+            // webhook landed while this page sat open) - same reasoning as
+            // Mobile's own "Already Paid" handling.
+            if (alreadyPaid)
+            {
+                _order = await Api.GetMyOrderAsync(OrderId);
+                return;
+            }
+
+            if (checkoutUrl is null)
+            {
+                _errorMessage = error ?? "Could not resume checkout.";
+                return;
+            }
+
+            await Js.InvokeVoidAsync("localStorage.setItem", LastOrderIdKey, OrderId.ToString());
+            Nav.NavigateTo(checkoutUrl, forceLoad: true);
+        }
+        finally
+        {
+            _resuming = false;
         }
     }
 }

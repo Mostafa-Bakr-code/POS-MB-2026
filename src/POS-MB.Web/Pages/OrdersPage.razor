@@ -1,4 +1,5 @@
 @page "/orders"
+@implements IDisposable
 @inject ApiClient Api
 @inject NavigationManager Nav
 
@@ -28,8 +29,11 @@ else
 }
 
 @code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(5);
+
     private List<OrderSummaryDto> _orders = [];
     private bool _loading = true;
+    private CancellationTokenSource? _pollCts;
 
     protected override async Task OnInitializedAsync()
     {
@@ -39,8 +43,67 @@ else
             return;
         }
 
-        _orders = await Api.GetMyOrdersAsync();
-        _orders = _orders.OrderByDescending(o => o.Date).ToList();
+        await LoadAsync();
         _loading = false;
+        StartPolling();
     }
+
+    private async Task LoadAsync()
+    {
+        var orders = await Api.GetMyOrdersAsync();
+        _orders = orders.OrderByDescending(o => o.Date).ToList();
+    }
+
+    // Mirrors Mobile's OrdersPage polling - so a status change (or a new
+    // order placed elsewhere) shows up without a manual refresh.
+    private void StartPolling()
+    {
+        _pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(_pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(PollInterval, token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested) return;
+
+            List<OrderSummaryDto> updated;
+            try
+            {
+                updated = await Api.GetMyOrdersAsync();
+            }
+            catch (Exception)
+            {
+                continue; // transient blip - keep showing the last known state, try again next tick
+            }
+
+            updated = updated.OrderByDescending(o => o.Date).ToList();
+            if (HasChanged(_orders, updated))
+            {
+                _orders = updated;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private static bool HasChanged(List<OrderSummaryDto> previous, List<OrderSummaryDto> current)
+    {
+        if (previous.Count != current.Count) return true;
+        for (var i = 0; i < previous.Count; i++)
+            if (previous[i].OrderId != current[i].OrderId || previous[i].Status != current[i].Status || previous[i].Total != current[i].Total)
+                return true;
+        return false;
+    }
+
+    public void Dispose() => _pollCts?.Cancel();
 }
