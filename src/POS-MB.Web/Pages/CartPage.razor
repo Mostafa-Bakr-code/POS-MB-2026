@@ -24,8 +24,42 @@ else
             <div class="cart-line-controls">
                 <span>Qty: @line.Quantity</span>
                 <button class="btn-link" @onclick="() => AddAnother(line)">+1</button>
+                @if (_extraItems.Count > 0 && line.CanAddExtra)
+                {
+                    <button class="btn-link" @onclick="() => ToggleExtraPicker(line)">+ Extra</button>
+                }
+                <button class="btn-link" @onclick="() => OpenCommentEditor(line)">@(string.IsNullOrWhiteSpace(line.Comment) ? "Add Comment" : "Edit Comment")</button>
                 <button class="btn-link" @onclick="() => RemoveLine(line)">Remove</button>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(line.Comment))
+            {
+                <div class="cart-line-extra"><span><em>@line.Comment</em></span></div>
+            }
+
+            @if (ReferenceEquals(_extraPickerLine, line))
+            {
+                <div class="cart-line-extra">
+                    <select class="form-control" style="width:auto; display:inline-block;" @bind="_selectedExtraItemId">
+                        @foreach (var extra in _extraItems)
+                        {
+                            <option value="@extra.ItemId">@extra.ItemName (@extra.Price.ToString("0.00") EGP)</option>
+                        }
+                    </select>
+                    <button class="btn-link" style="display:inline; width:auto;" @onclick="() => AddExtra(line)">Add</button>
+                    <button class="btn-link" style="display:inline; width:auto;" @onclick="() => _extraPickerLine = null">Cancel</button>
+                </div>
+            }
+
+            @if (ReferenceEquals(_commentEditorLine, line))
+            {
+                <div class="cart-line-extra">
+                    <input class="form-control" style="width:auto; display:inline-block;" maxlength="50" @bind="_commentDraft" placeholder="e.g. no onions" />
+                    <button class="btn-link" style="display:inline; width:auto;" @onclick="() => SaveComment(line)">Save</button>
+                    <button class="btn-link" style="display:inline; width:auto;" @onclick="() => _commentEditorLine = null">Cancel</button>
+                </div>
+            }
+
             @foreach (var extra in line.Extras)
             {
                 <div class="cart-line-extra">
@@ -49,6 +83,18 @@ else
         }
     </div>
 
+    @if (AppSession.CurrentStudent?.SavedCardMaskedPan is string maskedPan)
+    {
+        <div class="form-group">
+            <label>
+                <input type="checkbox" @bind="_useSavedCard" />
+                @(AppSession.CurrentStudent?.SavedCardSubtype is string subtype
+                    ? $"Pay with saved {subtype} {maskedPan}"
+                    : $"Pay with saved card {maskedPan}")
+            </label>
+        </div>
+    }
+
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
         <p class="error-text">@_errorMessage</p>
@@ -62,9 +108,20 @@ else
 @code {
     private const string LastOrderIdKey = "last_placed_order_id";
 
+    // Matches the cashier side's and Mobile's own copy of this key - the
+    // setting that marks which category's items show up behind a cart
+    // line's "+Extra" button.
+    private const string ExtrasCategorySettingKey = "ExtrasCategoryId";
+
     private string? _errorMessage;
     private bool _placing;
     private decimal _serviceFee;
+    private bool _useSavedCard;
+    private List<ItemDto> _extraItems = [];
+    private CartLine? _extraPickerLine;
+    private int _selectedExtraItemId;
+    private CartLine? _commentEditorLine;
+    private string _commentDraft = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -79,10 +136,53 @@ else
             && decimal.TryParse(feeValue, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var fee)
                 ? fee
                 : 0m;
+
+        var extrasCategoryValue = await Api.GetSettingValueAsync(ExtrasCategorySettingKey);
+        _extraItems = int.TryParse(extrasCategoryValue, out var categoryId)
+            ? await Api.GetItemsAsync(categoryId)
+            : [];
     }
 
     private void AddAnother(CartLine line) => Cart.AddAnother(line);
     private void RemoveLine(CartLine line) => Cart.Remove(line);
+
+    // An extra always attaches to the ONE specific line it was requested
+    // for, not to the cart generally - same reasoning as Mobile's
+    // OnAddExtraClicked (see Session/Cart.cs's AddExtra).
+    private void ToggleExtraPicker(CartLine line)
+    {
+        _commentEditorLine = null;
+        if (ReferenceEquals(_extraPickerLine, line))
+        {
+            _extraPickerLine = null;
+            return;
+        }
+
+        _extraPickerLine = line;
+        _selectedExtraItemId = _extraItems[0].ItemId;
+    }
+
+    private void AddExtra(CartLine line)
+    {
+        var extraItem = _extraItems.FirstOrDefault(i => i.ItemId == _selectedExtraItemId);
+        if (extraItem is not null)
+            Cart.AddExtra(line, extraItem);
+
+        _extraPickerLine = null;
+    }
+
+    private void OpenCommentEditor(CartLine line)
+    {
+        _extraPickerLine = null;
+        _commentEditorLine = line;
+        _commentDraft = line.Comment ?? "";
+    }
+
+    private void SaveComment(CartLine line)
+    {
+        line.Comment = string.IsNullOrWhiteSpace(_commentDraft) ? null : _commentDraft.Trim();
+        _commentEditorLine = null;
+    }
 
     private async Task PlaceOrder()
     {
@@ -91,7 +191,8 @@ else
         try
         {
             var items = Cart.Flattened.Select(l => new OrderItemLineDto(l.ItemId, l.Quantity, l.Comment)).ToList();
-            var (result, error, unavailableItems) = await Api.PlaceOrderAsync(items);
+            var useSavedCard = AppSession.CurrentStudent?.SavedCardMaskedPan is not null && _useSavedCard;
+            var (result, error, unavailableItems) = await Api.PlaceOrderAsync(items, useSavedCard);
 
             if (result is null)
             {

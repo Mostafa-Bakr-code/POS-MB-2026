@@ -9,6 +9,28 @@
 <p>@AppSession.CurrentStudent?.Email</p>
 
 <div class="auth-card" style="max-width: 400px; margin: 1.5rem 0;">
+    <h1 style="font-size: 1.3rem;">Saved Card</h1>
+
+    @if (AppSession.CurrentStudent?.SavedCardMaskedPan is string maskedPan)
+    {
+        <p>@(AppSession.CurrentStudent?.SavedCardSubtype is string subtype ? $"{subtype} {maskedPan}" : maskedPan)</p>
+
+        @if (!string.IsNullOrEmpty(_cardErrorMessage))
+        {
+            <p class="error-text">@_cardErrorMessage</p>
+        }
+
+        <button class="btn btn-danger" @onclick="RemoveCard" disabled="@_removingCard">
+            @(_removingCard ? "Please wait..." : "Remove Card")
+        </button>
+    }
+    else
+    {
+        <p class="status-text">No saved card. Check "Pay with saved card" during checkout to save one for next time.</p>
+    }
+</div>
+
+<div class="auth-card" style="max-width: 400px; margin: 1.5rem 0;">
     <h1 style="font-size: 1.3rem;">Change Password</h1>
 
     <div class="form-group">
@@ -40,11 +62,43 @@
     private string _confirmPassword = "";
     private string? _errorMessage;
     private bool _busy;
+    private string? _cardErrorMessage;
+    private bool _removingCard;
 
     protected override void OnInitialized()
     {
         if (AppSession.Token is null)
             Nav.NavigateTo("/");
+    }
+
+    private async Task RemoveCard()
+    {
+        var confirmed = await Js.InvokeAsync<bool>("confirm", "Remove your saved card? You'll need to enter card details again next time.");
+        if (!confirmed) return;
+
+        _cardErrorMessage = null;
+        _removingCard = true;
+        try
+        {
+            var (success, error) = await Api.RemoveSavedCardAsync();
+            if (!success)
+            {
+                _cardErrorMessage = error ?? "Something went wrong.";
+                return;
+            }
+
+            // Updates the in-memory session immediately so Cart/Resume
+            // Checkout's "pay with saved card" option disappears right away
+            // too, without needing a fresh login - same reasoning as
+            // Mobile's own OnRemoveCardClicked.
+            var student = AppSession.CurrentStudent;
+            if (student is not null)
+                AppSession.CurrentStudent = student with { SavedCardMaskedPan = null, SavedCardSubtype = null };
+        }
+        finally
+        {
+            _removingCard = false;
+        }
     }
 
     private async Task ChangePassword()

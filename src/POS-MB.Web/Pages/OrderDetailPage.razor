@@ -170,16 +170,17 @@ else
         }
     }
 
-    // No saved-card option built for Web yet (useSavedCard: false always) -
-    // see Mobile's OnContinuePaymentClicked for the saved-card re-offer this
-    // doesn't yet have.
+    // Reoffers the saved card on retry too - a student who has one on file
+    // almost certainly still wants to use it, same reasoning as Mobile's
+    // OnContinuePaymentClicked.
     private async Task ResumeCheckout()
     {
         _errorMessage = null;
         _resuming = true;
         try
         {
-            var (checkoutUrl, alreadyPaid, error) = await Api.ResumeCheckoutAsync(OrderId);
+            var useSavedCard = AppSession.CurrentStudent?.SavedCardMaskedPan is not null;
+            var (checkoutUrl, alreadyPaid, error) = await Api.ResumeCheckoutAsync(OrderId, useSavedCard);
 
             // Not an error - the payment actually already succeeded (e.g. the
             // webhook landed while this page sat open) - same reasoning as
