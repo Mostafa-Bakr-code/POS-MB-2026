@@ -5,7 +5,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>POS-MB - Order Online</title>
-    <base href="/" />
+    <!-- Relative, not "/" - this app is served from the root locally
+         (dotnet run) but from /order/ once deployed alongside the API
+         (wwwroot/order). A relative base resolves correctly either way with
+         no environment-specific config needed, as long as the app is always
+         reached via a URL ending in "/" (see Program.cs's MapFallbackToFile
+         for why a deep link like /order/cart still resolves this the same
+         way). -->
+    <base href="./" />
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />

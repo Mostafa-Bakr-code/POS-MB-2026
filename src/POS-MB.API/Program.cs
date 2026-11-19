@@ -278,4 +278,21 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Serves the Web ordering client (wwwroot/order, a Blazor WASM app) for any
+// deep link under /order that isn't a real file - without this, a direct
+// navigation to something like /order/cart (bookmarked, or a hard refresh)
+// 404s, since UseStaticFiles only serves files that actually exist on disk.
+// Client-side link clicks never hit this at all (the Blazor router handles
+// those entirely in the browser) - this only matters for a URL typed/
+// bookmarked directly or a full-page redirect, which is exactly what
+// Paymob's post-payment redirect to /order/payment-complete is.
+// :nonfile keeps an actual static asset request (e.g. /order/favicon.png)
+// going through UseStaticFiles above instead of always falling back here.
+// AllowAnonymous - the global FallbackPolicy below (RequireAuthenticatedUser)
+// applies to every endpoint by default, and unlike the chef page (served
+// purely by UseStaticFiles middleware, never touching routing at all) this
+// IS a routed endpoint, so it needs the same explicit opt-out every other
+// anonymous endpoint in this file already has.
+app.MapFallbackToFile("/order/{*path:nonfile}", "order/index.html").AllowAnonymous();
+
 app.Run();

@@ -487,3 +487,9 @@ $RECYCLE.BIN/
 # ItemsController/CategoriesController's image upload endpoints
 src/POS-MB.API/wwwroot/item-images/
 src/POS-MB.API/wwwroot/category-images/
+
+# Published Web client output - a build artifact of POS-MB.Web (`dotnet
+# publish`), not source. Regenerate and copy here before each deploy rather
+# than committing compiled WASM output; see the Web browser client plan
+# memory for the exact steps.
+src/POS-MB.API/wwwroot/order/
