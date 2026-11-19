@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.IdentityModel.Tokens;
 using POS_MB.API;
 using POS_MB.API.Auth;
@@ -258,7 +259,19 @@ app.UseCors("Default");
 // page) must be reachable before a token exists; the API calls the page
 // makes are still protected normally.
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// Default StaticFileOptions silently decline to serve any extension their
+// content-type map doesn't recognize (ServeUnknownFileTypes defaults to
+// false) - a declined file falls through to routing instead of 404ing
+// directly, and the global FallbackPolicy below then rejects it with 401
+// since no endpoint matched. Found live: the Web client's ICU globalization
+// data (.dat, not a commonly-mapped extension) silently failed this way
+// while every other framework asset (.wasm/.js/.css, all recognized) was
+// served correctly, breaking Blazor's WASM boot with no indication the
+// real cause was a missing MIME mapping rather than an actual auth issue.
+var staticFileContentTypes = new FileExtensionContentTypeProvider();
+staticFileContentTypes.Mappings[".dat"] = "application/octet-stream";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = staticFileContentTypes });
 
 // Authentication ahead of the rate limiter (not just ahead of Authorization)
 // so the global limiter below can read context.User and partition by the
