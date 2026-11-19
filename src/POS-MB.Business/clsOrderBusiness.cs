@@ -169,8 +169,24 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
             savedCardToken = student?.SavedCardToken;
         }
 
-        var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: false, savedCardToken);
-        return (orderId, checkoutUrl);
+        // Found live: a transient failure here (a DNS/network blip reaching
+        // Paymob, not anything wrong with the order itself) used to leave
+        // the just-created order sitting as an orphaned AwaitingPayment row
+        // with no checkout session ever created and no way for the student
+        // to know one already existed - retrying from the client created a
+        // second, separate orphaned order the same way. Cancelling it here
+        // before rethrowing means a failed checkout attempt never leaves
+        // anything behind to accidentally duplicate.
+        try
+        {
+            var checkoutUrl = await StartPaymobCheckoutAsync(order, studentEmail, isRetry: false, savedCardToken);
+            return (orderId, checkoutUrl);
+        }
+        catch
+        {
+            await CancelAsync(orderId, "System: checkout session could not be created");
+            throw;
+        }
     }
 
     // A student backing out of the in-app payment screen (or the app
@@ -288,7 +304,21 @@ public class clsOrderBusiness(clsOrderDataAccess dataAccess, clsSettingsBusiness
     {
         var (utcStart, utcEndExclusive) = await TimeZoneHelper.ResolveUtcRangeAsync(settingsBusiness, startDate, endDate);
 
-        return await dataAccess.GetAllForStudentAsync(studentId, utcStart, utcEndExclusive);
+        var orders = await dataAccess.GetAllForStudentAsync(studentId, utcStart, utcEndExclusive);
+
+        // Same reconciliation the single-order detail view already does
+        // (ReconcileIfAwaitingPaymentAsync) - without it, a student's order
+        // list could sit on a stale "AwaitingPayment" for several seconds
+        // after a payment actually succeeded (the webhook hasn't landed
+        // yet), while viewing that exact order's own detail page already
+        // showed the correct, up-to-date status. A no-op for every order
+        // not currently AwaitingPayment, so this is cheap in the normal
+        // case (realistically at most one such order per student at a time).
+        var reconciled = new List<Order>();
+        foreach (var order in orders)
+            reconciled.Add(await ReconcileIfAwaitingPaymentAsync(order));
+
+        return reconciled;
     }
 
     // Lets a student's order-detail screen (which polls this every few
