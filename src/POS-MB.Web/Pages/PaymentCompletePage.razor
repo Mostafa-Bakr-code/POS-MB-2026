@@ -22,6 +22,6 @@
     protected override async Task OnInitializedAsync()
     {
         var orderIdText = await Js.InvokeAsync<string?>("localStorage.getItem", LastOrderIdKey);
-        Nav.NavigateTo(int.TryParse(orderIdText, out var orderId) ? $"/orders/{orderId}" : "/orders", replace: true);
+        Nav.NavigateTo(int.TryParse(orderIdText, out var orderId) ? $"orders/{orderId}" : "orders", replace: true);
     }
 }

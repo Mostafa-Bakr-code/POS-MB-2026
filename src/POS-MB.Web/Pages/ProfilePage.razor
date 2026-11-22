@@ -68,7 +68,7 @@
     protected override void OnInitialized()
     {
         if (AppSession.Token is null)
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("");
     }
 
     private async Task RemoveCard()
@@ -137,7 +137,7 @@
             await AppSession.ClearPersistedAsync(Js);
             Cart.Clear();
 
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("");
         }
         finally
         {

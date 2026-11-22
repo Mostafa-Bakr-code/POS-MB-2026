@@ -7,11 +7,11 @@
     @if (AppSession.Token is not null)
     {
         <nav class="top-nav">
-            <a href="/menu" class="top-nav-brand">POS-MB</a>
-            <a href="/menu">Menu</a>
-            <a href="/cart">Cart @(Cart.TotalItemCount > 0 ? $"({Cart.TotalItemCount})" : "")</a>
-            <a href="/orders">My Orders</a>
-            <a href="/profile">My Account</a>
+            <a href="menu" class="top-nav-brand">POS-MB</a>
+            <a href="menu">Menu</a>
+            <a href="cart">Cart @(Cart.TotalItemCount > 0 ? $"({Cart.TotalItemCount})" : "")</a>
+            <a href="orders">My Orders</a>
+            <a href="profile">My Account</a>
             <button class="btn-link top-nav-logout" @onclick="Logout">Log Out</button>
         </nav>
     }
@@ -30,6 +30,6 @@
         AppSession.Clear();
         Cart.Clear();
         await AppSession.ClearPersistedAsync(Js);
-        Nav.NavigateTo("/");
+        Nav.NavigateTo("");
     }
 }

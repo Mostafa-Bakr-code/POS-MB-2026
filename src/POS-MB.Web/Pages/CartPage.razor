@@ -10,7 +10,7 @@
 @if (Cart.Lines.Count == 0)
 {
     <p>Your cart is empty.</p>
-    <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("/menu")'>Back to Menu</button>
+    <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("menu")'>Back to Menu</button>
 }
 else
 {
@@ -127,7 +127,7 @@ else
     {
         if (AppSession.Token is null)
         {
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("");
             return;
         }
 
@@ -213,7 +213,7 @@ else
             if (result.CheckoutUrl is not null)
                 Nav.NavigateTo(result.CheckoutUrl, forceLoad: true); // external redirect to Paymob's hosted checkout
             else
-                Nav.NavigateTo($"/orders/{result.OrderId}");
+                Nav.NavigateTo($"orders/{result.OrderId}");
         }
         finally
         {

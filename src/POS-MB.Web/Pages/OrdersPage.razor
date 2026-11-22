@@ -19,7 +19,7 @@ else
 {
     @foreach (var order in _orders)
     {
-        <div class="order-row" @onclick='() => Nav.NavigateTo($"/orders/{order.OrderId}")'>
+        <div class="order-row" @onclick='() => Nav.NavigateTo($"orders/{order.OrderId}")'>
             <span>Order #@(order.SerialNumber ?? order.OrderId)</span>
             <span>@AppSession.ToLocalDisplay(order.Date).ToString("yyyy-MM-dd HH:mm")</span>
             <span>@order.Status</span>
@@ -39,7 +39,7 @@ else
     {
         if (AppSession.Token is null)
         {
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("");
             return;
         }
 

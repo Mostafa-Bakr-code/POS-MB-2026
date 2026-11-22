@@ -55,7 +55,7 @@ else
 
 @if (Cart.TotalItemCount > 0)
 {
-    <div class="cart-bar" @onclick='() => Nav.NavigateTo("/cart")'>
+    <div class="cart-bar" @onclick='() => Nav.NavigateTo("cart")'>
         <span>@Cart.TotalItemCount item(s) - @Cart.Total.ToString("0.00") EGP</span>
         <span class="cart-bar-action">View Cart &rarr;</span>
     </div>
@@ -79,7 +79,7 @@ else
     {
         if (AppSession.Token is null)
         {
-            Nav.NavigateTo("/");
+            Nav.NavigateTo("");
             return;
         }
 

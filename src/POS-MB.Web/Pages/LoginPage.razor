@@ -41,7 +41,7 @@
 
             @if (!_isSignUpMode)
             {
-                <button class="btn-link" @onclick='() => Nav.NavigateTo("/forgot-password")'>
+                <button class="btn-link" @onclick='() => Nav.NavigateTo("forgot-password")'>
                     Forgot password?
                 </button>
             }
@@ -78,7 +78,7 @@
         }
 
         await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
-        Nav.NavigateTo("/menu");
+        Nav.NavigateTo("menu");
     }
 
     private void ToggleMode()
@@ -111,7 +111,7 @@
             }
 
             await ApplySessionAsync(result.Token, result.RefreshToken, result.Student);
-            Nav.NavigateTo("/menu");
+            Nav.NavigateTo("menu");
         }
         finally
         {
