@@ -56,6 +56,15 @@
     </button>
 </div>
 
+<div class="auth-card" style="max-width: 400px; margin: 1.5rem 0;">
+    <h1 style="font-size: 1.3rem;">Legal</h1>
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <a href="@($"{ApiConfig.BaseUrl}policies/privacy.html")" target="_blank" rel="noopener">Privacy Policy</a>
+        <a href="@($"{ApiConfig.BaseUrl}policies/refund-exchange.html")" target="_blank" rel="noopener">Refund &amp; Exchange Policy</a>
+        <a href="@($"{ApiConfig.BaseUrl}policies/shipping.html")" target="_blank" rel="noopener">Shipping &amp; Pickup Policy</a>
+    </div>
+</div>
+
 @code {
     private string _currentPassword = "";
     private string _newPassword = "";

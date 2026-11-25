@@ -89,6 +89,14 @@
 
             </VerticalStackLayout>
 
+            <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" Margin="0,24,0,0">
+                <Button Text="Privacy" Clicked="OnPrivacyPolicyClicked" BackgroundColor="Transparent" TextColor="{StaticResource TextOnDarkMuted}" FontSize="12" Padding="0" MinimumHeightRequest="0" />
+                <Label Text="•" TextColor="{StaticResource TextOnDarkMuted}" FontSize="12" VerticalOptions="Center" />
+                <Button Text="Refunds" Clicked="OnRefundPolicyClicked" BackgroundColor="Transparent" TextColor="{StaticResource TextOnDarkMuted}" FontSize="12" Padding="0" MinimumHeightRequest="0" />
+                <Label Text="•" TextColor="{StaticResource TextOnDarkMuted}" FontSize="12" VerticalOptions="Center" />
+                <Button Text="Pickup" Clicked="OnShippingPolicyClicked" BackgroundColor="Transparent" TextColor="{StaticResource TextOnDarkMuted}" FontSize="12" Padding="0" MinimumHeightRequest="0" />
+            </HorizontalStackLayout>
+
         </VerticalStackLayout>
     </ScrollView>
 

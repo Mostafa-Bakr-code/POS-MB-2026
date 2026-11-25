@@ -96,6 +96,41 @@
                 HeightRequest="52"
                 FontSize="16" />
 
+            <BoxView HeightRequest="1" Color="{StaticResource ChipInactive}" />
+
+            <Label
+                Text="LEGAL"
+                FontSize="12"
+                FontAttributes="Bold"
+                TextColor="{StaticResource TextOnDarkMuted}" />
+
+            <Button
+                Text="Privacy Policy"
+                Clicked="OnPrivacyPolicyClicked"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource TextOnCard}"
+                HorizontalOptions="Start"
+                Padding="0"
+                MinimumHeightRequest="0" />
+
+            <Button
+                Text="Refund &amp; Exchange Policy"
+                Clicked="OnRefundPolicyClicked"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource TextOnCard}"
+                HorizontalOptions="Start"
+                Padding="0"
+                MinimumHeightRequest="0" />
+
+            <Button
+                Text="Shipping &amp; Pickup Policy"
+                Clicked="OnShippingPolicyClicked"
+                BackgroundColor="Transparent"
+                TextColor="{StaticResource TextOnCard}"
+                HorizontalOptions="Start"
+                Padding="0"
+                MinimumHeightRequest="0" />
+
         </VerticalStackLayout>
     </ScrollView>
 

@@ -134,4 +134,15 @@ public partial class LoginPage : ContentPage
         ErrorLabel.Text = message;
         ErrorLabel.IsVisible = true;
     }
+
+    // Reachable pre-login too, not just from the account page - Paymob and
+    // app store reviewers commonly check these without creating an account.
+    private async void OnPrivacyPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/privacy.html");
+
+    private async void OnRefundPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/refund-exchange.html");
+
+    private async void OnShippingPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/shipping.html");
 }

@@ -126,4 +126,19 @@ public partial class ProfilePage : ContentPage
 
     private async void OnHomeClicked(object? sender, EventArgs e) =>
         await NavigationHelper.GoHomeAsync(Navigation);
+
+    // Hosted as plain static pages on the API (wwwroot/policies), same
+    // pattern as the chef tablet page - a single live source of truth
+    // means editing the policy text just needs republishing the API, never
+    // an app store update. Opened in the system browser rather than an
+    // in-app WebView - simpler, works identically on Android and iOS, and
+    // these are read-once legal pages, not something worth a custom screen.
+    private async void OnPrivacyPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/privacy.html");
+
+    private async void OnRefundPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/refund-exchange.html");
+
+    private async void OnShippingPolicyClicked(object? sender, EventArgs e) =>
+        await Browser.OpenAsync($"{ApiConfig.BaseUrl}policies/shipping.html");
 }
